@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   title: "LokAgenda - Sistema de Locação",
   description:
     "Sistema completo para gestão de locação de brinquedos e equipamentos para festas e eventos",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
