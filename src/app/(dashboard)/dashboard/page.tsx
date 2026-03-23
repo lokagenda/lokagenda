@@ -8,6 +8,7 @@ import {
   Calendar,
   Users,
   CalendarClock,
+  TrendingUp,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -38,76 +39,98 @@ export default async function DashboardPage() {
     supabase.from('rentals').select('id, customer_name, event_date, total, status').eq('company_id', companyId).gte('event_date', today).order('event_date', { ascending: true }).limit(5),
   ])
 
-  const productsCount = r1.count
-  const pendingQuotesCount = r2.count
-  const monthRentalsCount = r3.count
-  const customersCount = r4.count
-  const upcomingRentals = r5.data
-
   const stats = [
     {
-      label: 'Total de Produtos',
-      value: String(productsCount ?? 0),
+      label: 'Produtos',
+      value: String(r1.count ?? 0),
       icon: Package,
-      color: 'text-blue-700 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+      bgColor: 'bg-blue-50 dark:bg-blue-500/10',
+      href: '/dashboard/produtos',
     },
     {
       label: 'Orçamentos Pendentes',
-      value: String(pendingQuotesCount ?? 0),
+      value: String(r2.count ?? 0),
       icon: FileText,
-      color: 'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10',
+      iconColor: 'text-amber-600 dark:text-amber-400',
+      bgColor: 'bg-amber-50 dark:bg-amber-500/10',
+      href: '/dashboard/orcamentos',
     },
     {
       label: 'Locações do Mês',
-      value: String(monthRentalsCount ?? 0),
+      value: String(r3.count ?? 0),
       icon: Calendar,
-      color: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-500/10',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-500/10',
+      href: '/dashboard/locacoes',
     },
     {
-      label: 'Clientes Cadastrados',
-      value: String(customersCount ?? 0),
+      label: 'Clientes',
+      value: String(r4.count ?? 0),
       icon: Users,
-      color: 'text-sky-600 bg-sky-50 dark:text-sky-400 dark:bg-sky-500/10',
+      iconColor: 'text-violet-600 dark:text-violet-400',
+      bgColor: 'bg-violet-50 dark:bg-violet-500/10',
+      href: '/dashboard/clientes',
     },
   ]
 
-  const rentals = upcomingRentals ?? []
+  const rentals = r5.data ?? []
 
   return (
-    <div className="space-y-10">
-      {/* Welcome */}
-      <div>
-        <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          Bem-vindo, {firstName}!
-        </h2>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          Aqui está um resumo do seu negócio.
-        </p>
+    <div className="space-y-8">
+      {/* Welcome header */}
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            Bem-vindo de volta,
+          </p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            {firstName}
+          </h2>
+        </div>
+        <div className="hidden items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 sm:flex">
+          <TrendingUp className="h-3.5 w-3.5" />
+          Resumo do negócio
+        </div>
       </div>
 
       {/* Stats grid */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-5">
-              <div className="flex items-center gap-4">
-                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${stat.color}`}>
-                  <stat.icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">{stat.label}</p>
-                  <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{stat.value}</p>
+          <Link key={stat.label} href={stat.href} className="group">
+            <div className="rounded-xl border border-zinc-200 bg-white p-5 transition-all hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
+              <div className="flex items-center justify-between">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.bgColor}`}>
+                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              <div className="mt-4">
+                <p className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                  {stat.value}
+                </p>
+                <p className="mt-1 text-[13px] text-zinc-500 dark:text-zinc-400">
+                  {stat.label}
+                </p>
+              </div>
+            </div>
+          </Link>
         ))}
       </div>
 
       {/* Upcoming rentals */}
       <Card>
-        <CardHeader>
-          <CardTitle>Próximas Locações</CardTitle>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Próximas Locações</CardTitle>
+            {rentals.length > 0 && (
+              <Link
+                href="/dashboard/locacoes"
+                className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Ver todas
+              </Link>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {rentals.length === 0 ? (
@@ -117,16 +140,16 @@ export default async function DashboardPage() {
               description="Quando você criar locações, elas aparecerão aqui organizadas por data."
             />
           ) : (
-            <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {rentals.map((rental) => (
                 <Link
                   key={rental.id}
                   href={`/dashboard/locacoes/${rental.id}`}
-                  className="flex items-center justify-between py-3 first:pt-0 last:pb-0 hover:opacity-75 transition-opacity"
+                  className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0 transition-colors hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 -mx-2 px-2 rounded-lg"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                      <CalendarClock className="h-5 w-5" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                      <CalendarClock className="h-4 w-4" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
@@ -137,7 +160,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                     {formatCurrency(rental.total)}
                   </p>
                 </Link>

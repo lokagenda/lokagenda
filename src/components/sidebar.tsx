@@ -15,6 +15,7 @@ import {
   LogOut,
   X,
   Menu,
+  ChevronRight,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -49,25 +50,26 @@ export function Sidebar({ companyName, companyLogoUrl }: SidebarProps) {
   }
 
   const sidebarContent = (
-    <div className="flex h-full flex-col bg-zinc-900">
-      {/* LokAgenda branding */}
-      <div className="flex h-16 items-center gap-3 border-b border-zinc-800 px-5">
-        <Image
-          src="/logo.png"
-          alt="LokAgenda"
-          width={32}
-          height={32}
-          className="h-8 w-8 rounded-lg object-contain"
-        />
+    <div className="flex h-full flex-col bg-gradient-to-b from-zinc-900 to-zinc-950">
+      {/* Brand header */}
+      <div className="flex h-16 items-center gap-3 border-b border-white/5 px-5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
+          <Image
+            src="/logo.png"
+            alt="LokAgenda"
+            width={28}
+            height={28}
+            className="h-7 w-7 object-contain"
+          />
+        </div>
         <div className="flex flex-col min-w-0">
-          <span className="text-xs font-bold text-amber-400 leading-tight">LokAgenda</span>
-          <span className="text-xs text-zinc-400 truncate">{companyName}</span>
+          <span className="text-[13px] font-semibold text-white leading-tight">LokAgenda</span>
+          <span className="text-[11px] text-zinc-500 truncate">{companyName}</span>
         </div>
 
-        {/* Mobile close button */}
         <button
           onClick={() => setMobileOpen(false)}
-          className="ml-auto text-zinc-400 hover:text-white lg:hidden"
+          className="ml-auto text-zinc-500 hover:text-white lg:hidden"
           aria-label="Fechar menu"
         >
           <X className="h-5 w-5" />
@@ -75,34 +77,37 @@ export function Sidebar({ companyName, companyLogoUrl }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {navigation.map((item) => {
-          const active = isActive(item.href)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-blue-700 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-              }`}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {item.name}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 overflow-y-auto px-3 py-5">
+        <div className="space-y-0.5">
+          {navigation.map((item) => {
+            const active = isActive(item.href)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all ${
+                  active
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                }`}
+              >
+                <item.icon className={`h-[18px] w-[18px] shrink-0 ${active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'}`} />
+                <span className="flex-1">{item.name}</span>
+                {active && <ChevronRight className="h-3.5 w-3.5 text-white/50" />}
+              </Link>
+            )
+          })}
+        </div>
       </nav>
 
       {/* Sign out */}
-      <div className="border-t border-zinc-800 p-3">
+      <div className="border-t border-white/5 p-3">
         <button
           onClick={handleSignOut}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition-all hover:bg-white/5 hover:text-zinc-300"
         >
-          <LogOut className="h-5 w-5 shrink-0" />
+          <LogOut className="h-[18px] w-[18px] shrink-0" />
           Sair
         </button>
       </div>
@@ -111,7 +116,7 @@ export function Sidebar({ companyName, companyLogoUrl }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile hamburger trigger */}
+      {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
         className="fixed left-4 top-4 z-40 rounded-lg bg-zinc-900 p-2 text-white shadow-lg lg:hidden"
@@ -123,7 +128,7 @@ export function Sidebar({ companyName, companyLogoUrl }: SidebarProps) {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
