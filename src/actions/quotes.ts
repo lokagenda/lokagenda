@@ -345,24 +345,6 @@ export async function convertQuoteToRental(quoteId: string) {
     return { error: `Erro ao criar itens da locação: ${rentalItemsError.message}` }
   }
 
-  // Decrease stock for each product
-  for (const item of items) {
-    if (item.product_id) {
-      const { data: product } = await supabase
-        .from('products')
-        .select('stock')
-        .eq('id', item.product_id)
-        .single()
-
-      if (product) {
-        await supabase
-          .from('products')
-          .update({ stock: Math.max(0, product.stock - item.quantity) })
-          .eq('id', item.product_id)
-      }
-    }
-  }
-
   // Update quote status
   await supabase
     .from('quotes')

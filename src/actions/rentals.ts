@@ -119,24 +119,6 @@ export async function createRental(input: CreateRentalInput) {
     }
   }
 
-  // Decrease stock
-  for (const item of input.items) {
-    if (item.product_id) {
-      const { data: product } = await supabase
-        .from('products')
-        .select('stock')
-        .eq('id', item.product_id)
-        .single()
-
-      if (product) {
-        await supabase
-          .from('products')
-          .update({ stock: Math.max(0, product.stock - item.quantity) })
-          .eq('id', item.product_id)
-      }
-    }
-  }
-
   revalidatePath('/dashboard/locacoes')
   return { success: true, id: rental.id }
 }
@@ -147,33 +129,6 @@ export async function updateRentalStatus(
 ) {
   const supabase = await createClient()
   await getCompanyId(supabase)
-
-  // If returning, restore stock
-  if (status === 'returned') {
-    const { data: items } = await supabase
-      .from('rental_items')
-      .select('*')
-      .eq('rental_id', id)
-
-    if (items) {
-      for (const item of items) {
-        if (item.product_id) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('stock')
-            .eq('id', item.product_id)
-            .single()
-
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ stock: product.stock + item.quantity })
-              .eq('id', item.product_id)
-          }
-        }
-      }
-    }
-  }
 
   const { error } = await supabase
     .from('rentals')
@@ -192,31 +147,6 @@ export async function updateRentalStatus(
 export async function cancelRental(id: string) {
   const supabase = await createClient()
   await getCompanyId(supabase)
-
-  // Restore stock
-  const { data: items } = await supabase
-    .from('rental_items')
-    .select('*')
-    .eq('rental_id', id)
-
-  if (items) {
-    for (const item of items) {
-      if (item.product_id) {
-        const { data: product } = await supabase
-          .from('products')
-          .select('stock')
-          .eq('id', item.product_id)
-          .single()
-
-        if (product) {
-          await supabase
-            .from('products')
-            .update({ stock: product.stock + item.quantity })
-            .eq('id', item.product_id)
-        }
-      }
-    }
-  }
 
   const { error } = await supabase
     .from('rentals')
@@ -284,39 +214,6 @@ export async function recordPayment(rentalId: string, amount: number) {
 export async function deleteRental(id: string) {
   const supabase = await createClient()
   await getCompanyId(supabase)
-
-  // Restore stock before deleting
-  const { data: rental } = await supabase
-    .from('rentals')
-    .select('status')
-    .eq('id', id)
-    .single()
-
-  if (rental && rental.status !== 'returned' && rental.status !== 'cancelled') {
-    const { data: items } = await supabase
-      .from('rental_items')
-      .select('*')
-      .eq('rental_id', id)
-
-    if (items) {
-      for (const item of items) {
-        if (item.product_id) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('stock')
-            .eq('id', item.product_id)
-            .single()
-
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ stock: product.stock + item.quantity })
-              .eq('id', item.product_id)
-          }
-        }
-      }
-    }
-  }
 
   await supabase.from('rental_items').delete().eq('rental_id', id)
 
