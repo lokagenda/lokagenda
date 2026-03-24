@@ -51,7 +51,7 @@ export async function createRental(input: CreateRentalInput) {
   // Validate date-based stock availability before creating the rental
   for (const item of input.items) {
     if (item.product_id) {
-      const available = await getAvailableStock(companyId, item.product_id, input.event_date)
+      const available = await getAvailableStock(companyId, item.product_id, input.event_date, input.delivery_time, input.pickup_time)
 
       if (available < item.quantity) {
         const { data: product } = await supabase

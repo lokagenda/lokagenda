@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createQuote } from '@/actions/quotes'
+import { createQuote, updateQuote } from '@/actions/quotes'
 import { generateQuoteMessage, getWhatsAppUrl } from '@/lib/whatsapp'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,7 +30,12 @@ interface QuoteItemForm {
 
 export default function NovoOrcamentoPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit')
+  const isEditing = Boolean(editId)
+
   const [loading, setLoading] = useState(false)
+  const [loadingQuote, setLoadingQuote] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [company, setCompany] = useState<Company | null>(null)
@@ -53,10 +58,11 @@ export default function NovoOrcamentoPage() {
   const [pickupTime, setPickupTime] = useState('')
   const [notes, setNotes] = useState('')
   const [discount, setDiscount] = useState(0)
+  const [freight, setFreight] = useState(0)
   const [items, setItems] = useState<QuoteItemForm[]>([])
 
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0)
-  const total = subtotal - discount
+  const total = subtotal - discount + freight
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
@@ -98,6 +104,56 @@ export default function NovoOrcamentoPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Load existing quote data when editing
+  useEffect(() => {
+    if (!editId) return
+
+    async function loadQuote() {
+      setLoadingQuote(true)
+      const supabase = createClient()
+
+      const [quoteRes, itemsRes] = await Promise.all([
+        supabase.from('quotes').select('*').eq('id', editId!).single(),
+        supabase.from('quote_items').select('*').eq('quote_id', editId!),
+      ])
+
+      if (quoteRes.data) {
+        const q = quoteRes.data
+        setSelectedCustomerId(q.customer_id || null)
+        setCustomerName(q.customer_name || '')
+        setCustomerPhone(q.customer_phone || '')
+        setCustomerEmail(q.customer_email || '')
+        setCustomerSearch(q.customer_name || '')
+        setEventDate(q.event_date || '')
+        setEventAddress(q.event_address || '')
+        setEventCity(q.event_city || '')
+        setEventState(q.event_state || '')
+        setEventZip(q.event_zip_code || '')
+        setDeliveryTime(q.delivery_time || '')
+        setPickupTime(q.pickup_time || '')
+        setNotes(q.notes || '')
+        setDiscount(q.discount || 0)
+        setFreight(q.freight || 0)
+      }
+
+      if (itemsRes.data) {
+        setItems(
+          itemsRes.data.map((item) => ({
+            product_id: item.product_id || null,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            subtotal: item.subtotal,
+          }))
+        )
+      }
+
+      setLoadingQuote(false)
+    }
+
+    loadQuote()
+  }, [editId])
 
   const filteredCustomers = customers.filter(
     (c) =>
@@ -167,6 +223,17 @@ export default function NovoOrcamentoPage() {
     )
   }
 
+  function updateItemPrice(index: number, price: number) {
+    if (price < 0) return
+    setItems(
+      items.map((item, i) =>
+        i === index
+          ? { ...item, unit_price: price, subtotal: item.quantity * price }
+          : item
+      )
+    )
+  }
+
   function removeItem(index: number) {
     setItems(items.filter((_, i) => i !== index))
   }
@@ -178,7 +245,7 @@ export default function NovoOrcamentoPage() {
     }
 
     setLoading(true)
-    const result = await createQuote({
+    const quoteData = {
       customer_id: selectedCustomerId,
       customer_name: customerName,
       customer_phone: customerPhone || undefined,
@@ -193,7 +260,11 @@ export default function NovoOrcamentoPage() {
       notes: notes || undefined,
       discount,
       items,
-    })
+    }
+
+    const result = isEditing
+      ? await updateQuote(editId!, quoteData)
+      : await createQuote(quoteData)
     setLoading(false)
 
     if (result.error) {
@@ -201,7 +272,8 @@ export default function NovoOrcamentoPage() {
       return
     }
 
-    router.push(`/dashboard/orcamentos/${result.id}`)
+    const quoteId = isEditing ? editId! : (result as { id?: string }).id
+    router.push(`/dashboard/orcamentos/${quoteId}`)
   }
 
   async function handleSendWhatsApp() {
@@ -216,7 +288,7 @@ export default function NovoOrcamentoPage() {
     }
 
     setLoading(true)
-    const result = await createQuote({
+    const quoteData = {
       customer_id: selectedCustomerId,
       customer_name: customerName,
       customer_phone: customerPhone || undefined,
@@ -231,7 +303,11 @@ export default function NovoOrcamentoPage() {
       notes: notes || undefined,
       discount,
       items,
-    })
+    }
+
+    const result = isEditing
+      ? await updateQuote(editId!, quoteData)
+      : await createQuote(quoteData)
     setLoading(false)
 
     if (result.error) {
@@ -239,10 +315,12 @@ export default function NovoOrcamentoPage() {
       return
     }
 
+    const quoteId = isEditing ? editId! : (result as { id?: string }).id
+
     // Build the WhatsApp message
     if (company) {
       const quoteObj = {
-        id: result.id!,
+        id: quoteId!,
         company_id: company.id,
         customer_id: selectedCustomerId,
         customer_name: customerName,
@@ -268,7 +346,15 @@ export default function NovoOrcamentoPage() {
       window.open(url, '_blank')
     }
 
-    router.push(`/dashboard/orcamentos/${result.id}`)
+    router.push(`/dashboard/orcamentos/${quoteId}`)
+  }
+
+  if (loadingQuote) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-sm text-zinc-500 dark:text-zinc-400">Carregando orçamento...</div>
+      </div>
+    )
   }
 
   return (
@@ -282,10 +368,12 @@ export default function NovoOrcamentoPage() {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            Novo Orçamento
+            {isEditing ? 'Editar Orçamento' : 'Novo Orçamento'}
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Crie um novo orçamento para seu cliente
+            {isEditing
+              ? 'Edite os dados do orçamento'
+              : 'Crie um novo orçamento para seu cliente'}
           </p>
         </div>
       </div>
@@ -486,8 +574,15 @@ export default function NovoOrcamentoPage() {
                   <div className="font-medium text-zinc-900 dark:text-zinc-50 md:col-span-5">
                     {item.product_name}
                   </div>
-                  <div className="text-sm text-zinc-600 dark:text-zinc-400 md:col-span-2">
-                    {formatCurrency(item.unit_price)}
+                  <div className="md:col-span-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.unit_price}
+                      onChange={(e) => updateItemPrice(index, Number(e.target.value))}
+                      className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                    />
                   </div>
                   <div className="flex items-center gap-2 md:col-span-2">
                     <button
@@ -544,6 +639,19 @@ export default function NovoOrcamentoPage() {
                   />
                 </div>
               </div>
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-zinc-600 dark:text-zinc-400">Frete / Deslocamento</span>
+                <div className="w-40">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={freight || ''}
+                    onChange={(e) => setFreight(Number(e.target.value))}
+                  />
+                </div>
+              </div>
               <div className="flex items-center justify-between border-t border-zinc-200 pt-3 dark:border-zinc-700">
                 <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
                   Total
@@ -580,7 +688,7 @@ export default function NovoOrcamentoPage() {
         </Button>
         <Button variant="secondary" onClick={handleSave} disabled={loading}>
           <Save className="h-4 w-4" />
-          {loading ? 'Salvando...' : 'Salvar Rascunho'}
+          {loading ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Salvar Rascunho'}
         </Button>
         <Button onClick={handleSendWhatsApp} disabled={loading}>
           <MessageCircle className="h-4 w-4" />

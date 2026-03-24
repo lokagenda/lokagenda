@@ -229,6 +229,7 @@ export interface Database {
             | "converted";
           total: number;
           discount: number;
+          freight: number;
           created_by: string;
           created_at: string;
           updated_at: string;
@@ -256,6 +257,7 @@ export interface Database {
             | "converted";
           total?: number;
           discount?: number;
+          freight?: number;
           created_by: string;
           created_at?: string;
           updated_at?: string;
@@ -283,6 +285,7 @@ export interface Database {
             | "converted";
           total?: number;
           discount?: number;
+          freight?: number;
           created_by?: string;
           created_at?: string;
           updated_at?: string;
@@ -377,6 +380,7 @@ export interface Database {
           status: "confirmed" | "delivered" | "returned" | "cancelled";
           total: number;
           discount: number;
+          freight: number;
           contract_html: string | null;
           created_by: string;
           created_at: string;
@@ -402,6 +406,7 @@ export interface Database {
           status?: "confirmed" | "delivered" | "returned" | "cancelled";
           total?: number;
           discount?: number;
+          freight?: number;
           contract_html?: string | null;
           created_by: string;
           created_at?: string;
@@ -427,6 +432,7 @@ export interface Database {
           status?: "confirmed" | "delivered" | "returned" | "cancelled";
           total?: number;
           discount?: number;
+          freight?: number;
           contract_html?: string | null;
           created_by?: string;
           created_at?: string;

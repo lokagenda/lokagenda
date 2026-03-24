@@ -464,6 +464,14 @@ export default function LocacaoDetailPage({
                 </span>
               </div>
             )}
+            {rental.freight > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-600 dark:text-zinc-400">Frete / Deslocamento</span>
+                <span className="text-zinc-900 dark:text-zinc-50">
+                  +{formatCurrency(rental.freight)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between border-t border-zinc-200 pt-2 dark:border-zinc-700">
               <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
                 Total

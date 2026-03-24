@@ -9,7 +9,7 @@ type QuoteItemLike = {
 }
 
 export function generateQuoteMessage(
-  quote: Partial<Quote> & { customer_name: string; event_date: string; total: number; discount?: number },
+  quote: Partial<Quote> & { customer_name: string; event_date: string; total: number; discount?: number; freight?: number },
   items: QuoteItemLike[],
   company: Partial<Company> & { name: string }
 ): string {
@@ -49,6 +49,10 @@ export function generateQuoteMessage(
 
   if (quote.discount && quote.discount > 0) {
     message += `*Desconto:* ${formatCurrency(quote.discount)}\n`
+  }
+
+  if (quote.freight && quote.freight > 0) {
+    message += `*Frete:* ${formatCurrency(quote.freight)}\n`
   }
 
   message += `*TOTAL: ${formatCurrency(quote.total)}*\n\n`

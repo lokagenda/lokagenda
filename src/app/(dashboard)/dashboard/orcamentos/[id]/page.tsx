@@ -16,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   ArrowLeft,
-  Check,
   X,
   RefreshCw,
   MessageCircle,
@@ -192,16 +191,16 @@ export default function OrcamentoDetailPage({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {quote.status === 'pending' && (
+          {(quote.status === 'pending' || quote.status === 'approved') && (
             <>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                onClick={() => handleStatusChange('approved')}
+                onClick={handleConvert}
                 disabled={actionLoading}
               >
-                <Check className="h-4 w-4" />
-                Aprovar
+                <RefreshCw className="h-4 w-4" />
+                Converter em Locação
               </Button>
               <Button
                 variant="outline"
@@ -210,20 +209,9 @@ export default function OrcamentoDetailPage({
                 disabled={actionLoading}
               >
                 <X className="h-4 w-4" />
-                Rejeitar
+                Cancelar Orçamento
               </Button>
             </>
-          )}
-          {(quote.status === 'pending' || quote.status === 'approved') && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleConvert}
-              disabled={actionLoading}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Converter em Locação
-            </Button>
           )}
           <Button
             size="sm"
@@ -405,6 +393,14 @@ export default function OrcamentoDetailPage({
                 <span className="text-zinc-600 dark:text-zinc-400">Desconto</span>
                 <span className="text-red-600 dark:text-red-400">
                   -{formatCurrency(quote.discount)}
+                </span>
+              </div>
+            )}
+            {quote.freight > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-600 dark:text-zinc-400">Frete / Deslocamento</span>
+                <span className="text-zinc-900 dark:text-zinc-50">
+                  +{formatCurrency(quote.freight)}
                 </span>
               </div>
             )}

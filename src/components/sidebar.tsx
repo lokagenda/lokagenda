@@ -10,6 +10,7 @@ import {
   Users,
   FileText,
   Calendar,
+  Search,
   ScrollText,
   Building2,
   LogOut,
@@ -30,6 +31,7 @@ const navigation = [
   { name: 'Clientes', href: '/dashboard/clientes', icon: Users },
   { name: 'Orçamentos', href: '/dashboard/orcamentos', icon: FileText },
   { name: 'Locações', href: '/dashboard/locacoes', icon: Calendar },
+  { name: 'Disponibilidade', href: '/dashboard/disponibilidade', icon: Search },
   { name: 'Contratos', href: '/dashboard/contratos', icon: ScrollText },
   { name: 'Empresa', href: '/dashboard/empresa', icon: Building2 },
 ]

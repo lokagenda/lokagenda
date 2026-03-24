@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getAvailableStock } from '@/lib/availability'
 
 interface QuoteItemInput {
   product_id: string | null
@@ -25,6 +26,7 @@ interface CreateQuoteInput {
   pickup_time?: string | null
   notes?: string | null
   discount?: number
+  freight?: number
   items: QuoteItemInput[]
 }
 
@@ -48,13 +50,52 @@ export async function createQuote(input: CreateQuoteInput) {
 
   const subtotal = input.items.reduce((sum, item) => sum + item.subtotal, 0)
   const discount = input.discount || 0
-  const total = subtotal - discount
+  const freight = input.freight || 0
+  const total = subtotal - discount + freight
+
+  // If no customer_id but customer_name exists, find or create customer
+  let customerId = input.customer_id || null
+  if (!customerId && input.customer_name) {
+    // Check if customer with same name+phone already exists in this company
+    let query = supabase
+      .from('customers')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('name', input.customer_name)
+
+    if (input.customer_phone) {
+      query = query.eq('phone', input.customer_phone)
+    } else {
+      query = query.is('phone', null)
+    }
+
+    const { data: existingCustomer } = await query.maybeSingle()
+
+    if (existingCustomer) {
+      customerId = existingCustomer.id
+    } else {
+      const { data: newCustomer, error: customerError } = await supabase
+        .from('customers')
+        .insert({
+          company_id: companyId,
+          name: input.customer_name.trim(),
+          phone: input.customer_phone?.trim() || null,
+          email: input.customer_email?.trim() || null,
+        })
+        .select('id')
+        .single()
+
+      if (!customerError && newCustomer) {
+        customerId = newCustomer.id
+      }
+    }
+  }
 
   const { data: quote, error: quoteError } = await supabase
     .from('quotes')
     .insert({
       company_id: companyId,
-      customer_id: input.customer_id || null,
+      customer_id: customerId,
       customer_name: input.customer_name,
       customer_phone: input.customer_phone || null,
       customer_email: input.customer_email || null,
@@ -67,6 +108,7 @@ export async function createQuote(input: CreateQuoteInput) {
       pickup_time: input.pickup_time || null,
       notes: input.notes || null,
       discount,
+      freight,
       total,
       status: 'pending',
       created_by: userId,
@@ -105,7 +147,8 @@ export async function updateQuote(id: string, input: CreateQuoteInput) {
 
   const subtotal = input.items.reduce((sum, item) => sum + item.subtotal, 0)
   const discount = input.discount || 0
-  const total = subtotal - discount
+  const freight = input.freight || 0
+  const total = subtotal - discount + freight
 
   const { error: quoteError } = await supabase
     .from('quotes')
@@ -123,6 +166,7 @@ export async function updateQuote(id: string, input: CreateQuoteInput) {
       pickup_time: input.pickup_time || null,
       notes: input.notes || null,
       discount,
+      freight,
       total,
     })
     .eq('id', id)
@@ -226,43 +270,27 @@ export async function convertQuoteToRental(quoteId: string) {
     return { error: 'Orçamento sem itens' }
   }
 
-  // Validate date-based stock availability before converting
+  // Validate time-period-based stock availability before converting
   for (const item of items) {
     if (item.product_id) {
-      const { data: product } = await supabase
-        .from('products')
-        .select('stock, name')
-        .eq('id', item.product_id)
-        .single()
-
-      if (!product) continue
-
-      // Get active rentals for the same event_date (excluding cancelled/returned)
-      const { data: activeRentals } = await supabase
-        .from('rentals')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('event_date', quote.event_date)
-        .not('status', 'in', '("cancelled","returned")')
-
-      let reserved = 0
-      if (activeRentals && activeRentals.length > 0) {
-        const rentalIds = activeRentals.map(r => r.id)
-
-        const { data: rentalItems } = await supabase
-          .from('rental_items')
-          .select('quantity')
-          .eq('product_id', item.product_id)
-          .in('rental_id', rentalIds)
-
-        reserved = rentalItems?.reduce((sum, ri) => sum + ri.quantity, 0) || 0
-      }
-
-      const available = Math.max(0, product.stock - reserved)
+      const available = await getAvailableStock(
+        companyId,
+        item.product_id,
+        quote.event_date,
+        quote.delivery_time,
+        quote.pickup_time
+      )
 
       if (available < item.quantity) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('name')
+          .eq('id', item.product_id)
+          .single()
+
+        const productName = product?.name || item.product_name
         return {
-          error: `Estoque insuficiente para "${product.name}" na data ${quote.event_date}: disponível ${available}, necessário ${item.quantity}`,
+          error: `Estoque insuficiente para "${productName}" na data ${quote.event_date}: disponível ${available}, necessário ${item.quantity}`,
         }
       }
     }
@@ -288,6 +316,7 @@ export async function convertQuoteToRental(quoteId: string) {
       notes: quote.notes,
       total: quote.total,
       discount: quote.discount,
+      freight: quote.freight || 0,
       status: 'confirmed',
       created_by: userId,
     })
