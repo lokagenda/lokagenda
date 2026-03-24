@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { ExportButton } from '@/components/export-button'
 import { Pagination } from '@/components/pagination'
+import { DateFilter } from '@/components/date-filter'
 
 const ITEMS_PER_PAGE = 12
 
@@ -299,49 +300,8 @@ export default async function LocacoesPage({
         </div>
 
         {/* Date Range */}
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">De</label>
-          <form>
-            <input
-              type="date"
-              name="date_from"
-              defaultValue={dateFrom || ''}
-              onChange={(e) => {
-                const params = new URLSearchParams(window.location.search)
-                if (e.target.value) {
-                  params.set('date_from', e.target.value)
-                } else {
-                  params.delete('date_from')
-                }
-                params.delete('page')
-                window.location.href = `/dashboard/locacoes?${params.toString()}`
-              }}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </form>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Ate</label>
-          <form>
-            <input
-              type="date"
-              name="date_to"
-              defaultValue={dateTo || ''}
-              onChange={(e) => {
-                const params = new URLSearchParams(window.location.search)
-                if (e.target.value) {
-                  params.set('date_to', e.target.value)
-                } else {
-                  params.delete('date_to')
-                }
-                params.delete('page')
-                window.location.href = `/dashboard/locacoes?${params.toString()}`
-              }}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </form>
-        </div>
+        <DateFilter paramName="date_from" label="De" defaultValue={dateFrom} />
+        <DateFilter paramName="date_to" label="Até" defaultValue={dateTo} />
 
         {/* Customer Search */}
         <div className="space-y-1 flex-1 min-w-[200px]">
