@@ -23,7 +23,7 @@ export function formatDate(date: string | Date): string {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-  }).format(typeof date === 'string' ? new Date(date + 'T12:00:00') : date);
+  }).format(typeof date === 'string' ? new Date(date) : date);
 }
 
 export function formatPhone(phone: string): string {
