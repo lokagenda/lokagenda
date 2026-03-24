@@ -2,8 +2,28 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
 
 /**
- * Check if two time periods overlap.
- * If any time is null/undefined, treat as full-day (always conflicts).
+ * Normalize a date value to YYYY-MM-DD format.
+ * Handles ISO timestamps (e.g. "2024-01-15T00:00:00+00:00") and plain date strings.
+ */
+function normalizeDate(date: string): string {
+  // If already YYYY-MM-DD, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date
+  // Extract the date portion from ISO or other formats
+  const match = date.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (match) return match[1]
+  // Fallback: parse as Date and extract YYYY-MM-DD
+  const d = new Date(date)
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10)
+  }
+  return date
+}
+
+/**
+ * Check if two time periods overlap on the same date.
+ * - If the existing rental has no times (null/empty) → full-day reservation, always conflicts
+ * - If the new query has no times (null/empty) → wants the full day, always conflicts
+ * - If both have complete times → check actual overlap
  */
 function timesOverlap(
   aStart: string | null | undefined,
@@ -11,8 +31,17 @@ function timesOverlap(
   bStart: string | null | undefined,
   bEnd: string | null | undefined
 ): boolean {
-  if (!aStart || !aEnd || !bStart || !bEnd) return true
-  return aStart < bEnd && aEnd > bStart
+  const aHasTime = !!(aStart && aEnd)
+  const bHasTime = !!(bStart && bEnd)
+
+  // If the existing rental has no time range, it occupies the full day → conflict
+  if (!aHasTime) return true
+
+  // If the query has no time range, it wants the full day → conflict
+  if (!bHasTime) return true
+
+  // Both have times: check actual overlap
+  return aStart! < bEnd! && aEnd! > bStart!
 }
 
 /**
@@ -30,6 +59,9 @@ export async function getAvailableStock(
 ): Promise<number> {
   const supabase = await createClient()
 
+  // Normalize date to YYYY-MM-DD to match Supabase date column format
+  const normalizedDate = normalizeDate(eventDate)
+
   // Get total stock
   const { data: product } = await supabase
     .from('products')
@@ -44,7 +76,7 @@ export async function getAvailableStock(
     .from('rentals')
     .select('id, delivery_time, pickup_time')
     .eq('company_id', companyId)
-    .eq('event_date', eventDate)
+    .eq('event_date', normalizedDate)
     .not('status', 'in', '("cancelled","returned")')
 
   if (!rentals || rentals.length === 0) return product.stock
@@ -82,6 +114,9 @@ export async function getAvailableStockClient(
 ): Promise<number> {
   const supabase = createBrowserClient()
 
+  // Normalize date to YYYY-MM-DD to match Supabase date column format
+  const normalizedDate = normalizeDate(eventDate)
+
   const { data: product } = await supabase
     .from('products')
     .select('stock')
@@ -94,7 +129,7 @@ export async function getAvailableStockClient(
     .from('rentals')
     .select('id, delivery_time, pickup_time')
     .eq('company_id', companyId)
-    .eq('event_date', eventDate)
+    .eq('event_date', normalizedDate)
     .not('status', 'in', '("cancelled","returned")')
 
   if (!rentals || rentals.length === 0) return product.stock

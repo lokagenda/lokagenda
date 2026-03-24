@@ -382,6 +382,8 @@ export interface Database {
           discount: number;
           freight: number;
           contract_html: string | null;
+          payment_status: "pending" | "partial" | "paid";
+          amount_paid: number;
           created_by: string;
           created_at: string;
           updated_at: string;
@@ -408,6 +410,8 @@ export interface Database {
           discount?: number;
           freight?: number;
           contract_html?: string | null;
+          payment_status?: "pending" | "partial" | "paid";
+          amount_paid?: number;
           created_by: string;
           created_at?: string;
           updated_at?: string;
@@ -434,6 +438,8 @@ export interface Database {
           discount?: number;
           freight?: number;
           contract_html?: string | null;
+          payment_status?: "pending" | "partial" | "paid";
+          amount_paid?: number;
           created_by?: string;
           created_at?: string;
           updated_at?: string;

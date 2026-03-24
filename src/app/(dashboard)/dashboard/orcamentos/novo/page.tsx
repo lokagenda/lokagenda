@@ -155,6 +155,43 @@ export default function NovoOrcamentoPage() {
     loadQuote()
   }, [editId])
 
+  // Pre-populate from availability page URL params
+  useEffect(() => {
+    if (isEditing) return
+    const itemsParam = searchParams.get('items')
+    if (!itemsParam || products.length === 0) return
+
+    const dateParam = searchParams.get('date')
+    const deliveryParam = searchParams.get('delivery')
+    const pickupParam = searchParams.get('pickup')
+
+    if (dateParam) setEventDate(dateParam)
+    if (deliveryParam) setDeliveryTime(deliveryParam)
+    if (pickupParam) setPickupTime(pickupParam)
+
+    const pairs = itemsParam.split(',').filter(Boolean)
+    const newItems: QuoteItemForm[] = []
+
+    for (const pair of pairs) {
+      const [productId, qtyStr] = pair.split(':')
+      const qty = Number(qtyStr) || 1
+      const product = products.find((p) => p.id === productId)
+      if (product) {
+        newItems.push({
+          product_id: product.id,
+          product_name: product.name,
+          quantity: qty,
+          unit_price: product.price,
+          subtotal: qty * product.price,
+        })
+      }
+    }
+
+    if (newItems.length > 0) {
+      setItems(newItems)
+    }
+  }, [isEditing, products, searchParams])
+
   const filteredCustomers = customers.filter(
     (c) =>
       c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
@@ -259,6 +296,7 @@ export default function NovoOrcamentoPage() {
       pickup_time: pickupTime || undefined,
       notes: notes || undefined,
       discount,
+      freight,
       items,
     }
 
@@ -302,6 +340,7 @@ export default function NovoOrcamentoPage() {
       pickup_time: pickupTime || undefined,
       notes: notes || undefined,
       discount,
+      freight,
       items,
     }
 

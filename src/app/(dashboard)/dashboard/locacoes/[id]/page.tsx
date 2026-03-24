@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { use } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
-import { updateRentalStatus, cancelRental, deleteRental } from '@/actions/rentals'
+import { updateRentalStatus, cancelRental, deleteRental, recordPayment } from '@/actions/rentals'
 import { generateContract } from '@/actions/contracts'
 import { buildFullAddress, getGoogleMapsUrl, getWazeUrl } from '@/lib/maps'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -23,6 +23,8 @@ import {
   FileText,
   Package,
   Loader2,
+  CheckCircle2,
+  DollarSign,
 } from 'lucide-react'
 import type { Rental, RentalItem } from '@/types/database'
 
@@ -62,6 +64,8 @@ export default function LocacaoDetailPage({
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [contractLoading, setContractLoading] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentLoading, setPaymentLoading] = useState(false)
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
@@ -138,6 +142,30 @@ export default function LocacaoDetailPage({
       toast.error('Erro ao gerar contrato.')
     } finally {
       setContractLoading(false)
+    }
+  }
+
+  async function handleRecordPayment() {
+    if (!rental) return
+    const amount = parseFloat(paymentAmount.replace(',', '.'))
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Informe um valor válido.')
+      return
+    }
+    setPaymentLoading(true)
+    try {
+      const result = await recordPayment(rental.id, amount)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('Pagamento registrado com sucesso!')
+        setPaymentAmount('')
+        await loadData()
+      }
+    } catch {
+      toast.error('Erro ao registrar pagamento.')
+    } finally {
+      setPaymentLoading(false)
     }
   }
 
@@ -481,6 +509,93 @@ export default function LocacaoDetailPage({
               </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Pagamento */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Pagamento
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Status:</span>
+            {rental.payment_status === 'paid' ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                <CheckCircle2 className="h-3 w-3" />
+                Pago
+              </span>
+            ) : rental.payment_status === 'partial' ? (
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                Parcial
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                Pendente
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Total</div>
+              <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                {formatCurrency(rental.total)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Valor Pago</div>
+              <div className="mt-1 text-sm font-semibold text-green-700 dark:text-green-400">
+                {formatCurrency(rental.amount_paid || 0)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Restante</div>
+              <div className="mt-1 text-sm font-semibold text-red-600 dark:text-red-400">
+                {formatCurrency(Math.max(0, rental.total - (rental.amount_paid || 0)))}
+              </div>
+            </div>
+          </div>
+
+          {rental.payment_status === 'paid' ? (
+            <div className="flex items-center gap-2 rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <span className="text-sm font-medium text-green-800 dark:text-green-300">
+                Pagamento completo
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">
+                  R$
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-10 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-blue-500"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={handleRecordPayment}
+                disabled={paymentLoading || !paymentAmount}
+              >
+                {paymentLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <DollarSign className="h-4 w-4" />
+                )}
+                Registrar Pagamento
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

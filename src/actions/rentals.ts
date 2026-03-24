@@ -232,6 +232,55 @@ export async function cancelRental(id: string) {
   return { success: true }
 }
 
+export async function recordPayment(rentalId: string, amount: number) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  // Fetch current rental and verify ownership
+  const { data: rental, error: fetchError } = await supabase
+    .from('rentals')
+    .select('id, company_id, total, amount_paid')
+    .eq('id', rentalId)
+    .single()
+
+  if (fetchError || !rental) {
+    return { error: 'Locação não encontrada' }
+  }
+
+  if (rental.company_id !== companyId) {
+    return { error: 'Sem permissão para esta locação' }
+  }
+
+  if (amount <= 0) {
+    return { error: 'O valor deve ser maior que zero' }
+  }
+
+  const newAmountPaid = (rental.amount_paid || 0) + amount
+  let paymentStatus: 'pending' | 'partial' | 'paid' = 'pending'
+
+  if (newAmountPaid >= rental.total) {
+    paymentStatus = 'paid'
+  } else if (newAmountPaid > 0) {
+    paymentStatus = 'partial'
+  }
+
+  const { error: updateError } = await supabase
+    .from('rentals')
+    .update({
+      amount_paid: newAmountPaid,
+      payment_status: paymentStatus,
+    })
+    .eq('id', rentalId)
+
+  if (updateError) {
+    return { error: `Erro ao registrar pagamento: ${updateError.message}` }
+  }
+
+  revalidatePath('/dashboard/locacoes')
+  revalidatePath(`/dashboard/locacoes/${rentalId}`)
+  return { success: true }
+}
+
 export async function deleteRental(id: string) {
   const supabase = await createClient()
   await getCompanyId(supabase)

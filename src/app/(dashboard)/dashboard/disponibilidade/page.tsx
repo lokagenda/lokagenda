@@ -26,8 +26,17 @@ function timesOverlap(
   bStart: string | null | undefined,
   bEnd: string | null | undefined
 ): boolean {
-  if (!aStart || !aEnd || !bStart || !bEnd) return true
-  return aStart < bEnd && aEnd > bStart
+  const aHasTime = !!(aStart && aEnd)
+  const bHasTime = !!(bStart && bEnd)
+
+  // If the existing rental has no time range, it occupies the full day → conflict
+  if (!aHasTime) return true
+
+  // If the query has no time range, it wants the full day → conflict
+  if (!bHasTime) return true
+
+  // Both have times: check actual overlap
+  return aStart! < bEnd! && aEnd! > bStart!
 }
 
 export default function DisponibilidadePage() {
