@@ -227,3 +227,40 @@ export async function generateContract(rentalId: string) {
   revalidatePath(`/dashboard/locacoes/${rentalId}`)
   return { success: true, html: contractHtml }
 }
+
+export async function saveSignatures(
+  rentalId: string,
+  signatureClient: string,
+  signatureCompany: string
+) {
+  const { supabase, companyId } = await getAuthenticatedProfile()
+
+  // Verify rental belongs to company
+  const { data: rental, error: fetchError } = await supabase
+    .from('rentals')
+    .select('id')
+    .eq('id', rentalId)
+    .eq('company_id', companyId)
+    .single()
+
+  if (fetchError || !rental) {
+    return { error: 'Locação não encontrada.' }
+  }
+
+  const { error: updateError } = await supabase
+    .from('rentals')
+    .update({
+      signature_client: signatureClient,
+      signature_company: signatureCompany,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', rentalId)
+    .eq('company_id', companyId)
+
+  if (updateError) {
+    return { error: `Erro ao salvar assinaturas: ${updateError.message}` }
+  }
+
+  revalidatePath(`/dashboard/locacoes/${rentalId}`)
+  return { success: true }
+}

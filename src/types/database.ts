@@ -382,6 +382,8 @@ export interface Database {
           discount: number;
           freight: number;
           contract_html: string | null;
+          signature_client: string | null;
+          signature_company: string | null;
           payment_status: "pending" | "partial" | "paid";
           amount_paid: number;
           created_by: string;
@@ -410,6 +412,8 @@ export interface Database {
           discount?: number;
           freight?: number;
           contract_html?: string | null;
+          signature_client?: string | null;
+          signature_company?: string | null;
           payment_status?: "pending" | "partial" | "paid";
           amount_paid?: number;
           created_by: string;
@@ -438,6 +442,8 @@ export interface Database {
           discount?: number;
           freight?: number;
           contract_html?: string | null;
+          signature_client?: string | null;
+          signature_company?: string | null;
           payment_status?: "pending" | "partial" | "paid";
           amount_paid?: number;
           created_by?: string;
@@ -516,6 +522,149 @@ export interface Database {
             columns: ["product_id"];
             isOneToOne: false;
             referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      payments: {
+        Row: {
+          id: string;
+          rental_id: string;
+          company_id: string;
+          amount: number;
+          method: string | null;
+          paid_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          rental_id: string;
+          company_id: string;
+          amount: number;
+          method?: string | null;
+          paid_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          rental_id?: string;
+          company_id?: string;
+          amount?: number;
+          method?: string | null;
+          paid_at?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payments_rental_id_fkey";
+            columns: ["rental_id"];
+            isOneToOne: false;
+            referencedRelation: "rentals";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notifications: {
+        Row: {
+          id: string;
+          company_id: string;
+          user_id: string | null;
+          type: string;
+          title: string;
+          message: string;
+          rental_id: string | null;
+          quote_id: string | null;
+          read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          user_id?: string | null;
+          type: string;
+          title: string;
+          message: string;
+          rental_id?: string | null;
+          quote_id?: string | null;
+          read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          user_id?: string | null;
+          type?: string;
+          title?: string;
+          message?: string;
+          rental_id?: string | null;
+          quote_id?: string | null;
+          read?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_rental_id_fkey";
+            columns: ["rental_id"];
+            isOneToOne: false;
+            referencedRelation: "rentals";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      banners: {
+        Row: {
+          id: string;
+          company_id: string | null;
+          image_url: string;
+          link_url: string | null;
+          active: boolean;
+          position: number;
+          is_global: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id?: string | null;
+          image_url: string;
+          link_url?: string | null;
+          active?: boolean;
+          position?: number;
+          is_global?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string | null;
+          image_url?: string;
+          link_url?: string | null;
+          active?: boolean;
+          position?: number;
+          is_global?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "banners_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
             referencedColumns: ["id"];
           },
         ];
@@ -602,3 +751,6 @@ export type QuoteItem = Tables<"quote_items">;
 export type Rental = Tables<"rentals">;
 export type RentalItem = Tables<"rental_items">;
 export type ContractTemplate = Tables<"contract_templates">;
+export type Payment = Tables<"payments">;
+export type Notification = Tables<"notifications">;
+export type Banner = Tables<"banners">;

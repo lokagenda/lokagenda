@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, FileText, Eye } from 'lucide-react'
+import { Plus, FileText, Eye, Search } from 'lucide-react'
 import { ExportButton } from '@/components/export-button'
 import { Pagination } from '@/components/pagination'
 
@@ -35,9 +35,21 @@ const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
 export default async function OrcamentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>
+  searchParams: Promise<{
+    status?: string
+    page?: string
+    customer?: string
+    date_from?: string
+    date_to?: string
+  }>
 }) {
-  const { status: filterStatus, page: pageParam } = await searchParams
+  const {
+    status: filterStatus,
+    page: pageParam,
+    customer: customerSearch,
+    date_from: dateFrom,
+    date_to: dateTo,
+  } = await searchParams
   const currentPage = Math.max(1, parseInt(pageParam || '1', 10) || 1)
 
   const supabase = await createClient()
@@ -63,6 +75,18 @@ export default async function OrcamentosPage({
     query = query.eq('status', filterStatus as 'pending' | 'approved' | 'rejected' | 'expired' | 'converted')
   }
 
+  if (customerSearch) {
+    query = query.ilike('customer_name', `%${customerSearch}%`)
+  }
+
+  if (dateFrom) {
+    query = query.gte('event_date', dateFrom)
+  }
+
+  if (dateTo) {
+    query = query.lte('event_date', dateTo)
+  }
+
   // Count query for pagination
   let countQuery = supabase
     .from('quotes')
@@ -71,6 +95,18 @@ export default async function OrcamentosPage({
 
   if (filterStatus && filterStatus !== 'all') {
     countQuery = countQuery.eq('status', filterStatus as 'pending' | 'approved' | 'rejected' | 'expired' | 'converted')
+  }
+
+  if (customerSearch) {
+    countQuery = countQuery.ilike('customer_name', `%${customerSearch}%`)
+  }
+
+  if (dateFrom) {
+    countQuery = countQuery.gte('event_date', dateFrom)
+  }
+
+  if (dateTo) {
+    countQuery = countQuery.lte('event_date', dateTo)
   }
 
   const { count } = await countQuery
@@ -87,6 +123,9 @@ export default async function OrcamentosPage({
   // Build baseUrl preserving existing filters
   const params = new URLSearchParams()
   if (filterStatus) params.set('status', filterStatus)
+  if (customerSearch) params.set('customer', customerSearch)
+  if (dateFrom) params.set('date_from', dateFrom)
+  if (dateTo) params.set('date_to', dateTo)
   const baseUrl = `/dashboard/orcamentos${params.toString() ? `?${params.toString()}` : ''}`
 
   return (
@@ -135,6 +174,74 @@ export default async function OrcamentosPage({
             </button>
           </Link>
         ))}
+      </div>
+
+      {/* Advanced Filters */}
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+        {/* Customer Search */}
+        <div className="space-y-1 flex-1 min-w-[200px]">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cliente</label>
+          <form action="/dashboard/orcamentos" method="GET">
+            {filterStatus && <input type="hidden" name="status" value={filterStatus} />}
+            {dateFrom && <input type="hidden" name="date_from" value={dateFrom} />}
+            {dateTo && <input type="hidden" name="date_to" value={dateTo} />}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                name="customer"
+                placeholder="Buscar cliente..."
+                defaultValue={customerSearch || ''}
+                className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500"
+              />
+            </div>
+          </form>
+        </div>
+
+        {/* Date Range */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">De</label>
+          <form>
+            <input
+              type="date"
+              name="date_from"
+              defaultValue={dateFrom || ''}
+              onChange={(e) => {
+                const p = new URLSearchParams(window.location.search)
+                if (e.target.value) {
+                  p.set('date_from', e.target.value)
+                } else {
+                  p.delete('date_from')
+                }
+                p.delete('page')
+                window.location.href = `/dashboard/orcamentos?${p.toString()}`
+              }}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </form>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Ate</label>
+          <form>
+            <input
+              type="date"
+              name="date_to"
+              defaultValue={dateTo || ''}
+              onChange={(e) => {
+                const p = new URLSearchParams(window.location.search)
+                if (e.target.value) {
+                  p.set('date_to', e.target.value)
+                } else {
+                  p.delete('date_to')
+                }
+                p.delete('page')
+                window.location.href = `/dashboard/orcamentos?${p.toString()}`
+              }}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </form>
+        </div>
       </div>
 
       {/* Quotes List */}

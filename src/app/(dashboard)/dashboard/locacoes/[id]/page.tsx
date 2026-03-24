@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { use } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { updateRentalStatus, cancelRental, deleteRental, recordPayment } from '@/actions/rentals'
-import { generateContract } from '@/actions/contracts'
+import { generateContract, saveSignatures } from '@/actions/contracts'
 import { buildFullAddress, getGoogleMapsUrl, getWazeUrl } from '@/lib/maps'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Modal } from '@/components/ui/modal'
+import { SignaturePad } from '@/components/signature-pad'
 import {
   ArrowLeft,
   Truck,
@@ -25,8 +27,10 @@ import {
   Loader2,
   CheckCircle2,
   DollarSign,
+  PenTool,
+  Download,
 } from 'lucide-react'
-import type { Rental, RentalItem } from '@/types/database'
+import type { Rental, RentalItem, Payment } from '@/types/database'
 
 const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   confirmed: {
@@ -65,18 +69,28 @@ export default function LocacaoDetailPage({
   const [actionLoading, setActionLoading] = useState(false)
   const [contractLoading, setContractLoading] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('PIX')
   const [paymentLoading, setPaymentLoading] = useState(false)
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false)
+  const [signatureClient, setSignatureClient] = useState<string | null>(null)
+  const [signatureCompany, setSignatureCompany] = useState<string | null>(null)
+  const [signatureSaving, setSignatureSaving] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const pdfContainerRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
 
-    const [rentalRes, itemsRes] = await Promise.all([
+    const [rentalRes, itemsRes, paymentsRes] = await Promise.all([
       supabase.from('rentals').select('*').eq('id', id).single(),
       supabase.from('rental_items').select('*').eq('rental_id', id),
+      supabase.from('payments').select('*').eq('rental_id', id).order('paid_at', { ascending: false }),
     ])
 
     setRental(rentalRes.data)
     setItems(itemsRes.data || [])
+    setPayments(paymentsRes.data || [])
     setLoading(false)
   }, [id])
 
@@ -154,18 +168,179 @@ export default function LocacaoDetailPage({
     }
     setPaymentLoading(true)
     try {
-      const result = await recordPayment(rental.id, amount)
+      const result = await recordPayment(rental.id, amount, paymentMethod)
       if (result.error) {
         toast.error(result.error)
       } else {
         toast.success('Pagamento registrado com sucesso!')
         setPaymentAmount('')
+        setPaymentMethod('PIX')
         await loadData()
       }
     } catch {
       toast.error('Erro ao registrar pagamento.')
     } finally {
       setPaymentLoading(false)
+    }
+  }
+
+  async function handleSaveSignatures() {
+    if (!rental || !signatureClient || !signatureCompany) {
+      toast.error('Ambas as assinaturas são necessárias.')
+      return
+    }
+    setSignatureSaving(true)
+    try {
+      const result = await saveSignatures(rental.id, signatureClient, signatureCompany)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('Assinaturas salvas com sucesso!')
+        setSignatureModalOpen(false)
+        await loadData()
+      }
+    } catch {
+      toast.error('Erro ao salvar assinaturas.')
+    } finally {
+      setSignatureSaving(false)
+    }
+  }
+
+  async function handleExportPdf() {
+    if (!rental) return
+    setPdfLoading(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const { jsPDF } = await import('jspdf')
+
+      const container = pdfContainerRef.current
+      if (!container) return
+
+      container.innerHTML = ''
+      container.style.width = '794px'
+      container.style.padding = '40px'
+      container.style.background = 'white'
+      container.style.color = 'black'
+      container.style.fontFamily = 'Arial, sans-serif'
+      container.style.fontSize = '14px'
+      container.style.lineHeight = '1.6'
+      container.style.position = 'absolute'
+      container.style.left = '-9999px'
+      container.style.top = '0'
+
+      const contractDiv = document.createElement('div')
+      contractDiv.innerHTML = rental.contract_html || ''
+      container.appendChild(contractDiv)
+
+      const clientSig = rental.signature_client
+      const companySig = rental.signature_company
+      if (clientSig || companySig) {
+        const sigSection = document.createElement('div')
+        sigSection.style.marginTop = '40px'
+        sigSection.style.display = 'flex'
+        sigSection.style.justifyContent = 'space-between'
+        sigSection.style.gap = '40px'
+
+        if (clientSig) {
+          const clientDiv = document.createElement('div')
+          clientDiv.style.textAlign = 'center'
+          clientDiv.style.flex = '1'
+          const clientImg = document.createElement('img')
+          clientImg.src = clientSig
+          clientImg.style.maxWidth = '250px'
+          clientImg.style.maxHeight = '120px'
+          clientImg.style.display = 'block'
+          clientImg.style.margin = '0 auto'
+          clientDiv.appendChild(clientImg)
+          const clientLine = document.createElement('div')
+          clientLine.style.borderTop = '1px solid #333'
+          clientLine.style.marginTop = '8px'
+          clientLine.style.paddingTop = '8px'
+          clientLine.textContent = 'Assinatura do Cliente'
+          clientDiv.appendChild(clientLine)
+          sigSection.appendChild(clientDiv)
+        }
+
+        if (companySig) {
+          const companyDiv = document.createElement('div')
+          companyDiv.style.textAlign = 'center'
+          companyDiv.style.flex = '1'
+          const companyImg = document.createElement('img')
+          companyImg.src = companySig
+          companyImg.style.maxWidth = '250px'
+          companyImg.style.maxHeight = '120px'
+          companyImg.style.display = 'block'
+          companyImg.style.margin = '0 auto'
+          companyDiv.appendChild(companyImg)
+          const companyLine = document.createElement('div')
+          companyLine.style.borderTop = '1px solid #333'
+          companyLine.style.marginTop = '8px'
+          companyLine.style.paddingTop = '8px'
+          companyLine.textContent = 'Assinatura da Empresa'
+          companyDiv.appendChild(companyLine)
+          sigSection.appendChild(companyDiv)
+        }
+
+        container.appendChild(sigSection)
+      }
+
+      const images = container.querySelectorAll('img')
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve()
+              } else {
+                img.onload = () => resolve()
+                img.onerror = () => resolve()
+              }
+            })
+        )
+      )
+
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      })
+
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pdfWidth
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width
+
+      let heightLeft = imgHeight
+      let position = 0
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pdfHeight
+
+      while (heightLeft > 0) {
+        position = position - pdfHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pdfHeight
+      }
+
+      const clientName = rental.customer_name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, '_')
+      const dateStr = rental.event_date.replace(/-/g, '')
+      pdf.save(`${clientName}_${dateStr}.pdf`)
+
+      toast.success('PDF exportado com sucesso!')
+    } catch (err) {
+      console.error('Erro ao exportar PDF:', err)
+      toast.error('Erro ao exportar PDF.')
+    } finally {
+      setPdfLoading(false)
+      if (pdfContainerRef.current) {
+        pdfContainerRef.current.innerHTML = ''
+      }
     }
   }
 
@@ -204,6 +379,9 @@ export default function LocacaoDetailPage({
 
   return (
     <div className="space-y-6">
+      {/* Hidden div for PDF generation */}
+      <div ref={pdfContainerRef} aria-hidden="true" />
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -598,6 +776,140 @@ export default function LocacaoDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* Contrato - Assinaturas e PDF */}
+      {rental.contract_html && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Contrato
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const w = window.open('', '_blank')
+                  if (w) {
+                    w.document.write(rental.contract_html!)
+                    w.document.close()
+                  }
+                }}
+              >
+                <FileText className="h-4 w-4" />
+                Ver Contrato
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSignatureClient(rental.signature_client || null)
+                  setSignatureCompany(rental.signature_company || null)
+                  setSignatureModalOpen(true)
+                }}
+              >
+                <PenTool className="h-4 w-4" />
+                Assinar Contrato
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={pdfLoading}
+              >
+                {pdfLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                Exportar PDF
+              </Button>
+            </div>
+
+            {/* Show saved signatures */}
+            {(rental.signature_client || rental.signature_company) && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {rental.signature_client && (
+                  <div>
+                    <div className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      Assinatura do Cliente
+                    </div>
+                    <div className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
+                      <img
+                        src={rental.signature_client}
+                        alt="Assinatura do Cliente"
+                        className="mx-auto max-h-24"
+                      />
+                    </div>
+                  </div>
+                )}
+                {rental.signature_company && (
+                  <div>
+                    <div className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      Assinatura da Empresa
+                    </div>
+                    <div className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
+                      <img
+                        src={rental.signature_company}
+                        alt="Assinatura da Empresa"
+                        className="mx-auto max-h-24"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Signature Modal */}
+      <Modal
+        open={signatureModalOpen}
+        onClose={() => setSignatureModalOpen(false)}
+        title="Assinar Contrato"
+        description="Desenhe as assinaturas do cliente e da empresa."
+        className="max-w-2xl"
+      >
+        <div className="space-y-6">
+          <SignaturePad
+            label="Assinatura do Cliente"
+            onSave={(dataUrl) => setSignatureClient(dataUrl)}
+            width={500}
+            height={180}
+          />
+          <SignaturePad
+            label="Assinatura da Empresa"
+            onSave={(dataUrl) => setSignatureCompany(dataUrl)}
+            width={500}
+            height={180}
+          />
+          <div className="flex justify-end gap-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSignatureModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveSignatures}
+              disabled={signatureSaving || !signatureClient || !signatureCompany}
+            >
+              {signatureSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PenTool className="h-4 w-4" />
+              )}
+              Salvar Assinaturas
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Notes */}
       {rental.notes && (

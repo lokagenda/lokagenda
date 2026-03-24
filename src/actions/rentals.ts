@@ -162,7 +162,7 @@ export async function cancelRental(id: string) {
   return { success: true }
 }
 
-export async function recordPayment(rentalId: string, amount: number) {
+export async function recordPayment(rentalId: string, amount: number, method?: string) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
 
@@ -185,6 +185,21 @@ export async function recordPayment(rentalId: string, amount: number) {
     return { error: 'O valor deve ser maior que zero' }
   }
 
+  // Insert into payments table
+  const { error: paymentError } = await supabase
+    .from('payments')
+    .insert({
+      rental_id: rentalId,
+      company_id: companyId,
+      amount,
+      method: method || null,
+      paid_at: new Date().toISOString(),
+    })
+
+  if (paymentError) {
+    return { error: `Erro ao registrar pagamento: ${paymentError.message}` }
+  }
+
   const newAmountPaid = (rental.amount_paid || 0) + amount
   let paymentStatus: 'pending' | 'partial' | 'paid' = 'pending'
 
@@ -203,7 +218,7 @@ export async function recordPayment(rentalId: string, amount: number) {
     .eq('id', rentalId)
 
   if (updateError) {
-    return { error: `Erro ao registrar pagamento: ${updateError.message}` }
+    return { error: `Erro ao atualizar locação: ${updateError.message}` }
   }
 
   revalidatePath('/dashboard/locacoes')

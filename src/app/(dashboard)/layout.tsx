@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/sidebar'
 import { Header } from '@/components/header'
+import { DailyPopup } from '@/components/daily-popup'
 
 export default async function DashboardLayout({
   children,
@@ -52,6 +53,8 @@ export default async function DashboardLayout({
         <Header userName={userName} avatarUrl={profile?.avatar_url} />
         <main className="p-6 lg:p-10">{children}</main>
       </div>
+
+      <DailyPopup />
     </div>
   )
 }

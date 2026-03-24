@@ -13,6 +13,7 @@ import {
   Search,
   ScrollText,
   Building2,
+  Megaphone,
   LogOut,
   X,
   Menu,
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Disponibilidade', href: '/dashboard/disponibilidade', icon: Search },
   { name: 'Contratos', href: '/dashboard/contratos', icon: ScrollText },
   { name: 'Empresa', href: '/dashboard/empresa', icon: Building2 },
+  { name: 'Banners', href: '/dashboard/banners', icon: Megaphone },
 ]
 
 export function Sidebar({ companyName, companyLogoUrl }: SidebarProps) {

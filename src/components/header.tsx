@@ -6,6 +6,7 @@ import { ChevronDown, User } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { NotificationBell } from '@/components/notification-bell'
 
 interface HeaderProps {
   userName: string
@@ -61,6 +62,7 @@ export function Header({ userName, avatarUrl }: HeaderProps) {
 
       {/* Right: theme toggle + user dropdown */}
       <div className="flex items-center gap-2">
+        <NotificationBell />
         <ThemeToggle />
         <div className="relative" ref={dropdownRef}>
         <button

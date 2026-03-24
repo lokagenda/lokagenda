@@ -12,6 +12,7 @@ import {
   Navigation,
   CalendarDays,
   List,
+  Search,
 } from 'lucide-react'
 import { ExportButton } from '@/components/export-button'
 import { Pagination } from '@/components/pagination'
@@ -62,9 +63,25 @@ function groupByDate(
 export default async function LocacoesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; status?: string; page?: string }>
+  searchParams: Promise<{
+    view?: string
+    status?: string
+    page?: string
+    payment_status?: string
+    date_from?: string
+    date_to?: string
+    customer?: string
+  }>
 }) {
-  const { view: viewParam, status: filterStatus, page: pageParam } = await searchParams
+  const {
+    view: viewParam,
+    status: filterStatus,
+    page: pageParam,
+    payment_status: paymentStatusFilter,
+    date_from: dateFrom,
+    date_to: dateTo,
+    customer: customerSearch,
+  } = await searchParams
   const currentPage = Math.max(1, parseInt(pageParam || '1', 10) || 1)
   const view = viewParam || 'calendar'
 
@@ -91,6 +108,22 @@ export default async function LocacoesPage({
     query = query.eq('status', filterStatus as 'confirmed' | 'delivered' | 'returned' | 'cancelled')
   }
 
+  if (paymentStatusFilter && paymentStatusFilter !== 'all') {
+    query = query.eq('payment_status', paymentStatusFilter as 'pending' | 'partial' | 'paid')
+  }
+
+  if (dateFrom) {
+    query = query.gte('event_date', dateFrom)
+  }
+
+  if (dateTo) {
+    query = query.lte('event_date', dateTo)
+  }
+
+  if (customerSearch) {
+    query = query.ilike('customer_name', `%${customerSearch}%`)
+  }
+
   // Count query for pagination
   let countQuery = supabase
     .from('rentals')
@@ -99,6 +132,22 @@ export default async function LocacoesPage({
 
   if (filterStatus && filterStatus !== 'all') {
     countQuery = countQuery.eq('status', filterStatus as 'confirmed' | 'delivered' | 'returned' | 'cancelled')
+  }
+
+  if (paymentStatusFilter && paymentStatusFilter !== 'all') {
+    countQuery = countQuery.eq('payment_status', paymentStatusFilter as 'pending' | 'partial' | 'paid')
+  }
+
+  if (dateFrom) {
+    countQuery = countQuery.gte('event_date', dateFrom)
+  }
+
+  if (dateTo) {
+    countQuery = countQuery.lte('event_date', dateTo)
+  }
+
+  if (customerSearch) {
+    countQuery = countQuery.ilike('customer_name', `%${customerSearch}%`)
   }
 
   const { count } = await countQuery
@@ -116,6 +165,10 @@ export default async function LocacoesPage({
   const urlParams = new URLSearchParams()
   if (viewParam) urlParams.set('view', viewParam)
   if (filterStatus) urlParams.set('status', filterStatus)
+  if (paymentStatusFilter) urlParams.set('payment_status', paymentStatusFilter)
+  if (dateFrom) urlParams.set('date_from', dateFrom)
+  if (dateTo) urlParams.set('date_to', dateTo)
+  if (customerSearch) urlParams.set('customer', customerSearch)
   const baseUrl = `/dashboard/locacoes${urlParams.toString() ? `?${urlParams.toString()}` : ''}`
   const rentalsList = rentals || []
   const grouped = groupByDate(rentalsList)
@@ -204,6 +257,115 @@ export default async function LocacoesPage({
               Lista
             </button>
           </Link>
+        </div>
+      </div>
+
+      {/* Advanced Filters */}
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+        {/* Payment Status Pills */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Pagamento</label>
+          <div className="flex gap-1">
+            {[
+              { value: 'all', label: 'Todos Pagamentos' },
+              { value: 'pending', label: 'Pendente' },
+              { value: 'partial', label: 'Parcial' },
+              { value: 'paid', label: 'Pago' },
+            ].map((filter) => {
+              const params = new URLSearchParams()
+              if (viewParam) params.set('view', viewParam)
+              if (filterStatus) params.set('status', filterStatus)
+              if (filter.value !== 'all') params.set('payment_status', filter.value)
+              if (dateFrom) params.set('date_from', dateFrom)
+              if (dateTo) params.set('date_to', dateTo)
+              if (customerSearch) params.set('customer', customerSearch)
+              const href = `/dashboard/locacoes${params.toString() ? `?${params.toString()}` : ''}`
+
+              return (
+                <Link key={filter.value} href={href}>
+                  <button
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      (paymentStatusFilter === filter.value || (!paymentStatusFilter && filter.value === 'all'))
+                        ? 'bg-blue-700 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Date Range */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">De</label>
+          <form>
+            <input
+              type="date"
+              name="date_from"
+              defaultValue={dateFrom || ''}
+              onChange={(e) => {
+                const params = new URLSearchParams(window.location.search)
+                if (e.target.value) {
+                  params.set('date_from', e.target.value)
+                } else {
+                  params.delete('date_from')
+                }
+                params.delete('page')
+                window.location.href = `/dashboard/locacoes?${params.toString()}`
+              }}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </form>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Ate</label>
+          <form>
+            <input
+              type="date"
+              name="date_to"
+              defaultValue={dateTo || ''}
+              onChange={(e) => {
+                const params = new URLSearchParams(window.location.search)
+                if (e.target.value) {
+                  params.set('date_to', e.target.value)
+                } else {
+                  params.delete('date_to')
+                }
+                params.delete('page')
+                window.location.href = `/dashboard/locacoes?${params.toString()}`
+              }}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </form>
+        </div>
+
+        {/* Customer Search */}
+        <div className="space-y-1 flex-1 min-w-[200px]">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cliente</label>
+          <form
+            action="/dashboard/locacoes"
+            method="GET"
+          >
+            {viewParam && <input type="hidden" name="view" value={viewParam} />}
+            {filterStatus && <input type="hidden" name="status" value={filterStatus} />}
+            {paymentStatusFilter && <input type="hidden" name="payment_status" value={paymentStatusFilter} />}
+            {dateFrom && <input type="hidden" name="date_from" value={dateFrom} />}
+            {dateTo && <input type="hidden" name="date_to" value={dateTo} />}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                name="customer"
+                placeholder="Buscar cliente..."
+                defaultValue={customerSearch || ''}
+                className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500"
+              />
+            </div>
+          </form>
         </div>
       </div>
 
