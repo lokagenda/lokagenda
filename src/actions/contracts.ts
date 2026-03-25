@@ -214,24 +214,23 @@ export async function generateContract(rentalId: string) {
 
   let contractHtml = replaceVariables(template.content, data)
 
-  // Inject signatures into the signature area at the bottom of the contract
-  // The signature section has: border-top...padding-top...<strong>LOCADORA</strong>
-  // We need to target ONLY the signature section, not the body text
+  // Inject signatures ABOVE the line (border-top) in the signature area
+  // Structure: <div container> → img HERE → <div border-top> → LOCADORA
   const sigCompany = rental.signature_company || company.signature_url
   const sigClient = rental.signature_client
-  const sigImgTag = (src: string) => `<img src="${src}" style="max-width: 200px; max-height: 80px; display: block; margin: 0 auto 10px;" />`
+  const sigImgTag = (src: string) => `<img src="${src}" style="max-width: 200px; max-height: 80px; display: block; margin: 0 auto 15px;" />`
 
   if (sigCompany) {
-    // Match the signature section: "border-top...LOCADORA" (not the body text "denominada LOCADORA")
+    // Insert img BEFORE the <div border-top> that contains LOCADORA
     contractHtml = contractHtml.replace(
-      /(border-top:\s*1px solid[^>]*>[\s\r\n]*)<strong>LOCADORA<\/strong>/,
-      `$1${sigImgTag(sigCompany)}<strong>LOCADORA</strong>`
+      /(<div style="border-top:\s*1px solid[^"]*"[^>]*>[\s\r\n]*<strong>LOCADORA<\/strong>)/,
+      `${sigImgTag(sigCompany)}$1`
     )
   }
   if (sigClient) {
     contractHtml = contractHtml.replace(
-      /(border-top:\s*1px solid[^>]*>[\s\r\n]*)<strong>LOCATÁRIO\(A\)<\/strong>/,
-      `$1${sigImgTag(sigClient)}<strong>LOCATÁRIO(A)</strong>`
+      /(<div style="border-top:\s*1px solid[^"]*"[^>]*>[\s\r\n]*<strong>LOCATÁRIO\(A\)<\/strong>)/,
+      `${sigImgTag(sigClient)}$1`
     )
   }
 
