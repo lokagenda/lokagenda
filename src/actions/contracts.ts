@@ -212,7 +212,26 @@ export async function generateContract(rentalId: string) {
     data_atual: formatDate(new Date()),
   }
 
-  const contractHtml = replaceVariables(template.content, data)
+  let contractHtml = replaceVariables(template.content, data)
+
+  // Append signatures if they exist
+  if (rental.signature_company || rental.signature_client) {
+    let sigHtml = '<div style="margin-top: 40px; display: flex; justify-content: space-between;">'
+    if (rental.signature_company) {
+      sigHtml += `<div style="text-align: center; width: 45%;"><img src="${rental.signature_company}" style="max-width: 200px; max-height: 80px;" /><div style="border-top: 1px solid #333; padding-top: 5px; margin-top: 5px;"><strong>LOCADORA</strong></div></div>`
+    }
+    if (rental.signature_client) {
+      sigHtml += `<div style="text-align: center; width: 45%;"><img src="${rental.signature_client}" style="max-width: 200px; max-height: 80px;" /><div style="border-top: 1px solid #333; padding-top: 5px; margin-top: 5px;"><strong>LOCATÁRIO(A)</strong></div></div>`
+    }
+    sigHtml += '</div>'
+    // Insert before closing </div> or append at end
+    if (contractHtml.includes('</div>')) {
+      const lastDiv = contractHtml.lastIndexOf('</div>')
+      contractHtml = contractHtml.slice(0, lastDiv) + sigHtml + contractHtml.slice(lastDiv)
+    } else {
+      contractHtml += sigHtml
+    }
+  }
 
   // Save to rental
   const { error: updateError } = await supabase
