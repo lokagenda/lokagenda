@@ -87,14 +87,14 @@ export function BannerCarousel({ companyId }: BannerCarouselProps) {
                 <img
                   src={banner.image_url}
                   alt="Banner"
-                  className="h-48 w-full object-cover sm:h-56 md:h-64 lg:h-72"
+                  className="w-full rounded-xl"
                 />
               </a>
             ) : (
               <img
                 src={banner.image_url}
                 alt="Banner"
-                className="h-48 w-full object-cover sm:h-56 md:h-64 lg:h-72"
+                className="w-full rounded-xl"
               />
             )}
           </div>
