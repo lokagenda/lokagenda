@@ -141,7 +141,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Banner carousel */}
-      <BannerCarousel />
+      <BannerCarousel companyId={companyId} />
 
       {/* Welcome header */}
       <div className="flex items-end justify-between">

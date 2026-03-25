@@ -30,6 +30,7 @@ export function DailyPopup() {
         .from('banners')
         .select('id, image_url, link_url')
         .eq('active', true)
+        .eq('type', 'popup')
 
       if (data && data.length > 0) {
         const randomIndex = Math.floor(Math.random() * data.length)

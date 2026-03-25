@@ -3,6 +3,7 @@ import { Plus, FileText, Eye, Star, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { deleteTemplate } from '@/actions/contracts'
 import { formatDate } from '@/lib/utils'
+import { CompanySignatureSection } from '@/components/company-signature-section'
 
 export const metadata = {
   title: 'Modelos de Contrato - Project Leo',
@@ -70,6 +71,11 @@ export default async function ContratosPage() {
           <Plus className="h-4 w-4" />
           Novo Modelo
         </Link>
+      </div>
+
+      {/* Assinatura da Empresa */}
+      <div className="mt-8">
+        <CompanySignatureSection />
       </div>
 
       {/* Templates List */}

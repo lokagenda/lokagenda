@@ -27,14 +27,17 @@ async function getAuthenticatedProfile() {
 export async function createBanner(formData: FormData) {
   const { supabase, companyId } = await getAuthenticatedProfile()
 
-  // Check max 5 banners per company
+  const bannerType = ((formData.get('type') as string) || 'banner') as 'banner' | 'popup'
+
+  // Check max 5 per type per company
   const { count } = await supabase
     .from('banners')
     .select('*', { count: 'exact', head: true })
     .eq('company_id', companyId)
+    .eq('type', bannerType)
 
   if (count !== null && count >= 5) {
-    throw new Error('Limite máximo de 5 banners por empresa atingido')
+    throw new Error(`Limite máximo de 5 ${bannerType === 'popup' ? 'pop-ups' : 'banners'} por empresa atingido`)
   }
 
   const linkUrl = formData.get('link_url') as string
@@ -71,6 +74,7 @@ export async function createBanner(formData: FormData) {
     position,
     active,
     is_global: false,
+    type: bannerType as 'banner' | 'popup',
   })
 
   if (error) {
@@ -137,6 +141,8 @@ export async function updateBanner(id: string, formData: FormData) {
     imageUrl = publicUrl
   }
 
+  const bannerType = (formData.get('type') as string) || 'banner'
+
   const { error } = await supabase
     .from('banners')
     .update({
@@ -144,6 +150,7 @@ export async function updateBanner(id: string, formData: FormData) {
       link_url: linkUrl || null,
       position,
       active,
+      type: bannerType as 'banner' | 'popup',
     })
     .eq('id', id)
     .eq('company_id', companyId)

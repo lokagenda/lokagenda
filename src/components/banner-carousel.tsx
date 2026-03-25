@@ -28,6 +28,7 @@ export function BannerCarousel({ companyId }: BannerCarouselProps) {
         .from('banners')
         .select('id, image_url, link_url, position')
         .eq('active', true)
+        .eq('type', 'banner')
         .order('position', { ascending: true })
 
       if (companyId) {

@@ -22,6 +22,7 @@ export interface Database {
           state: string | null;
           zip_code: string | null;
           logo_url: string | null;
+          signature_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -37,6 +38,7 @@ export interface Database {
           state?: string | null;
           zip_code?: string | null;
           logo_url?: string | null;
+          signature_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -52,6 +54,7 @@ export interface Database {
           state?: string | null;
           zip_code?: string | null;
           logo_url?: string | null;
+          signature_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -634,6 +637,7 @@ export interface Database {
           active: boolean;
           position: number;
           is_global: boolean;
+          type: "banner" | "popup";
           created_at: string;
           updated_at: string;
         };
@@ -645,6 +649,7 @@ export interface Database {
           active?: boolean;
           position?: number;
           is_global?: boolean;
+          type?: "banner" | "popup";
           created_at?: string;
           updated_at?: string;
         };
@@ -656,6 +661,7 @@ export interface Database {
           active?: boolean;
           position?: number;
           is_global?: boolean;
+          type?: "banner" | "popup";
           created_at?: string;
           updated_at?: string;
         };

@@ -98,3 +98,42 @@ export async function updateCompany(formData: FormData) {
   revalidatePath('/dashboard/empresa')
   return { success: true }
 }
+
+export async function saveCompanySignature(signatureDataUrl: string) {
+  const { supabase, companyId } = await getAuthenticatedProfile()
+
+  if (!signatureDataUrl) {
+    return { error: 'Assinatura e obrigatoria.' }
+  }
+
+  const { error } = await supabase
+    .from('companies')
+    .update({
+      signature_url: signatureDataUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', companyId)
+
+  if (error) {
+    return { error: `Erro ao salvar assinatura: ${error.message}` }
+  }
+
+  revalidatePath('/dashboard/contratos')
+  return { success: true }
+}
+
+export async function getCompanySignature() {
+  const { supabase, companyId } = await getAuthenticatedProfile()
+
+  const { data, error } = await supabase
+    .from('companies')
+    .select('signature_url')
+    .eq('id', companyId)
+    .single()
+
+  if (error) {
+    return { error: `Erro ao buscar assinatura: ${error.message}` }
+  }
+
+  return { signatureUrl: data?.signature_url || null }
+}

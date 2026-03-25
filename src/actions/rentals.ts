@@ -192,7 +192,7 @@ export async function recordPayment(rentalId: string, amount: number, method?: s
       rental_id: rentalId,
       company_id: companyId,
       amount,
-      method: method || null,
+      method: method || 'pix',
       paid_at: new Date().toISOString(),
     })
 
@@ -223,6 +223,83 @@ export async function recordPayment(rentalId: string, amount: number, method?: s
 
   revalidatePath('/dashboard/locacoes')
   revalidatePath(`/dashboard/locacoes/${rentalId}`)
+  return { success: true }
+}
+
+interface UpdateRentalInput {
+  customer_name: string
+  customer_phone?: string | null
+  customer_email?: string | null
+  customer_document?: string | null
+  event_date: string
+  event_address?: string | null
+  event_city?: string | null
+  event_state?: string | null
+  event_zip_code?: string | null
+  delivery_time?: string | null
+  pickup_time?: string | null
+  notes?: string | null
+  discount?: number
+  freight?: number
+}
+
+export async function updateRental(id: string, data: UpdateRentalInput) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  // Verify ownership
+  const { data: rental, error: fetchError } = await supabase
+    .from('rentals')
+    .select('id, company_id')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !rental) {
+    return { error: 'Locação não encontrada' }
+  }
+
+  if (rental.company_id !== companyId) {
+    return { error: 'Sem permissão para esta locação' }
+  }
+
+  // Recalculate total based on items + discount/freight
+  const { data: items } = await supabase
+    .from('rental_items')
+    .select('subtotal')
+    .eq('rental_id', id)
+
+  const subtotal = (items || []).reduce((sum, item) => sum + item.subtotal, 0)
+  const discount = data.discount || 0
+  const freight = data.freight || 0
+  const total = subtotal - discount + freight
+
+  const { error } = await supabase
+    .from('rentals')
+    .update({
+      customer_name: data.customer_name,
+      customer_phone: data.customer_phone || null,
+      customer_email: data.customer_email || null,
+      customer_document: data.customer_document || null,
+      event_date: data.event_date,
+      event_address: data.event_address || null,
+      event_city: data.event_city || null,
+      event_state: data.event_state || null,
+      event_zip_code: data.event_zip_code || null,
+      delivery_time: data.delivery_time || null,
+      pickup_time: data.pickup_time || null,
+      notes: data.notes || null,
+      discount,
+      freight,
+      total,
+    })
+    .eq('id', id)
+
+  if (error) {
+    return { error: `Erro ao atualizar locação: ${error.message}` }
+  }
+
+  revalidatePath('/dashboard/locacoes')
+  revalidatePath(`/dashboard/locacoes/${id}`)
   return { success: true }
 }
 

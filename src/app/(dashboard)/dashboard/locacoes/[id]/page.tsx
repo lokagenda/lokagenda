@@ -8,7 +8,9 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { updateRentalStatus, cancelRental, deleteRental, recordPayment } from '@/actions/rentals'
 import { generateContract, saveSignatures } from '@/actions/contracts'
+import { getCompanySignature } from '@/actions/company'
 import { buildFullAddress, getGoogleMapsUrl, getWazeUrl } from '@/lib/maps'
+import { getWhatsAppUrl } from '@/lib/whatsapp'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,8 +31,10 @@ import {
   DollarSign,
   PenTool,
   Download,
+  Edit,
+  MessageCircle,
 } from 'lucide-react'
-import type { Rental, RentalItem, Payment } from '@/types/database'
+import type { Rental, RentalItem, Payment, Company } from '@/types/database'
 
 const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   confirmed: {
@@ -69,7 +73,7 @@ export default function LocacaoDetailPage({
   const [actionLoading, setActionLoading] = useState(false)
   const [contractLoading, setContractLoading] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('PIX')
+  const [paymentMethod, setPaymentMethod] = useState('pix')
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [payments, setPayments] = useState<Payment[]>([])
   const [signatureModalOpen, setSignatureModalOpen] = useState(false)
@@ -77,6 +81,7 @@ export default function LocacaoDetailPage({
   const [signatureCompany, setSignatureCompany] = useState<string | null>(null)
   const [signatureSaving, setSignatureSaving] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [company, setCompany] = useState<Company | null>(null)
   const pdfContainerRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async () => {
@@ -91,6 +96,17 @@ export default function LocacaoDetailPage({
     setRental(rentalRes.data)
     setItems(itemsRes.data || [])
     setPayments(paymentsRes.data || [])
+
+    // Load company for WhatsApp message
+    if (rentalRes.data?.company_id) {
+      const { data: companyData } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', rentalRes.data.company_id)
+        .single()
+      setCompany(companyData)
+    }
+
     setLoading(false)
   }, [id])
 
@@ -174,7 +190,7 @@ export default function LocacaoDetailPage({
       } else {
         toast.success('Pagamento registrado com sucesso!')
         setPaymentAmount('')
-        setPaymentMethod('PIX')
+        setPaymentMethod('pix')
         await loadData()
       }
     } catch {
@@ -185,13 +201,13 @@ export default function LocacaoDetailPage({
   }
 
   async function handleSaveSignatures() {
-    if (!rental || !signatureClient || !signatureCompany) {
-      toast.error('Ambas as assinaturas são necessárias.')
+    if (!rental || (!signatureClient && !signatureCompany)) {
+      toast.error('É necessário ao menos uma assinatura.')
       return
     }
     setSignatureSaving(true)
     try {
-      const result = await saveSignatures(rental.id, signatureClient, signatureCompany)
+      const result = await saveSignatures(rental.id, signatureClient || '', signatureCompany || '')
       if (result.error) {
         toast.error(result.error)
       } else {
@@ -429,6 +445,14 @@ export default function LocacaoDetailPage({
               <XCircle className="h-4 w-4" />
               Cancelar
             </Button>
+          )}
+          {rental.status !== 'cancelled' && rental.status !== 'returned' && (
+            <Link href={`/dashboard/locacoes/${id}/editar`}>
+              <Button variant="outline" size="sm">
+                <Edit className="h-4 w-4" />
+                Editar
+              </Button>
+            </Link>
           )}
           {rental.contract_html ? (
             <>
@@ -760,6 +784,16 @@ export default function LocacaoDetailPage({
                   className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-10 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-blue-500"
                 />
               </div>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="rounded-lg border border-zinc-300 bg-white py-2 px-3 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-blue-500"
+              >
+                <option value="pix">PIX</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="cartao">Cartão</option>
+                <option value="transferencia">Transferência</option>
+              </select>
               <Button
                 size="sm"
                 onClick={handleRecordPayment}
@@ -805,9 +839,23 @@ export default function LocacaoDetailPage({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
                   setSignatureClient(rental.signature_client || null)
-                  setSignatureCompany(rental.signature_company || null)
+                  // Pre-populate company signature from saved company signature if not already signed
+                  if (rental.signature_company) {
+                    setSignatureCompany(rental.signature_company)
+                  } else {
+                    try {
+                      const result = await getCompanySignature()
+                      if (result.signatureUrl) {
+                        setSignatureCompany(result.signatureUrl)
+                      } else {
+                        setSignatureCompany(null)
+                      }
+                    } catch {
+                      setSignatureCompany(null)
+                    }
+                  }
                   setSignatureModalOpen(true)
                 }}
               >
@@ -827,6 +875,44 @@ export default function LocacaoDetailPage({
                 )}
                 Exportar PDF
               </Button>
+              {rental.customer_phone && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const companyName = company?.name || 'Empresa'
+                    const itemLines = items
+                      .map(
+                        (item, i) =>
+                          `${i + 1}. ${item.product_name} - ${item.quantity}x ${formatCurrency(item.unit_price)}`
+                      )
+                      .join('\n')
+
+                    const addressParts = [
+                      rental.event_address,
+                      rental.event_city,
+                      rental.event_state,
+                    ].filter(Boolean)
+
+                    let message = `*CONTRATO DE LOCAÇÃO*\n`
+                    message += `*${companyName}*\n\n`
+                    message += `Cliente: ${rental.customer_name}\n`
+                    message += `Data: ${formatDate(rental.event_date)}\n`
+                    if (rental.delivery_time) message += `Entrega: ${rental.delivery_time}\n`
+                    if (rental.pickup_time) message += `Retirada: ${rental.pickup_time}\n`
+                    if (addressParts.length > 0) message += `Local: ${addressParts.join(', ')}\n`
+                    message += `\nItens:\n${itemLines}\n\n`
+                    message += `Total: ${formatCurrency(rental.total)}\n\n`
+                    message += `Contrato disponível para assinatura.`
+
+                    const url = getWhatsAppUrl(rental.customer_phone!, message)
+                    window.open(url, '_blank')
+                  }}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Enviar WhatsApp
+                </Button>
+              )}
             </div>
 
             {/* Show saved signatures */}
@@ -881,12 +967,40 @@ export default function LocacaoDetailPage({
             width={500}
             height={180}
           />
-          <SignaturePad
-            label="Assinatura da Empresa"
-            onSave={(dataUrl) => setSignatureCompany(dataUrl)}
-            width={500}
-            height={180}
-          />
+
+          {/* Company signature: show pre-populated if available, otherwise show pad */}
+          {signatureCompany ? (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Assinatura da Empresa
+              </label>
+              <div className="rounded-lg border border-green-300 bg-white p-2 dark:border-green-700 dark:bg-zinc-900">
+                <img
+                  src={signatureCompany}
+                  alt="Assinatura da Empresa"
+                  className="mx-auto max-h-[180px]"
+                  style={{ maxWidth: 500 }}
+                />
+              </div>
+              <p className="text-xs text-green-600 dark:text-green-400">
+                Assinatura carregada automaticamente
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSignatureCompany(null)}
+              >
+                Refazer Assinatura
+              </Button>
+            </div>
+          ) : (
+            <SignaturePad
+              label="Assinatura da Empresa"
+              onSave={(dataUrl) => setSignatureCompany(dataUrl)}
+              width={500}
+              height={180}
+            />
+          )}
           <div className="flex justify-end gap-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
             <Button
               variant="outline"
@@ -898,7 +1012,7 @@ export default function LocacaoDetailPage({
             <Button
               size="sm"
               onClick={handleSaveSignatures}
-              disabled={signatureSaving || !signatureClient || !signatureCompany}
+              disabled={signatureSaving || (!signatureClient && !signatureCompany)}
             >
               {signatureSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
