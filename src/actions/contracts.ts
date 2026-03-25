@@ -202,6 +202,10 @@ export async function generateContract(rentalId: string) {
     itens_locacao: itemsHtml,
     valor_total: formatCurrency(rental.total),
     valor_desconto: formatCurrency(rental.discount),
+    valor_frete: formatCurrency(rental.freight || 0),
+    valor_pago: formatCurrency(rental.amount_paid || 0),
+    valor_restante: formatCurrency((rental.total || 0) - (rental.amount_paid || 0)),
+    status_pagamento: rental.payment_status === 'paid' ? 'Pago' : rental.payment_status === 'partial' ? 'Parcial' : 'Pendente',
     nome_empresa: company.name,
     telefone_empresa: company.phone || '-',
     cnpj_empresa: company.document || '-',
@@ -226,6 +230,38 @@ export async function generateContract(rentalId: string) {
 
   revalidatePath(`/dashboard/locacoes/${rentalId}`)
   return { success: true, html: contractHtml }
+}
+
+export async function saveContractPdf(rentalId: string, pdfUrl: string) {
+  const { supabase, companyId } = await getAuthenticatedProfile()
+
+  // Verify rental belongs to company
+  const { data: rental, error: fetchError } = await supabase
+    .from('rentals')
+    .select('id')
+    .eq('id', rentalId)
+    .eq('company_id', companyId)
+    .single()
+
+  if (fetchError || !rental) {
+    return { error: 'Locação não encontrada.' }
+  }
+
+  const { error: updateError } = await supabase
+    .from('rentals')
+    .update({
+      contract_pdf_url: pdfUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', rentalId)
+    .eq('company_id', companyId)
+
+  if (updateError) {
+    return { error: `Erro ao salvar URL do PDF: ${updateError.message}` }
+  }
+
+  revalidatePath(`/dashboard/locacoes/${rentalId}`)
+  return { success: true }
 }
 
 export async function saveSignatures(

@@ -7,7 +7,7 @@ import { use } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { updateRentalStatus, cancelRental, deleteRental, recordPayment } from '@/actions/rentals'
-import { generateContract, saveSignatures } from '@/actions/contracts'
+import { generateContract, saveSignatures, saveContractPdf } from '@/actions/contracts'
 import { getCompanySignature } from '@/actions/company'
 import { buildFullAddress, getGoogleMapsUrl, getWazeUrl } from '@/lib/maps'
 import { getWhatsAppUrl } from '@/lib/whatsapp'
@@ -81,6 +81,7 @@ export default function LocacaoDetailPage({
   const [signatureCompany, setSignatureCompany] = useState<string | null>(null)
   const [signatureSaving, setSignatureSaving] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [whatsappLoading, setWhatsappLoading] = useState(false)
   const [company, setCompany] = useState<Company | null>(null)
   const pdfContainerRef = useRef<HTMLDivElement>(null)
 
@@ -222,125 +223,173 @@ export default function LocacaoDetailPage({
     }
   }
 
+  async function generatePdfBlob(): Promise<{ blob: Blob; pdf: InstanceType<typeof import('jspdf').jsPDF> } | null> {
+    if (!rental) return null
+
+    const html2canvas = (await import('html2canvas')).default
+    const { jsPDF } = await import('jspdf')
+
+    const container = pdfContainerRef.current
+    if (!container) return null
+
+    container.innerHTML = ''
+    container.style.width = '794px'
+    container.style.padding = '40px'
+    container.style.background = 'white'
+    container.style.color = 'black'
+    container.style.fontFamily = 'Arial, sans-serif'
+    container.style.fontSize = '14px'
+    container.style.lineHeight = '1.6'
+    container.style.position = 'absolute'
+    container.style.left = '-9999px'
+    container.style.top = '0'
+
+    const contractDiv = document.createElement('div')
+    contractDiv.innerHTML = rental.contract_html || ''
+    container.appendChild(contractDiv)
+
+    const clientSig = rental.signature_client
+    const companySig = rental.signature_company
+    if (clientSig || companySig) {
+      const sigSection = document.createElement('div')
+      sigSection.style.marginTop = '40px'
+      sigSection.style.display = 'flex'
+      sigSection.style.justifyContent = 'space-between'
+      sigSection.style.gap = '40px'
+
+      if (clientSig) {
+        const clientDiv = document.createElement('div')
+        clientDiv.style.textAlign = 'center'
+        clientDiv.style.flex = '1'
+        const clientImg = document.createElement('img')
+        clientImg.src = clientSig
+        clientImg.style.maxWidth = '250px'
+        clientImg.style.maxHeight = '120px'
+        clientImg.style.display = 'block'
+        clientImg.style.margin = '0 auto'
+        clientDiv.appendChild(clientImg)
+        const clientLine = document.createElement('div')
+        clientLine.style.borderTop = '1px solid #333'
+        clientLine.style.marginTop = '8px'
+        clientLine.style.paddingTop = '8px'
+        clientLine.textContent = 'Assinatura do Cliente'
+        clientDiv.appendChild(clientLine)
+        sigSection.appendChild(clientDiv)
+      }
+
+      if (companySig) {
+        const companyDiv = document.createElement('div')
+        companyDiv.style.textAlign = 'center'
+        companyDiv.style.flex = '1'
+        const companyImg = document.createElement('img')
+        companyImg.src = companySig
+        companyImg.style.maxWidth = '250px'
+        companyImg.style.maxHeight = '120px'
+        companyImg.style.display = 'block'
+        companyImg.style.margin = '0 auto'
+        companyDiv.appendChild(companyImg)
+        const companyLine = document.createElement('div')
+        companyLine.style.borderTop = '1px solid #333'
+        companyLine.style.marginTop = '8px'
+        companyLine.style.paddingTop = '8px'
+        companyLine.textContent = 'Assinatura da Empresa'
+        companyDiv.appendChild(companyLine)
+        sigSection.appendChild(companyDiv)
+      }
+
+      container.appendChild(sigSection)
+    }
+
+    const images = container.querySelectorAll('img')
+    await Promise.all(
+      Array.from(images).map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            if (img.complete) {
+              resolve()
+            } else {
+              img.onload = () => resolve()
+              img.onerror = () => resolve()
+            }
+          })
+      )
+    )
+
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+    })
+
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pdfWidth = pdf.internal.pageSize.getWidth()
+    const pdfHeight = pdf.internal.pageSize.getHeight()
+    const imgWidth = pdfWidth
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width
+
+    let heightLeft = imgHeight
+    let position = 0
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pdfHeight
+
+    while (heightLeft > 0) {
+      position = position - pdfHeight
+      pdf.addPage()
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pdfHeight
+    }
+
+    const blob = pdf.output('blob')
+    return { blob, pdf }
+  }
+
+  async function uploadPdfAndSaveUrl(blob: Blob): Promise<string | null> {
+    if (!rental) return null
+    try {
+      const supabase = createClient()
+      const filePath = `${rental.company_id}/${rental.id}.pdf`
+
+      const { error: uploadError } = await supabase.storage
+        .from('contracts')
+        .upload(filePath, blob, {
+          contentType: 'application/pdf',
+          upsert: true,
+        })
+
+      if (uploadError) {
+        console.error('Erro ao fazer upload do PDF:', uploadError)
+        return null
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('contracts')
+        .getPublicUrl(filePath)
+
+      const pdfUrl = publicUrlData.publicUrl
+      await saveContractPdf(rental.id, pdfUrl)
+      setRental((prev) => prev ? { ...prev, contract_pdf_url: pdfUrl } : prev)
+      return pdfUrl
+    } catch (err) {
+      console.error('Erro ao fazer upload do PDF:', err)
+      return null
+    }
+  }
+
   async function handleExportPdf() {
     if (!rental) return
     setPdfLoading(true)
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const { jsPDF } = await import('jspdf')
+      const result = await generatePdfBlob()
+      if (!result) return
 
-      const container = pdfContainerRef.current
-      if (!container) return
+      const { blob, pdf } = result
 
-      container.innerHTML = ''
-      container.style.width = '794px'
-      container.style.padding = '40px'
-      container.style.background = 'white'
-      container.style.color = 'black'
-      container.style.fontFamily = 'Arial, sans-serif'
-      container.style.fontSize = '14px'
-      container.style.lineHeight = '1.6'
-      container.style.position = 'absolute'
-      container.style.left = '-9999px'
-      container.style.top = '0'
+      // Upload to Supabase Storage and save URL
+      await uploadPdfAndSaveUrl(blob)
 
-      const contractDiv = document.createElement('div')
-      contractDiv.innerHTML = rental.contract_html || ''
-      container.appendChild(contractDiv)
-
-      const clientSig = rental.signature_client
-      const companySig = rental.signature_company
-      if (clientSig || companySig) {
-        const sigSection = document.createElement('div')
-        sigSection.style.marginTop = '40px'
-        sigSection.style.display = 'flex'
-        sigSection.style.justifyContent = 'space-between'
-        sigSection.style.gap = '40px'
-
-        if (clientSig) {
-          const clientDiv = document.createElement('div')
-          clientDiv.style.textAlign = 'center'
-          clientDiv.style.flex = '1'
-          const clientImg = document.createElement('img')
-          clientImg.src = clientSig
-          clientImg.style.maxWidth = '250px'
-          clientImg.style.maxHeight = '120px'
-          clientImg.style.display = 'block'
-          clientImg.style.margin = '0 auto'
-          clientDiv.appendChild(clientImg)
-          const clientLine = document.createElement('div')
-          clientLine.style.borderTop = '1px solid #333'
-          clientLine.style.marginTop = '8px'
-          clientLine.style.paddingTop = '8px'
-          clientLine.textContent = 'Assinatura do Cliente'
-          clientDiv.appendChild(clientLine)
-          sigSection.appendChild(clientDiv)
-        }
-
-        if (companySig) {
-          const companyDiv = document.createElement('div')
-          companyDiv.style.textAlign = 'center'
-          companyDiv.style.flex = '1'
-          const companyImg = document.createElement('img')
-          companyImg.src = companySig
-          companyImg.style.maxWidth = '250px'
-          companyImg.style.maxHeight = '120px'
-          companyImg.style.display = 'block'
-          companyImg.style.margin = '0 auto'
-          companyDiv.appendChild(companyImg)
-          const companyLine = document.createElement('div')
-          companyLine.style.borderTop = '1px solid #333'
-          companyLine.style.marginTop = '8px'
-          companyLine.style.paddingTop = '8px'
-          companyLine.textContent = 'Assinatura da Empresa'
-          companyDiv.appendChild(companyLine)
-          sigSection.appendChild(companyDiv)
-        }
-
-        container.appendChild(sigSection)
-      }
-
-      const images = container.querySelectorAll('img')
-      await Promise.all(
-        Array.from(images).map(
-          (img) =>
-            new Promise<void>((resolve) => {
-              if (img.complete) {
-                resolve()
-              } else {
-                img.onload = () => resolve()
-                img.onerror = () => resolve()
-              }
-            })
-        )
-      )
-
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      })
-
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pdfWidth
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width
-
-      let heightLeft = imgHeight
-      let position = 0
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pdfHeight
-
-      while (heightLeft > 0) {
-        position = position - pdfHeight
-        pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pdfHeight
-      }
-
+      // Still download locally
       const clientName = rental.customer_name
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -879,37 +928,52 @@ export default function LocacaoDetailPage({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    const companyName = company?.name || 'Empresa'
-                    const itemLines = items
-                      .map(
-                        (item, i) =>
-                          `${i + 1}. ${item.product_name} - ${item.quantity}x ${formatCurrency(item.unit_price)}`
-                      )
-                      .join('\n')
+                  disabled={whatsappLoading}
+                  onClick={async () => {
+                    setWhatsappLoading(true)
+                    try {
+                      let pdfUrl = rental.contract_pdf_url
 
-                    const addressParts = [
-                      rental.event_address,
-                      rental.event_city,
-                      rental.event_state,
-                    ].filter(Boolean)
+                      // If no PDF URL yet, generate + upload first
+                      if (!pdfUrl && rental.contract_html) {
+                        const result = await generatePdfBlob()
+                        if (result) {
+                          pdfUrl = await uploadPdfAndSaveUrl(result.blob)
+                          if (pdfContainerRef.current) {
+                            pdfContainerRef.current.innerHTML = ''
+                          }
+                        }
+                      }
 
-                    let message = `*CONTRATO DE LOCAÇÃO*\n`
-                    message += `*${companyName}*\n\n`
-                    message += `Cliente: ${rental.customer_name}\n`
-                    message += `Data: ${formatDate(rental.event_date)}\n`
-                    if (rental.delivery_time) message += `Entrega: ${rental.delivery_time}\n`
-                    if (rental.pickup_time) message += `Retirada: ${rental.pickup_time}\n`
-                    if (addressParts.length > 0) message += `Local: ${addressParts.join(', ')}\n`
-                    message += `\nItens:\n${itemLines}\n\n`
-                    message += `Total: ${formatCurrency(rental.total)}\n\n`
-                    message += `Contrato disponível para assinatura.`
+                      const companyName = company?.name || 'Empresa'
+                      const remaining = Math.max(0, rental.total - (rental.amount_paid || 0))
 
-                    const url = getWhatsAppUrl(rental.customer_phone!, message)
-                    window.open(url, '_blank')
+                      let message = `*CONTRATO DE LOCAÇÃO*\n`
+                      message += `*${companyName}*\n\n`
+                      message += `Cliente: ${rental.customer_name}\n`
+                      message += `Data: ${formatDate(rental.event_date)}\n`
+                      if (pdfUrl) {
+                        message += `\n📄 Contrato em PDF:\n${pdfUrl}\n`
+                      }
+                      message += `\nTotal: ${formatCurrency(rental.total)}\n`
+                      message += `Sinal Pago: ${formatCurrency(rental.amount_paid || 0)}\n`
+                      message += `Restante: ${formatCurrency(remaining)}`
+
+                      const url = getWhatsAppUrl(rental.customer_phone!, message)
+                      window.open(url, '_blank')
+                    } catch (err) {
+                      console.error('Erro ao preparar WhatsApp:', err)
+                      toast.error('Erro ao preparar mensagem do WhatsApp.')
+                    } finally {
+                      setWhatsappLoading(false)
+                    }
                   }}
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  {whatsappLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4" />
+                  )}
                   Enviar WhatsApp
                 </Button>
               )}

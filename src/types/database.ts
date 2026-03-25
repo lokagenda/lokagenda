@@ -385,6 +385,7 @@ export interface Database {
           discount: number;
           freight: number;
           contract_html: string | null;
+          contract_pdf_url: string | null;
           signature_client: string | null;
           signature_company: string | null;
           payment_status: "pending" | "partial" | "paid";
@@ -415,6 +416,7 @@ export interface Database {
           discount?: number;
           freight?: number;
           contract_html?: string | null;
+          contract_pdf_url?: string | null;
           signature_client?: string | null;
           signature_company?: string | null;
           payment_status?: "pending" | "partial" | "paid";
@@ -445,6 +447,7 @@ export interface Database {
           discount?: number;
           freight?: number;
           contract_html?: string | null;
+          contract_pdf_url?: string | null;
           signature_client?: string | null;
           signature_company?: string | null;
           payment_status?: "pending" | "partial" | "paid";

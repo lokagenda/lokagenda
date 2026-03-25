@@ -38,10 +38,18 @@ export function getDefaultTemplate(): string {
     Horário de retirada/desmontagem: <strong>{{horario_retirada}}</strong>
   </p>
 
-  <h3 style="margin-top: 25px; font-size: 16px;">CLÁUSULA 3 - DO VALOR</h3>
+  <h3 style="margin-top: 25px; font-size: 16px;">CLÁUSULA 3 - DO VALOR E PAGAMENTO</h3>
   <p style="line-height: 1.8;">
     O valor total da locação é de <strong>{{valor_total}}</strong>.
     Desconto aplicado: <strong>{{valor_desconto}}</strong>.
+    Frete: <strong>{{valor_frete}}</strong>.
+  </p>
+
+  <h3 style="margin-top: 25px; font-size: 16px;">Pagamento</h3>
+  <p style="line-height: 1.8;">
+    Sinal Pago: <strong>{{valor_pago}}</strong><br/>
+    Valor Restante: <strong>{{valor_restante}}</strong><br/>
+    Status do Pagamento: <strong>{{status_pagamento}}</strong>
   </p>
 
   <h3 style="margin-top: 25px; font-size: 16px;">CLÁUSULA 4 - DAS RESPONSABILIDADES DO LOCATÁRIO</h3>
@@ -99,6 +107,10 @@ export function getSampleData(): Record<string, string> {
     itens_locacao: '2x Cama Elástica Grande - R$ 200,00<br/>1x Piscina de Bolinhas - R$ 150,00<br/>1x Tobogã Inflável - R$ 180,00',
     valor_total: 'R$ 530,00',
     valor_desconto: 'R$ 0,00',
+    valor_frete: 'R$ 50,00',
+    valor_pago: 'R$ 200,00',
+    valor_restante: 'R$ 330,00',
+    status_pagamento: 'Parcial',
     nome_empresa: 'Festas Divertidas LTDA',
     telefone_empresa: '(11) 3333-4444',
     cnpj_empresa: '12.345.678/0001-99',
