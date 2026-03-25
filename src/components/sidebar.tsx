@@ -13,6 +13,7 @@ import {
   Search,
   ScrollText,
   Building2,
+  CreditCard,
   Megaphone,
   LogOut,
   X,
@@ -35,6 +36,7 @@ const navigation = [
   { name: 'Disponibilidade', href: '/dashboard/disponibilidade', icon: Search },
   { name: 'Contratos', href: '/dashboard/contratos', icon: ScrollText },
   { name: 'Empresa', href: '/dashboard/empresa', icon: Building2 },
+  { name: 'Assinatura', href: '/dashboard/assinatura', icon: CreditCard },
   { name: 'Banners', href: '/dashboard/banners', icon: Megaphone },
 ]
 

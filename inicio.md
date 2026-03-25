@@ -29,9 +29,9 @@
 
 ---
 
-## Fase 2 — Operação e gestão (R$ 1.800) 🚧 EM DESENVOLVIMENTO
+## Fase 2 — Operação e gestão (R$ 1.800) ✅ ENTREGUE
 
-**Prazo estimado:** 7 a 10 dias corridos
+**Status:** Concluída e aprovada pelo cliente em 25/03/2026
 **Início:** 25/03/2026
 
 ### 2.1 — Dashboard redesenhado (conforme layout do cliente)
@@ -143,16 +143,84 @@ O cliente enviou um layout de referência com as seguintes seções:
 
 ---
 
-## Fase 3 — SaaS, monetização e admin (R$ 1.850)
+## Fase 3 — SaaS, monetização e admin (R$ 1.850) 🚧 EM DESENVOLVIMENTO
 
-**Status:** Não iniciada
+**Status:** Em desenvolvimento
 **Prazo estimado:** 8 a 10 dias corridos
+**Início:** 25/03/2026
 
-- Planos e assinaturas (mensal, semestral, anual)
-- Integração com Mercado Pago (liberação e bloqueio automáticos)
-- Landing page pública (apresentação, planos, cadastro, login)
-- Sistema de anúncios: pop-up (1x por dia) e banner na home
-- Painel admin geral (gerenciar empresas, contas, planos e anúncios)
+### 3.1 — Planos e assinaturas
+
+**Definição de planos:**
+- 3 planos: Básico, Profissional, Premium
+- Ciclos: mensal, semestral, anual
+- Limites por plano: produtos, locações/mês, usuários
+- Trial gratuito de 7 dias para novos cadastros
+
+**Tabelas no banco:**
+- `plans`: definição dos planos (nome, preço, limites, features)
+- `subscriptions`: assinatura ativa por empresa (plano, status, ciclo, datas)
+
+**Status de assinatura:** trial → active → past_due → cancelled → expired
+
+**Lógica de bloqueio:**
+- Empresa sem assinatura ativa (trial expirado) → overlay "Assine um plano"
+- Limites por plano (ex: Básico = 10 produtos, 50 locações/mês, 2 usuários)
+
+### 3.2 — Integração com Mercado Pago
+
+**Fluxo de pagamento:**
+1. Usuário escolhe plano (landing page ou /dashboard/assinatura)
+2. Sistema cria preferência de pagamento no Mercado Pago
+3. Usuário paga via checkout do MP
+4. Webhook do MP notifica o sistema → atualiza status da assinatura
+5. Se pagamento falha → status `past_due` → notificação ao usuário
+6. Se cancela → bloqueia após período atual
+
+**Liberação e bloqueio automáticos:**
+- Webhook processa: payment.approved → status `active`
+- Webhook processa: payment.rejected → status `past_due`
+- Cron diário: verifica `current_period_end` → marca como `expired`
+
+### 3.3 — Landing page pública
+
+**Seções:**
+1. Hero: título + subtítulo + CTA "Começar grátis"
+2. Features: ícones + descrição das funcionalidades do sistema
+3. Como funciona: 3 passos (cadastrar, configurar, gerenciar)
+4. Planos e preços: cards comparativos com toggle mensal/anual
+5. FAQ
+6. CTA final + footer
+
+**Páginas:**
+- `/` — landing page principal
+- `/precos` — página de planos detalhada
+- Layout público sem sidebar (header + footer próprios)
+
+### 3.4 — Sistema de anúncios ✅ JÁ IMPLEMENTADO (Fase 2)
+
+- Banner carrossel no dashboard (rotação automática 5s) ✅
+- Pop-up diário (1x por dia por usuário) ✅
+- Admin de banners com tipos separados (banner retangular + popup quadrado) ✅
+- Suporte a banners globais (is_global) que aparecem em todas as empresas ✅
+- Até 5 imagens por tipo ✅
+
+### 3.5 — Painel admin geral (Super Admin)
+
+**Acesso:** Role `super_admin` no perfil do usuário
+
+**Dashboard admin:**
+- Total de empresas cadastradas
+- Assinaturas ativas / trial / canceladas
+- Receita mensal
+- Últimos cadastros
+
+**Gerenciamento:**
+- Listar/editar/suspender empresas
+- CRUD de planos (criar, editar preços, ativar/desativar)
+- Ver assinaturas (filtrar por status)
+- Gerenciar banners globais (aparecem em todas as empresas)
+- Listar todos os usuários do sistema
 
 ---
 
@@ -165,4 +233,5 @@ O cliente enviou um layout de referência com as seguintes seções:
 
 **Proposta aceita em:** 20/03/2026
 **Fase 1 entregue em:** 24/03/2026
-**Fase 2 início:** 25/03/2026
+**Fase 2 entregue em:** 25/03/2026
+**Fase 3 início:** 25/03/2026

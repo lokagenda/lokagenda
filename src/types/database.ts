@@ -65,7 +65,7 @@ export interface Database {
           id: string;
           company_id: string;
           full_name: string;
-          role: "owner" | "admin" | "operator";
+          role: "owner" | "admin" | "operator" | "super_admin";
           avatar_url: string | null;
           created_at: string;
           updated_at: string;
@@ -74,7 +74,7 @@ export interface Database {
           id: string;
           company_id: string;
           full_name: string;
-          role?: "owner" | "admin" | "operator";
+          role?: "owner" | "admin" | "operator" | "super_admin";
           avatar_url?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -83,7 +83,7 @@ export interface Database {
           id?: string;
           company_id?: string;
           full_name?: string;
-          role?: "owner" | "admin" | "operator";
+          role?: "owner" | "admin" | "operator" | "super_admin";
           avatar_url?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -678,6 +678,126 @@ export interface Database {
           },
         ];
       };
+      plans: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          price_monthly: number;
+          price_semiannual: number;
+          price_annual: number;
+          max_products: number;
+          max_rentals_month: number;
+          max_users: number;
+          features: Json;
+          active: boolean;
+          position: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          price_monthly: number;
+          price_semiannual: number;
+          price_annual: number;
+          max_products?: number;
+          max_rentals_month?: number;
+          max_users?: number;
+          features?: Json;
+          active?: boolean;
+          position?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          price_monthly?: number;
+          price_semiannual?: number;
+          price_annual?: number;
+          max_products?: number;
+          max_rentals_month?: number;
+          max_users?: number;
+          features?: Json;
+          active?: boolean;
+          position?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          company_id: string;
+          plan_id: string;
+          status: "trial" | "active" | "past_due" | "cancelled" | "expired";
+          billing_cycle: "monthly" | "semiannual" | "annual";
+          current_price: number;
+          mercadopago_subscription_id: string | null;
+          mercadopago_payer_id: string | null;
+          trial_ends_at: string | null;
+          current_period_start: string | null;
+          current_period_end: string | null;
+          cancelled_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          plan_id: string;
+          status?: "trial" | "active" | "past_due" | "cancelled" | "expired";
+          billing_cycle?: "monthly" | "semiannual" | "annual";
+          current_price?: number;
+          mercadopago_subscription_id?: string | null;
+          mercadopago_payer_id?: string | null;
+          trial_ends_at?: string | null;
+          current_period_start?: string | null;
+          current_period_end?: string | null;
+          cancelled_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          plan_id?: string;
+          status?: "trial" | "active" | "past_due" | "cancelled" | "expired";
+          billing_cycle?: "monthly" | "semiannual" | "annual";
+          current_price?: number;
+          mercadopago_subscription_id?: string | null;
+          mercadopago_payer_id?: string | null;
+          trial_ends_at?: string | null;
+          current_period_start?: string | null;
+          current_period_end?: string | null;
+          cancelled_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey";
+            columns: ["plan_id"];
+            isOneToOne: false;
+            referencedRelation: "plans";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       contract_templates: {
         Row: {
           id: string;
@@ -724,7 +844,9 @@ export interface Database {
       [_ in never]: never;
     };
     Enums: {
-      profile_role: "owner" | "admin" | "operator";
+      profile_role: "owner" | "admin" | "operator" | "super_admin";
+      subscription_status: "trial" | "active" | "past_due" | "cancelled" | "expired";
+      billing_cycle: "monthly" | "semiannual" | "annual";
       product_status: "active" | "inactive" | "maintenance";
       quote_status:
         | "pending"
@@ -763,3 +885,5 @@ export type ContractTemplate = Tables<"contract_templates">;
 export type Payment = Tables<"payments">;
 export type Notification = Tables<"notifications">;
 export type Banner = Tables<"banners">;
+export type Plan = Tables<"plans">;
+export type Subscription = Tables<"subscriptions">;
