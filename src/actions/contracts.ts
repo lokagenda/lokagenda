@@ -215,22 +215,30 @@ export async function generateContract(rentalId: string) {
   let contractHtml = replaceVariables(template.content, data)
 
   // Inject signatures ABOVE the line (border-top) in the signature area
-  // Structure: <div container> → img HERE → <div border-top> → LOCADORA
   const sigCompany = rental.signature_company || company.signature_url
   const sigClient = rental.signature_client
-  const sigImgTag = (src: string) => `<img src="${src}" style="max-width: 200px; max-height: 80px; display: block; margin: 0 auto 15px;" />`
+  const sigImg = (src: string) => `<img src="${src}" style="max-width: 200px; height: 80px; object-fit: contain; display: block; margin: 0 auto 10px;" />`
+  const sigPlaceholder = '<div style="height: 80px; margin-bottom: 10px;"></div>'
 
+  // Add align-items: flex-end to the flex container so both columns align at bottom
+  contractHtml = contractHtml.replace(
+    /display:\s*flex;\s*justify-content:\s*space-between;/,
+    'display: flex; justify-content: space-between; align-items: flex-end;'
+  )
+
+  // LOCADORA signature (or placeholder)
   if (sigCompany) {
-    // Insert img BEFORE the <div border-top> that contains LOCADORA
     contractHtml = contractHtml.replace(
       /(<div style="border-top:\s*1px solid[^"]*"[^>]*>[\s\r\n]*<strong>LOCADORA<\/strong>)/,
-      `${sigImgTag(sigCompany)}$1`
+      `${sigImg(sigCompany)}$1`
     )
   }
+
+  // LOCATÁRIO signature (or placeholder to keep alignment)
   if (sigClient) {
     contractHtml = contractHtml.replace(
       /(<div style="border-top:\s*1px solid[^"]*"[^>]*>[\s\r\n]*<strong>LOCATÁRIO\(A\)<\/strong>)/,
-      `${sigImgTag(sigClient)}$1`
+      `${sigImg(sigClient)}$1`
     )
   }
 
