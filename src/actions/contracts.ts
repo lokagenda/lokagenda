@@ -214,26 +214,24 @@ export async function generateContract(rentalId: string) {
 
   let contractHtml = replaceVariables(template.content, data)
 
-  // Append signatures if they exist (fallback to company.signature_url)
+  // Inject signatures into existing LOCADORA/LOCATÁRIO fields (fallback to company.signature_url)
   const sigCompany = rental.signature_company || company.signature_url
   const sigClient = rental.signature_client
+  const sigImgStyle = 'max-width: 200px; max-height: 80px; display: block; margin: 0 auto 10px;'
 
-  if (sigCompany || sigClient) {
-    let sigHtml = '<div style="margin-top: 40px; display: flex; justify-content: space-between;">'
-    if (sigCompany) {
-      sigHtml += `<div style="text-align: center; width: 45%;"><img src="${sigCompany}" style="max-width: 200px; max-height: 80px;" /><div style="border-top: 1px solid #333; padding-top: 5px; margin-top: 5px;"><strong>LOCADORA</strong></div></div>`
-    }
-    if (sigClient) {
-      sigHtml += `<div style="text-align: center; width: 45%;"><img src="${sigClient}" style="max-width: 200px; max-height: 80px;" /><div style="border-top: 1px solid #333; padding-top: 5px; margin-top: 5px;"><strong>LOCATÁRIO(A)</strong></div></div>`
-    }
-    sigHtml += '</div>'
-    // Insert before closing </div> or append at end
-    if (contractHtml.includes('</div>')) {
-      const lastDiv = contractHtml.lastIndexOf('</div>')
-      contractHtml = contractHtml.slice(0, lastDiv) + sigHtml + contractHtml.slice(lastDiv)
-    } else {
-      contractHtml += sigHtml
-    }
+  if (sigCompany) {
+    // Insert company signature image above the LOCADORA text in the existing template
+    contractHtml = contractHtml.replace(
+      /<strong>LOCADORA<\/strong>/,
+      `<img src="${sigCompany}" style="${sigImgStyle}" /><strong>LOCADORA</strong>`
+    )
+  }
+  if (sigClient) {
+    // Insert client signature image above the LOCATÁRIO text in the existing template
+    contractHtml = contractHtml.replace(
+      /<strong>LOCATÁRIO\(A\)<\/strong>/,
+      `<img src="${sigClient}" style="${sigImgStyle}" /><strong>LOCATÁRIO(A)</strong>`
+    )
   }
 
   // Save to rental
