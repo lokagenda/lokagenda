@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
     const price = getPlanPrice(typedPlan, billingCycle)
     const cycleLabel = getCycleLabel(billingCycle)
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const host = request.headers.get('host') || 'lokagenda-one.vercel.app'
+    const protocol = host.includes('localhost') ? 'http' : 'https'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`
 
     const preference = await preferenceClient.create({
       body: {
@@ -86,10 +88,11 @@ export async function POST(request: NextRequest) {
       init_point: preference.init_point,
       sandbox_init_point: preference.sandbox_init_point,
     })
-  } catch (error) {
-    console.error('[MercadoPago] Erro ao criar preferência:', error)
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('[MercadoPago] Erro ao criar preferência:', errMsg, error)
     return NextResponse.json(
-      { error: 'Erro interno ao criar preferência de pagamento' },
+      { error: `Erro ao processar pagamento: ${errMsg}` },
       { status: 500 }
     )
   }
