@@ -12,6 +12,9 @@ import {
   Package,
   Rocket,
   ArrowRight,
+  AlertTriangle,
+  ShieldAlert,
+  Ban,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PricingSection } from '@/components/public/pricing-section'
@@ -23,32 +26,32 @@ const features = [
   {
     icon: Calendar,
     title: 'Agenda inteligente',
-    description: 'Controle de disponibilidade por data e horario com visualizacao simplificada.',
+    description: 'Controle de disponibilidade por data e horário com visualização simplificada.',
   },
   {
     icon: MessageCircle,
     title: 'WhatsApp integrado',
-    description: 'Envie orcamentos e confirmacoes direto para o cliente via WhatsApp.',
+    description: 'Envie orçamentos e confirmações direto para o cliente via WhatsApp.',
   },
   {
     icon: FileText,
-    title: 'Contratos automaticos',
-    description: 'Assinatura digital e exportacao em PDF com modelos personalizaveis.',
+    title: 'Contratos automáticos',
+    description: 'Assinatura digital e exportação em PDF com modelos personalizáveis.',
   },
   {
     icon: DollarSign,
     title: 'Controle financeiro',
-    description: 'Pagamentos, sinais e contas a receber em um so lugar.',
+    description: 'Pagamentos, sinais e contas a receber em um só lugar.',
   },
   {
     icon: Bell,
-    title: 'Notificacoes',
-    description: 'Alertas de locacoes e pagamentos pendentes para nao perder nada.',
+    title: 'Notificações',
+    description: 'Alertas de locações e pagamentos pendentes para não perder nada.',
   },
   {
     icon: BarChart3,
     title: 'Dashboard completo',
-    description: 'Visao geral do seu negocio em tempo real com graficos e metricas.',
+    description: 'Visão geral do seu negócio em tempo real com gráficos e métricas.',
   },
 ]
 
@@ -56,17 +59,35 @@ const steps = [
   {
     icon: Building2,
     title: 'Cadastre sua empresa',
-    description: 'Crie sua conta e configure as informacoes do seu negocio em minutos.',
+    description: 'Crie sua conta e configure as informações do seu negócio em minutos.',
   },
   {
     icon: Package,
     title: 'Configure seus produtos',
-    description: 'Adicione seus brinquedos e equipamentos com precos e disponibilidade.',
+    description: 'Adicione seus brinquedos e equipamentos com preços e disponibilidade.',
   },
   {
     icon: Rocket,
     title: 'Comece a gerenciar',
-    description: 'Receba orcamentos, gerencie locacoes e acompanhe tudo pelo painel.',
+    description: 'Receba orçamentos, gerencie locações e acompanhe tudo pelo painel.',
+  },
+]
+
+const desafios = [
+  {
+    icon: AlertTriangle,
+    title: 'Perda de agendamentos',
+    description: 'Evite duplicidades e reservas perdidas',
+  },
+  {
+    icon: ShieldAlert,
+    title: 'Desorganização e erros',
+    description: 'Controle manual de estoque e contratos',
+  },
+  {
+    icon: Ban,
+    title: 'Prejuízo financeiro',
+    description: 'Reservas bloqueadas por falta de disponibilidade',
   },
 ]
 
@@ -107,19 +128,19 @@ export default async function LandingPage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
-              7 dias gratis para testar
+              7 dias grátis para testar
             </div>
 
             <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-white sm:text-5xl lg:text-6xl">
-              Gerencie suas locacoes de forma{' '}
+              Gerencie suas locações de forma{' '}
               <span className="bg-gradient-to-r from-primary to-blue-500 bg-clip-text text-transparent">
                 inteligente
               </span>
             </h1>
 
             <p className="mt-6 text-lg leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-xl">
-              Sistema completo para empresas de locacao de brinquedos e equipamentos para festas.
-              Orcamentos, contratos, agenda e financeiro em um so lugar.
+              Sistema completo para empresas de locação de brinquedos e equipamentos para festas.
+              Orçamentos, contratos, agenda e financeiro em um só lugar.
             </p>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -127,7 +148,7 @@ export default async function LandingPage() {
                 href="/register"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-4 text-base font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-hover hover:shadow-xl hover:shadow-primary/30"
               >
-                Comecar gratis
+                Começar grátis
                 <ArrowRight className="h-5 w-5" />
               </Link>
               <a
@@ -139,36 +160,20 @@ export default async function LandingPage() {
             </div>
           </div>
 
-          {/* Dashboard mockup */}
-          <div className="relative mx-auto mt-16 max-w-5xl">
-            <div className="rounded-2xl border border-zinc-200 bg-white p-2 shadow-2xl dark:border-zinc-700 dark:bg-zinc-800">
-              <div className="flex items-center gap-1.5 px-3 pb-2 pt-1">
-                <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                <div className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                <div className="ml-3 h-5 flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700" />
-              </div>
-              <div className="rounded-xl bg-gradient-to-br from-zinc-50 to-zinc-100 p-8 dark:from-zinc-800 dark:to-zinc-900">
-                <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { label: 'Locacoes do mes', value: '47', color: 'bg-primary/10 text-primary' },
-                    { label: 'Receita mensal', value: 'R$ 12.450', color: 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' },
-                    { label: 'Clientes ativos', value: '128', color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' },
-                  ].map((stat) => (
-                    <div key={stat.label} className={`rounded-lg p-4 ${stat.color}`}>
-                      <p className="text-xs font-medium opacity-70">{stat.label}</p>
-                      <p className="mt-1 text-2xl font-bold">{stat.value}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="h-32 rounded-lg bg-white/60 dark:bg-zinc-800/60" />
-                  <div className="h-32 rounded-lg bg-white/60 dark:bg-zinc-800/60" />
-                </div>
-              </div>
+          {/* Hero image */}
+          <div className="relative mx-auto mt-16 flex justify-center">
+            <div className="relative w-full max-w-lg">
+              <Image
+                src="/images/hero-mobile.jpg"
+                alt="LokAgenda no celular"
+                width={600}
+                height={800}
+                className="w-full rounded-2xl shadow-2xl"
+                priority
+              />
+              {/* Glow effect */}
+              <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-r from-primary/20 via-transparent to-accent/20 blur-2xl" />
             </div>
-            {/* Glow effect */}
-            <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-r from-primary/20 via-transparent to-accent/20 blur-2xl" />
           </div>
         </div>
       </section>
@@ -178,10 +183,10 @@ export default async function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-4xl">
-              Tudo que voce precisa em um so lugar
+              Tudo que você precisa em um só lugar
             </h2>
             <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-              Funcionalidades pensadas para simplificar a gestao do seu negocio de locacao.
+              Funcionalidades pensadas para simplificar a gestão do seu negócio de locação.
             </p>
           </div>
 
@@ -212,7 +217,7 @@ export default async function LandingPage() {
               Comece em 3 passos simples
             </h2>
             <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-              Configure tudo em poucos minutos e comece a gerenciar suas locacoes.
+              Configure tudo em poucos minutos e comece a gerenciar suas locações.
             </p>
           </div>
 
@@ -238,6 +243,40 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* ───── Desafios ───── */}
+      <section className="bg-zinc-50/50 py-20 dark:bg-zinc-900/50 lg:py-28">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-4xl">
+              Os desafios de quem aluga brinquedos...
+            </h2>
+          </div>
+
+          <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {desafios.map((desafio) => (
+              <div
+                key={desafio.title}
+                className="group rounded-2xl border border-red-200 bg-white p-6 transition-all hover:shadow-lg dark:border-red-900/40 dark:bg-zinc-800/50"
+              >
+                <div className="mb-4 inline-flex rounded-xl bg-red-100 p-3 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                  <desafio.icon className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">{desafio.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                  {desafio.description}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mx-auto mt-12 max-w-2xl text-center">
+            <p className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
+              Com <span className="font-bold text-primary">LokAgenda</span>, isso fica no passado. Sua gestão fica online, inteligente e sem perdas.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ───── Pricing ───── */}
       <div className="bg-zinc-50/50 dark:bg-zinc-900/50">
         <PricingSection plans={(plans as any) || []} />
@@ -255,16 +294,16 @@ export default async function LandingPage() {
             <div className="pointer-events-none absolute -bottom-20 -left-20 h-40 w-40 rounded-full bg-white/10" />
 
             <h2 className="relative text-3xl font-bold text-white sm:text-4xl">
-              Pronto para comecar?
+              Pronto para começar?
             </h2>
             <p className="relative mt-4 text-lg text-blue-100">
-              Junte-se a centenas de empresas que ja simplificaram sua gestao de locacoes.
+              Junte-se a centenas de empresas que já simplificaram sua gestão de locações.
             </p>
             <Link
               href="/register"
               className="relative mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-base font-semibold text-primary shadow-lg transition-all hover:bg-blue-50 hover:shadow-xl"
             >
-              Criar conta gratis
+              Criar conta grátis
               <ArrowRight className="h-5 w-5" />
             </Link>
           </div>

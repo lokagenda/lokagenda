@@ -13,7 +13,7 @@ export function PublicFooter() {
               <span className="text-lg font-bold text-primary">LokAgenda</span>
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-              Sistema completo para empresas de locacao de brinquedos e equipamentos para festas e eventos.
+              Sistema completo para empresas de locação de brinquedos e equipamentos para festas e eventos.
             </p>
           </div>
 
@@ -28,7 +28,7 @@ export function PublicFooter() {
               </li>
               <li>
                 <a href="#precos" className="text-sm text-zinc-500 transition-colors hover:text-primary dark:text-zinc-400">
-                  Precos
+                  Preços
                 </a>
               </li>
               <li>
@@ -49,6 +49,16 @@ export function PublicFooter() {
             <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Contato</h4>
             <ul className="mt-3 space-y-2">
               <li className="text-sm text-zinc-500 dark:text-zinc-400">contato@lokagenda.com.br</li>
+              <li>
+                <a
+                  href="https://wa.me/5516991773037"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-zinc-500 transition-colors hover:text-primary dark:text-zinc-400"
+                >
+                  (16) 99177-3037 (WhatsApp)
+                </a>
+              </li>
             </ul>
           </div>
         </div>

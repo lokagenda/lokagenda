@@ -5,34 +5,34 @@ import { ChevronDown } from 'lucide-react'
 
 const faqItems = [
   {
-    question: 'Posso testar gratis?',
+    question: 'Posso testar grátis?',
     answer:
-      'Sim! Oferecemos 7 dias de teste gratis em todos os planos. Voce pode explorar todas as funcionalidades sem compromisso e sem precisar cadastrar cartao de credito.',
+      'Sim! Oferecemos 7 dias de teste grátis em todos os planos. Você pode explorar todas as funcionalidades sem compromisso e sem precisar cadastrar cartão de crédito.',
   },
   {
     question: 'Quais formas de pagamento?',
     answer:
-      'Aceitamos PIX, cartao de credito (todas as bandeiras) e boleto bancario. Para planos semestrais e anuais, oferecemos descontos especiais.',
+      'Aceitamos PIX, cartão de crédito (todas as bandeiras) e boleto bancário. Para planos semestrais e anuais, oferecemos descontos especiais.',
   },
   {
     question: 'Posso cancelar a qualquer momento?',
     answer:
-      'Sim, voce pode cancelar sua assinatura a qualquer momento diretamente pelo painel. Nao ha multa ou taxa de cancelamento. Seu acesso continua ate o fim do periodo ja pago.',
+      'Sim, você pode cancelar sua assinatura a qualquer momento diretamente pelo painel. Não há multa ou taxa de cancelamento. Seu acesso continua até o fim do período já pago.',
   },
   {
     question: 'Quantos produtos posso cadastrar?',
     answer:
-      'Depende do plano escolhido. O plano Basico permite ate 30 produtos, o Profissional ate 100 e o Premium oferece produtos ilimitados. Voce pode fazer upgrade a qualquer momento.',
+      'Depende do plano escolhido. O plano Básico permite até 30 produtos, o Profissional até 100 e o Premium oferece produtos ilimitados. Você pode fazer upgrade a qualquer momento.',
   },
   {
     question: 'O sistema funciona no celular?',
     answer:
-      'Sim, o LokAgenda e 100% responsivo e funciona perfeitamente em smartphones, tablets e computadores. Voce pode gerenciar suas locacoes de qualquer lugar.',
+      'Sim, o LokAgenda é 100% responsivo e funciona perfeitamente em smartphones, tablets e computadores. Você pode gerenciar suas locações de qualquer lugar.',
   },
   {
-    question: 'Meus dados estao seguros?',
+    question: 'Meus dados estão seguros?',
     answer:
-      'Absolutamente. Utilizamos criptografia de ponta a ponta, servidores seguros e fazemos backups diarios automaticos. Seus dados e os dos seus clientes estao sempre protegidos.',
+      'Absolutamente. Utilizamos criptografia de ponta a ponta, servidores seguros e fazemos backups diários automáticos. Seus dados e os dos seus clientes estão sempre protegidos.',
   },
 ]
 
@@ -47,7 +47,7 @@ export function FaqSection() {
             Perguntas frequentes
           </h2>
           <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-            Tire suas duvidas sobre o LokAgenda
+            Tire suas dúvidas sobre o LokAgenda
           </p>
         </div>
 

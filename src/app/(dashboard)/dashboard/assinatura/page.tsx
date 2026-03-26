@@ -21,14 +21,42 @@ type SubscriptionWithPlan = Subscription & {
   plans: Plan
 }
 
-const cycleLabels: Record<BillingCycle, string> = {
-  monthly: 'Mensal',
-  semiannual: 'Semestral',
-  annual: 'Anual',
+const cycleConfig: Record<BillingCycle, {
+  label: string
+  pricePerMonth: number
+  totalPrice: number
+  months: number
+  savings: string | null
+  description: string
+}> = {
+  monthly: {
+    label: 'Mensal',
+    pricePerMonth: 59.99,
+    totalPrice: 59.99,
+    months: 1,
+    savings: null,
+    description: 'Cobrança mensal, cancele quando quiser',
+  },
+  semiannual: {
+    label: 'Semestral',
+    pricePerMonth: 49.99,
+    totalPrice: 299.94,
+    months: 6,
+    savings: '~17%',
+    description: 'R$ 299,94 a cada 6 meses',
+  },
+  annual: {
+    label: 'Anual',
+    pricePerMonth: 39.99,
+    totalPrice: 479.88,
+    months: 12,
+    savings: '~33%',
+    description: 'R$ 479,88 por ano',
+  },
 }
 
 const statusLabels: Record<string, { label: string; color: string }> = {
-  trialing: { label: 'Teste Grátis', color: 'bg-yellow-500/10 text-yellow-500' },
+  trial: { label: 'Teste Grátis', color: 'bg-yellow-500/10 text-yellow-500' },
   active: { label: 'Ativo', color: 'bg-green-500/10 text-green-500' },
   past_due: { label: 'Pagamento Pendente', color: 'bg-red-500/10 text-red-500' },
   cancelled: { label: 'Cancelado', color: 'bg-zinc-500/10 text-zinc-500' },
@@ -44,45 +72,11 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString('pt-BR')
 }
 
-function getPlanPrice(plan: Plan, cycle: BillingCycle): number {
-  switch (cycle) {
-    case 'monthly':
-      return plan.price_monthly
-    case 'semiannual':
-      return plan.price_semiannual
-    case 'annual':
-      return plan.price_annual
-    default:
-      return plan.price_monthly
-  }
-}
-
-function getMonthlyEquivalent(plan: Plan, cycle: BillingCycle): number {
-  switch (cycle) {
-    case 'monthly':
-      return plan.price_monthly
-    case 'semiannual':
-      return plan.price_semiannual / 6
-    case 'annual':
-      return plan.price_annual / 12
-    default:
-      return plan.price_monthly
-  }
-}
-
-function getSavingsPercent(plan: Plan, cycle: BillingCycle): number {
-  if (cycle === 'monthly') return 0
-  const monthlyTotal = cycle === 'semiannual' ? plan.price_monthly * 6 : plan.price_monthly * 12
-  const cyclePrice = getPlanPrice(plan, cycle)
-  return Math.round(((monthlyTotal - cyclePrice) / monthlyTotal) * 100)
-}
-
 export default function AssinaturaPage() {
   const [subscription, setSubscription] = useState<SubscriptionWithPlan | null>(null)
-  const [plans, setPlans] = useState<Plan[]>([])
-  const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
+  const [plan, setPlan] = useState<Plan | null>(null)
   const [loading, setLoading] = useState(true)
-  const [subscribing, setSubscribing] = useState<string | null>(null)
+  const [subscribing, setSubscribing] = useState<BillingCycle | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -94,7 +88,10 @@ export default function AssinaturaPage() {
         getPlans(),
       ])
       setSubscription(subResult.data as SubscriptionWithPlan | null)
-      setPlans(plansResult.data || [])
+      // Single plan - use the first active one
+      if (plansResult.data && plansResult.data.length > 0) {
+        setPlan(plansResult.data[0])
+      }
     } catch {
       console.error('Erro ao carregar dados da assinatura')
     } finally {
@@ -112,9 +109,7 @@ export default function AssinaturaPage() {
     const status = params.get('status')
     if (status === 'success') {
       setMessage({ type: 'success', text: 'Pagamento realizado com sucesso! Sua assinatura será ativada em instantes.' })
-      // Limpar URL
       window.history.replaceState({}, '', '/dashboard/assinatura')
-      // Recarregar dados após um momento
       setTimeout(() => loadData(), 3000)
     } else if (status === 'failure') {
       setMessage({ type: 'error', text: 'O pagamento não foi aprovado. Tente novamente.' })
@@ -125,12 +120,12 @@ export default function AssinaturaPage() {
     }
   }, [loadData])
 
-  const handleSubscribe = async (planId: string) => {
-    setSubscribing(planId)
+  const handleSubscribe = async (cycle: BillingCycle) => {
+    if (!plan) return
+    setSubscribing(cycle)
     setMessage(null)
 
     try {
-      // Buscar company_id do usuário via subscription ou action
       const subData = await getSubscription()
       let companyId = ''
 
@@ -139,7 +134,6 @@ export default function AssinaturaPage() {
       }
 
       if (!companyId) {
-        // Fallback: buscar do perfil
         setMessage({ type: 'error', text: 'Não foi possível identificar a empresa.' })
         setSubscribing(null)
         return
@@ -149,8 +143,8 @@ export default function AssinaturaPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          planId,
-          billingCycle: selectedCycle,
+          planId: plan.id,
+          billingCycle: cycle,
           companyId,
         }),
       })
@@ -163,7 +157,6 @@ export default function AssinaturaPage() {
         return
       }
 
-      // Redirecionar para checkout do Mercado Pago
       const checkoutUrl = data.init_point || data.sandbox_init_point
       if (checkoutUrl) {
         window.location.href = checkoutUrl
@@ -208,6 +201,7 @@ export default function AssinaturaPage() {
 
   const isActive = subscription ? isSubscriptionActive(subscription) : false
   const trialDays = subscription ? getTrialDaysRemaining(subscription) : 0
+  const features = plan ? (plan.features as string[]) || [] : []
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -353,157 +347,138 @@ export default function AssinaturaPage() {
         </div>
       )}
 
-      {/* Seletor de Ciclo */}
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <div>
+      {/* Plano e opções de ciclo */}
+      {plan && (
+        <div>
+          <div className="mb-6">
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
               {isActive && subscription?.status === 'active' ? 'Alterar Plano' : 'Escolher Plano'}
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Selecione o melhor plano para o seu negócio
+              Selecione o ciclo de cobrança ideal para o seu negócio
             </p>
           </div>
-        </div>
 
-        {/* Toggle de ciclo */}
-        <div className="mb-8 flex items-center justify-center">
-          <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-700 dark:bg-zinc-800">
-            {(['monthly', 'semiannual', 'annual'] as BillingCycle[]).map((cycle) => (
-              <button
-                key={cycle}
-                onClick={() => setSelectedCycle(cycle)}
-                className={`relative rounded-md px-4 py-2 text-sm font-medium transition-all ${
-                  selectedCycle === cycle
-                    ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
-                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
-                }`}
-              >
-                {cycleLabels[cycle]}
-                {cycle !== 'monthly' && (
-                  <span className="ml-1 text-[10px] font-bold text-green-500">
-                    Economia
-                  </span>
-                )}
-              </button>
-            ))}
+          {/* Plan name header */}
+          <div className="mb-6 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+              <Crown className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{plan.name}</h3>
+              {plan.description && (
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">{plan.description}</p>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Cards de planos */}
-        <div className="grid gap-6 md:grid-cols-3">
-          {plans.map((plan) => {
-            const price = getPlanPrice(plan, selectedCycle)
-            const monthlyEq = getMonthlyEquivalent(plan, selectedCycle)
-            const savings = getSavingsPercent(plan, selectedCycle)
-            const isCurrentPlan = subscription?.plan_id === plan.id && isActive
-            const isProfessional = plan.slug === 'profissional'
-            const features = (plan.features as string[]) || []
+          {/* 3 pricing columns */}
+          <div className="grid gap-6 md:grid-cols-3">
+            {(['monthly', 'semiannual', 'annual'] as BillingCycle[]).map((cycle) => {
+              const config = cycleConfig[cycle]
+              const isPopular = cycle === 'semiannual'
+              const isCurrentCycle = subscription?.billing_cycle === cycle && isActive && subscription?.status === 'active'
 
-            return (
-              <div
-                key={plan.id}
-                className={`relative flex flex-col rounded-xl border p-6 transition-shadow hover:shadow-lg ${
-                  isProfessional
-                    ? 'border-blue-500 bg-white shadow-lg shadow-blue-500/10 dark:border-blue-500 dark:bg-zinc-900'
-                    : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-                }`}
-              >
-                {/* Popular badge */}
-                {isProfessional && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
-                      <Sparkles className="h-3 w-3" />
-                      Mais Popular
-                    </span>
-                  </div>
-                )}
-
-                {/* Plan header */}
-                <div className="mb-4">
-                  <div className="flex items-center gap-2">
-                    <Crown className={`h-5 w-5 ${isProfessional ? 'text-blue-500' : 'text-zinc-400 dark:text-zinc-500'}`} />
-                    <h3 className="text-lg font-bold text-zinc-900 dark:text-white">{plan.name}</h3>
-                  </div>
-                  {plan.description && (
-                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{plan.description}</p>
-                  )}
-                </div>
-
-                {/* Price */}
-                <div className="mb-6">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold text-zinc-900 dark:text-white">
-                      {formatCurrency(price)}
-                    </span>
-                    <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                      /{cycleLabels[selectedCycle].toLowerCase()}
-                    </span>
-                  </div>
-                  {selectedCycle !== 'monthly' && (
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {formatCurrency(monthlyEq)}/mês
-                      </span>
-                      {savings > 0 && (
-                        <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-600 dark:text-green-400">
-                          -{savings}%
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Features */}
-                <ul className="mb-6 flex-1 space-y-3">
-                  <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                    <Check className="h-4 w-4 shrink-0 text-green-500" />
-                    Até {plan.max_products} produtos
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                    <Check className="h-4 w-4 shrink-0 text-green-500" />
-                    Até {plan.max_rentals_month} locações/mês
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                    <Check className="h-4 w-4 shrink-0 text-green-500" />
-                    Até {plan.max_users} usuários
-                  </li>
-                  {features.map((feature, idx) => (
-                    <li key={idx} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                      <Check className="h-4 w-4 shrink-0 text-green-500" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                {/* CTA */}
-                <button
-                  onClick={() => handleSubscribe(plan.id)}
-                  disabled={!!subscribing || isCurrentPlan}
-                  className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                    isCurrentPlan
-                      ? 'border border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-                      : isProfessional
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
+              return (
+                <div
+                  key={cycle}
+                  className={`relative flex flex-col rounded-xl border p-6 transition-shadow hover:shadow-lg ${
+                    isPopular
+                      ? 'border-blue-500 bg-white shadow-lg shadow-blue-500/10 dark:border-blue-500 dark:bg-zinc-900'
+                      : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
                   }`}
                 >
-                  {subscribing === plan.id ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processando...
-                    </>
-                  ) : isCurrentPlan ? (
-                    'Plano atual'
-                  ) : (
-                    'Assinar'
+                  {/* Popular badge */}
+                  {isPopular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
+                        <Sparkles className="h-3 w-3" />
+                        Melhor custo-benefício
+                      </span>
+                    </div>
                   )}
-                </button>
-              </div>
-            )
-          })}
+
+                  {/* Cycle header */}
+                  <div className="mb-4">
+                    <h4 className="text-lg font-bold text-zinc-900 dark:text-white">
+                      {config.label}
+                    </h4>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      {config.description}
+                    </p>
+                  </div>
+
+                  {/* Price */}
+                  <div className="mb-6">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-bold text-zinc-900 dark:text-white">
+                        {formatCurrency(config.pricePerMonth)}
+                      </span>
+                      <span className="text-sm text-zinc-500 dark:text-zinc-400">/mês</span>
+                    </div>
+                    {config.savings && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Total: {formatCurrency(config.totalPrice)}
+                        </span>
+                        <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-600 dark:text-green-400">
+                          Economia de {config.savings}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Features */}
+                  <ul className="mb-6 flex-1 space-y-3">
+                    <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <Check className="h-4 w-4 shrink-0 text-green-500" />
+                      Até {plan.max_products} produtos
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <Check className="h-4 w-4 shrink-0 text-green-500" />
+                      Até {plan.max_rentals_month} locações/mês
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <Check className="h-4 w-4 shrink-0 text-green-500" />
+                      Até {plan.max_users} usuários
+                    </li>
+                    {features.map((feature, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                        <Check className="h-4 w-4 shrink-0 text-green-500" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* CTA */}
+                  <button
+                    onClick={() => handleSubscribe(cycle)}
+                    disabled={!!subscribing || isCurrentCycle}
+                    className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                      isCurrentCycle
+                        ? 'border border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+                        : isPopular
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
+                    }`}
+                  >
+                    {subscribing === cycle ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processando...
+                      </>
+                    ) : isCurrentCycle ? (
+                      'Plano atual'
+                    ) : (
+                      'Assinar'
+                    )}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

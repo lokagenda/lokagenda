@@ -65,6 +65,33 @@ export async function signUp(formData: FormData) {
     return { error: `Erro ao vincular perfil: ${profileError.message}` }
   }
 
+  // 4. Auto-create 7-day trial subscription
+  const { data: plan } = await admin
+    .from('plans')
+    .select('id')
+    .eq('active', true)
+    .order('position', { ascending: true })
+    .limit(1)
+    .single()
+
+  if (plan) {
+    const trialEndsAt = new Date()
+    trialEndsAt.setDate(trialEndsAt.getDate() + 7)
+
+    await admin
+      .from('subscriptions')
+      .insert({
+        company_id: company.id,
+        plan_id: plan.id,
+        status: 'trial',
+        billing_cycle: 'monthly',
+        current_price: 0,
+        trial_ends_at: trialEndsAt.toISOString(),
+        current_period_start: new Date().toISOString(),
+        current_period_end: trialEndsAt.toISOString(),
+      })
+  }
+
   return { success: true }
 }
 

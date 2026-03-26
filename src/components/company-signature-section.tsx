@@ -94,7 +94,7 @@ export function CompanySignatureSection() {
             Assinatura da Empresa
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Esta assinatura sera usada automaticamente nos contratos de locacao.
+            Esta assinatura será usada automaticamente nos contratos de locação.
           </p>
         </div>
       </div>
