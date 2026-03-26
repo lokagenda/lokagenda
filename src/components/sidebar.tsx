@@ -66,7 +66,7 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
   const sidebarContent = (
     <div className="flex h-full flex-col bg-gradient-to-b from-zinc-900 to-zinc-950">
       {/* Brand header */}
-      <div className="relative flex flex-col items-center border-b border-white/5 px-5 py-4">
+      <div className="relative flex flex-col items-center border-b border-white/5 px-4 pb-3 pt-5">
         <button
           onClick={() => setMobileOpen(false)}
           className="absolute right-3 top-3 text-zinc-500 hover:text-white lg:hidden"
@@ -77,11 +77,11 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
         <Image
           src="/logo.png"
           alt="LokAgenda"
-          width={80}
-          height={80}
-          className="h-14 w-14 object-contain"
+          width={120}
+          height={120}
+          className="h-20 w-20 object-contain"
         />
-        <span className="mt-2 text-[13px] font-medium text-zinc-400 truncate max-w-full text-center">{companyName}</span>
+        <span className="mt-1 text-[12px] font-medium text-zinc-500 truncate max-w-full text-center">{companyName}</span>
       </div>
 
       {/* Navigation */}
