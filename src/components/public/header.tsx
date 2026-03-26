@@ -33,7 +33,8 @@ export function PublicHeader() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="LokAgenda" width={36} height={36} className="rounded-lg" />
+          <Image src="/logo.png" alt="LokAgenda" width={36} height={36} className="rounded-lg dark:hidden" />
+          <Image src="/logo-white.png" alt="LokAgenda" width={36} height={36} className="hidden rounded-lg dark:block" />
           <span className="text-xl font-bold text-primary">LokAgenda</span>
         </Link>
 

@@ -9,7 +9,8 @@ export function PublicFooter() {
           {/* Brand */}
           <div>
             <Link href="/" className="flex items-center gap-2">
-              <Image src="/logo.png" alt="LokAgenda" width={32} height={32} className="rounded-lg" />
+              <Image src="/logo.png" alt="LokAgenda" width={32} height={32} className="rounded-lg dark:hidden" />
+              <Image src="/logo-white.png" alt="LokAgenda" width={32} height={32} className="hidden rounded-lg dark:block" />
               <span className="text-lg font-bold text-primary">LokAgenda</span>
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">

@@ -38,7 +38,15 @@ export default function AuthLayout({
                 alt="LokAgenda"
                 width={300}
                 height={300}
-                className="relative h-[160px] w-[160px] drop-shadow-2xl"
+                className="relative h-[160px] w-[160px] drop-shadow-2xl dark:hidden"
+                priority
+              />
+              <Image
+                src="/logo-white.png"
+                alt="LokAgenda"
+                width={300}
+                height={300}
+                className="relative hidden h-[160px] w-[160px] drop-shadow-2xl dark:block"
                 priority
               />
             </Link>

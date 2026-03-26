@@ -75,7 +75,7 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
           <X className="h-5 w-5" />
         </button>
         <Image
-          src="/logo.png"
+          src="/logo-white.png"
           alt="LokAgenda"
           width={120}
           height={120}
