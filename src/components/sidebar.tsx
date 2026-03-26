@@ -66,28 +66,22 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
   const sidebarContent = (
     <div className="flex h-full flex-col bg-gradient-to-b from-zinc-900 to-zinc-950">
       {/* Brand header */}
-      <div className="flex h-16 items-center gap-3 border-b border-white/5 px-5">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
-          <Image
-            src="/logo.png"
-            alt="LokAgenda"
-            width={36}
-            height={36}
-            className="h-9 w-9 object-contain"
-          />
-        </div>
-        <div className="flex flex-col min-w-0">
-          <span className="text-[13px] font-semibold text-white leading-tight">LokAgenda</span>
-          <span className="text-[11px] text-zinc-500 truncate">{companyName}</span>
-        </div>
-
+      <div className="relative flex flex-col items-center border-b border-white/5 px-5 py-4">
         <button
           onClick={() => setMobileOpen(false)}
-          className="ml-auto text-zinc-500 hover:text-white lg:hidden"
+          className="absolute right-3 top-3 text-zinc-500 hover:text-white lg:hidden"
           aria-label="Fechar menu"
         >
           <X className="h-5 w-5" />
         </button>
+        <Image
+          src="/logo.png"
+          alt="LokAgenda"
+          width={80}
+          height={80}
+          className="h-14 w-14 object-contain"
+        />
+        <span className="mt-2 text-[13px] font-medium text-zinc-400 truncate max-w-full text-center">{companyName}</span>
       </div>
 
       {/* Navigation */}
