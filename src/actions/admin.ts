@@ -236,9 +236,15 @@ export async function updateSubscription(id: string, data: {
   await requireSuperAdmin()
   const admin = createAdminClient()
 
+  // When updating trial_ends_at, also sync current_period_end
+  const updateData: Record<string, unknown> = { ...data, updated_at: new Date().toISOString() }
+  if (data.trial_ends_at && !data.current_period_end) {
+    updateData.current_period_end = data.trial_ends_at
+  }
+
   const { error } = await admin
     .from('subscriptions')
-    .update({ ...data, updated_at: new Date().toISOString() })
+    .update(updateData)
     .eq('id', id)
 
   if (error) throw new Error(error.message)
