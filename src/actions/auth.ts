@@ -9,6 +9,7 @@ export async function signUp(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const companyName = formData.get('companyName') as string
+  const phone = (formData.get('phone') as string) || null
 
   if (!fullName || !email || !password || !companyName) {
     return { error: 'Todos os campos são obrigatórios.' }
@@ -47,7 +48,7 @@ export async function signUp(formData: FormData) {
 
   const { data: company, error: companyError } = await admin
     .from('companies')
-    .insert({ name: companyName, slug })
+    .insert({ name: companyName, slug, phone })
     .select('id')
     .single()
 

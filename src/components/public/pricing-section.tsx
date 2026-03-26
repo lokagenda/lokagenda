@@ -37,8 +37,8 @@ const pricingOptions: {
   totalMonths: number
 }[] = [
   { key: 'monthly', label: 'Mensal', suffix: '/mês', totalMonths: 1 },
-  { key: 'semiannual', label: 'Semestral', suffix: '/mês', badge: 'Economize 10%', totalMonths: 6 },
-  { key: 'annual', label: 'Anual', suffix: '/mês', badge: 'Melhor valor', highlight: true, totalMonths: 12 },
+  { key: 'semiannual', label: 'Semestral', suffix: '/mês', badge: 'Economize ~17%', totalMonths: 6 },
+  { key: 'annual', label: 'Anual', suffix: '/mês', badge: 'Economize ~33%', highlight: true, totalMonths: 12 },
 ]
 
 export function PricingSection({ plans }: { plans: Plan[] }) {
@@ -52,9 +52,9 @@ export function PricingSection({ plans }: { plans: Plan[] }) {
   const features = Array.isArray(plan.features) ? plan.features : []
 
   const prices: Record<BillingCycle, number> = {
-    monthly: plan.price_monthly,
-    semiannual: plan.price_semiannual,
-    annual: plan.price_annual,
+    monthly: plan.price_monthly || 59.99,
+    semiannual: plan.price_semiannual || 49.99,
+    annual: plan.price_annual || 39.99,
   }
 
   return (

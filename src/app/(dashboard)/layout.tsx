@@ -85,6 +85,7 @@ export default async function DashboardLayout({
       <Sidebar
         companyName={companyName}
         companyLogoUrl={company?.logo_url}
+        role={profile?.role}
       />
 
       {/* Main content area offset by sidebar width on desktop */}

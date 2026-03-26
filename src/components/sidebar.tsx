@@ -25,6 +25,7 @@ import { createClient } from '@/lib/supabase/client'
 interface SidebarProps {
   companyName: string
   companyLogoUrl?: string | null
+  role?: string
 }
 
 const navigation = [
@@ -40,9 +41,14 @@ const navigation = [
   { name: 'Banners', href: '/dashboard/banners', icon: Megaphone },
 ]
 
-export function Sidebar({ companyName, companyLogoUrl }: SidebarProps) {
+export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const filteredNavigation = navigation.filter((item) => {
+    if (item.name === 'Banners' && role !== 'super_admin') return false
+    return true
+  })
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -85,7 +91,7 @@ export function Sidebar({ companyName, companyLogoUrl }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-5">
         <div className="space-y-0.5">
-          {navigation.map((item) => {
+          {filteredNavigation.map((item) => {
             const active = isActive(item.href)
             return (
               <Link

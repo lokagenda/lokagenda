@@ -5,12 +5,26 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signUp } from '@/actions/auth'
 import toast from 'react-hot-toast'
-import { ArrowRight, Mail, Lock, User, Building2, Eye, EyeOff } from 'lucide-react'
+import { ArrowRight, Mail, Lock, User, Building2, Phone, Eye, EyeOff } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [phone, setPhone] = useState('')
+
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    let value = e.target.value.replace(/\D/g, '')
+    if (value.length > 11) value = value.slice(0, 11)
+    if (value.length > 7) {
+      value = `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`
+    } else if (value.length > 2) {
+      value = `(${value.slice(0, 2)}) ${value.slice(2)}`
+    } else if (value.length > 0) {
+      value = `(${value}`
+    }
+    setPhone(value)
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -81,6 +95,22 @@ export default function RegisterPage() {
           <div className="group relative">
             <Building2 className={iconClass} />
             <input id="companyName" name="companyName" type="text" placeholder="Nome da sua empresa" required className={inputClass} />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="phone" className={labelClass}>Telefone</label>
+          <div className="group relative">
+            <Phone className={iconClass} />
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              placeholder="(00) 00000-0000"
+              value={phone}
+              onChange={handlePhoneChange}
+              className={inputClass}
+            />
           </div>
         </div>
 

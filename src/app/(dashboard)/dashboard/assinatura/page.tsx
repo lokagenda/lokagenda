@@ -149,6 +149,17 @@ export default function AssinaturaPage() {
         }),
       })
 
+      if (!response.ok) {
+        if (response.status === 503) {
+          setMessage({ type: 'error', text: 'Integração com pagamento em configuração. Entre em contato com o suporte.' })
+        } else {
+          const errorData = await response.json().catch(() => null)
+          setMessage({ type: 'error', text: errorData?.error || 'Erro ao processar assinatura. Tente novamente.' })
+        }
+        setSubscribing(null)
+        return
+      }
+
       const data = await response.json()
 
       if (data.error) {
