@@ -21,38 +21,48 @@ type SubscriptionWithPlan = Subscription & {
   plans: Plan
 }
 
-const cycleConfig: Record<BillingCycle, {
+interface CycleInfo {
   label: string
   pricePerMonth: number
   totalPrice: number
   months: number
   savings: string | null
   description: string
-}> = {
-  monthly: {
-    label: 'Mensal',
-    pricePerMonth: 59.99,
-    totalPrice: 59.99,
-    months: 1,
-    savings: null,
-    description: 'Cobrança mensal, cancele quando quiser',
-  },
-  semiannual: {
-    label: 'Semestral',
-    pricePerMonth: 49.99,
-    totalPrice: 299.94,
-    months: 6,
-    savings: '~17%',
-    description: 'R$ 299,94 a cada 6 meses',
-  },
-  annual: {
-    label: 'Anual',
-    pricePerMonth: 39.99,
-    totalPrice: 479.88,
-    months: 12,
-    savings: '~33%',
-    description: 'R$ 479,88 por ano',
-  },
+}
+
+function buildCycleConfig(plan: Plan | null): Record<BillingCycle, CycleInfo> {
+  const monthly = plan?.price_monthly || 59.99
+  const semiannualTotal = plan?.price_semiannual || 299.94
+  const annualTotal = plan?.price_annual || 479.88
+  const semiannualPerMonth = Math.round((semiannualTotal / 6) * 100) / 100
+  const annualPerMonth = Math.round((annualTotal / 12) * 100) / 100
+
+  return {
+    monthly: {
+      label: 'Mensal',
+      pricePerMonth: monthly,
+      totalPrice: monthly,
+      months: 1,
+      savings: null,
+      description: 'Cobrança mensal, cancele quando quiser',
+    },
+    semiannual: {
+      label: 'Semestral',
+      pricePerMonth: semiannualPerMonth,
+      totalPrice: semiannualTotal,
+      months: 6,
+      savings: '~17%',
+      description: `${formatCurrency(semiannualTotal)} a cada 6 meses`,
+    },
+    annual: {
+      label: 'Anual',
+      pricePerMonth: annualPerMonth,
+      totalPrice: annualTotal,
+      months: 12,
+      savings: '~33%',
+      description: `${formatCurrency(annualTotal)} por ano`,
+    },
+  }
 }
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -386,7 +396,7 @@ export default function AssinaturaPage() {
           {/* 3 pricing columns */}
           <div className="grid gap-6 md:grid-cols-3">
             {(['monthly', 'semiannual', 'annual'] as BillingCycle[]).map((cycle) => {
-              const config = cycleConfig[cycle]
+              const config = buildCycleConfig(plan)[cycle]
               const isPopular = cycle === 'semiannual'
               const isCurrentCycle = subscription?.billing_cycle === cycle && isActive && subscription?.status === 'active'
 
@@ -443,15 +453,15 @@ export default function AssinaturaPage() {
                   <ul className="mb-6 flex-1 space-y-3">
                     <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <Check className="h-4 w-4 shrink-0 text-green-500" />
-                      Até {plan.max_products} produtos
+                      {plan.max_products === -1 ? 'Produtos ilimitados' : `Até ${plan.max_products} produtos`}
                     </li>
                     <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <Check className="h-4 w-4 shrink-0 text-green-500" />
-                      Até {plan.max_rentals_month} locações/mês
+                      {plan.max_rentals_month === -1 ? 'Locações ilimitadas' : `Até ${plan.max_rentals_month} locações/mês`}
                     </li>
                     <li className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <Check className="h-4 w-4 shrink-0 text-green-500" />
-                      Até {plan.max_users} usuários
+                      {plan.max_users === -1 ? 'Usuários ilimitados' : `Até ${plan.max_users} usuários`}
                     </li>
                     {features.map((feature, idx) => (
                       <li key={idx} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">

@@ -44,9 +44,9 @@ export default async function AdminPlanosPage() {
                 <div>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">Limites</p>
                   <div className="mt-1 space-y-1 text-sm text-zinc-900 dark:text-zinc-50">
-                    <p>Produtos: {plan.max_products}</p>
-                    <p>Locacoes/mes: {plan.max_rentals_month}</p>
-                    <p>Usuarios: {plan.max_users}</p>
+                    <p>Produtos: {plan.max_products === -1 ? 'Ilimitados' : plan.max_products}</p>
+                    <p>Locações/mês: {plan.max_rentals_month === -1 ? 'Ilimitadas' : plan.max_rentals_month}</p>
+                    <p>Usuários: {plan.max_users === -1 ? 'Ilimitados' : plan.max_users}</p>
                   </div>
                 </div>
                 <div className="sm:col-span-2">

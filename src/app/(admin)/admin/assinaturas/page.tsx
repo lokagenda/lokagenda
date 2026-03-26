@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { SubscriptionActions } from '@/components/admin/subscription-actions'
 import { SubscriptionFilter } from '@/components/admin/subscription-filter'
+import { CreateFreeSubscription } from '@/components/admin/create-free-subscription'
+import { CompanyDetailsButton } from '@/components/admin/company-details-modal'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -44,9 +46,12 @@ export default async function AdminAssinaturasPage({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-        Assinaturas
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+          Assinaturas
+        </h2>
+        <CreateFreeSubscription />
+      </div>
 
       <SubscriptionFilter current={statusFilter} />
 
@@ -76,7 +81,15 @@ export default async function AdminAssinaturasPage({
                   return (
                     <tr key={sub.id} className="border-b border-zinc-100 dark:border-zinc-800/50">
                       <td className="py-3 font-medium text-zinc-900 dark:text-zinc-50">
-                        {sub.companies?.name || '-'}
+                        {sub.company_id && sub.companies?.name ? (
+                          <CompanyDetailsButton
+                            companyId={sub.company_id}
+                            companyName={sub.companies.name}
+                            variant="link"
+                          />
+                        ) : (
+                          sub.companies?.name || '-'
+                        )}
                       </td>
                       <td className="py-3 text-zinc-500 dark:text-zinc-400">
                         {sub.plans?.name || '-'}

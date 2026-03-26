@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AdminSearchForm } from '@/components/admin/search-form'
 import { CompanyActions } from '@/components/admin/company-actions'
+import { CompanyDetailsButton } from '@/components/admin/company-details-modal'
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('pt-BR', {
@@ -96,10 +97,16 @@ export default async function AdminEmpresasPage({
                         {formatDate(company.created_at)}
                       </td>
                       <td className="py-3 text-right">
-                        <CompanyActions
-                          companyId={company.id}
-                          isSuspended={isSuspended}
-                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <CompanyDetailsButton
+                            companyId={company.id}
+                            companyName={company.name}
+                          />
+                          <CompanyActions
+                            companyId={company.id}
+                            isSuspended={isSuspended}
+                          />
+                        </div>
                       </td>
                     </tr>
                   )

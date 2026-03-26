@@ -51,10 +51,16 @@ export function PricingSection({ plans }: { plans: Plan[] }) {
 
   const features = Array.isArray(plan.features) ? plan.features : []
 
-  const prices: Record<BillingCycle, number> = {
+  const totalPrices: Record<BillingCycle, number> = {
     monthly: plan.price_monthly || 59.99,
-    semiannual: plan.price_semiannual || 49.99,
-    annual: plan.price_annual || 39.99,
+    semiannual: plan.price_semiannual || 299.94,
+    annual: plan.price_annual || 479.88,
+  }
+
+  const prices: Record<BillingCycle, number> = {
+    monthly: totalPrices.monthly,
+    semiannual: Math.round((totalPrices.semiannual / 6) * 100) / 100,
+    annual: Math.round((totalPrices.annual / 12) * 100) / 100,
   }
 
   return (
@@ -86,7 +92,7 @@ export function PricingSection({ plans }: { plans: Plan[] }) {
               {pricingOptions.map((option) => {
                 const price = prices[option.key]
                 const isSelected = selectedCycle === option.key
-                const total = price * option.totalMonths
+                const total = totalPrices[option.key]
 
                 return (
                   <button
@@ -134,11 +140,11 @@ export function PricingSection({ plans }: { plans: Plan[] }) {
 
             {/* Limits */}
             <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
-              <span>Até {plan.max_products} produtos</span>
+              <span>{plan.max_products === -1 ? 'Produtos ilimitados' : `Até ${plan.max_products} produtos`}</span>
               <span className="text-zinc-300 dark:text-zinc-600">|</span>
-              <span>Até {plan.max_rentals_month} locações/mês</span>
+              <span>{plan.max_rentals_month === -1 ? 'Locações ilimitadas' : `Até ${plan.max_rentals_month} locações/mês`}</span>
               <span className="text-zinc-300 dark:text-zinc-600">|</span>
-              <span>Até {plan.max_users} {plan.max_users === 1 ? 'usuário' : 'usuários'}</span>
+              <span>{plan.max_users === -1 ? 'Usuários ilimitados' : `Até ${plan.max_users} ${plan.max_users === 1 ? 'usuário' : 'usuários'}`}</span>
             </div>
 
             {/* Features */}

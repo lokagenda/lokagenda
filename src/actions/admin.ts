@@ -167,6 +167,67 @@ export async function listSubscriptions(statusFilter?: string) {
   return data
 }
 
+export async function createFreeSubscription(companyId: string) {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+
+  // Get first plan
+  const { data: plans, error: planError } = await admin
+    .from('plans')
+    .select('id')
+    .order('position', { ascending: true })
+    .limit(1)
+
+  if (planError || !plans || plans.length === 0) {
+    throw new Error('Nenhum plano encontrado')
+  }
+
+  const planId = plans[0].id
+
+  // Check if company already has an active subscription
+  const { data: existing } = await admin
+    .from('subscriptions')
+    .select('id')
+    .eq('company_id', companyId)
+    .in('status', ['active', 'trial'])
+    .limit(1)
+
+  if (existing && existing.length > 0) {
+    throw new Error('Empresa já possui uma assinatura ativa')
+  }
+
+  const now = new Date().toISOString()
+
+  const { error } = await admin.from('subscriptions').insert({
+    company_id: companyId,
+    plan_id: planId,
+    status: 'active',
+    billing_cycle: 'monthly',
+    current_price: 0,
+    current_period_start: now,
+    current_period_end: '2099-12-31T23:59:59.000Z',
+    created_at: now,
+    updated_at: now,
+  })
+
+  if (error) throw new Error('Erro ao criar assinatura: ' + error.message)
+  revalidatePath('/admin/assinaturas')
+  revalidatePath('/admin/empresas')
+}
+
+export async function listCompaniesForSelect() {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+
+  const { data, error } = await admin
+    .from('companies')
+    .select('id, name')
+    .order('name', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
 export async function updateSubscription(id: string, data: {
   status?: SubscriptionStatus
   trial_ends_at?: string
