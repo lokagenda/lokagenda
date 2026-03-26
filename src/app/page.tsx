@@ -164,7 +164,7 @@ export default async function LandingPage() {
           <div className="relative mx-auto mt-16 flex justify-center">
             <div className="relative w-full max-w-lg">
               <Image
-                src="/images/hero-mobile.jpg"
+                src="/images/hero-mobile.png"
                 alt="LokAgenda no celular"
                 width={600}
                 height={800}

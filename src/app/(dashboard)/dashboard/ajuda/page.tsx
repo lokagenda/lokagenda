@@ -1,11 +1,33 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { MessageCircle, PlayCircle, HelpCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { Card, CardContent } from '@/components/ui/card'
+import { MessageCircle, PlayCircle } from 'lucide-react'
 
-const VIDEOS: { title: string; description: string; youtubeId: string }[] = []
+interface Video {
+  id: string
+  title: string
+  description: string | null
+  youtube_id: string
+}
 
 export default function AjudaPage() {
+  const [videos, setVideos] = useState<Video[]>([])
+
+  useEffect(() => {
+    async function loadVideos() {
+      const supabase = createClient() as any
+      const { data } = await supabase
+        .from('help_videos')
+        .select('id, title, description, youtube_id')
+        .eq('active', true)
+        .order('position', { ascending: true })
+      setVideos(data || [])
+    }
+    loadVideos()
+  }, [])
+
   return (
     <div className="space-y-8">
       <div>
@@ -38,7 +60,7 @@ export default function AjudaPage() {
       {/* Tutoriais em Vídeo */}
       <div>
         <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-zinc-50">Tutoriais em Vídeo</h2>
-        {VIDEOS.length === 0 ? (
+        {videos.length === 0 ? (
           <Card>
             <CardContent className="py-16 text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -52,10 +74,10 @@ export default function AjudaPage() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {VIDEOS.map((video) => (
+            {videos.map((video) => (
               <a
-                key={video.youtubeId}
-                href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+                key={video.id}
+                href={`https://www.youtube.com/watch?v=${video.youtube_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group"
@@ -63,7 +85,7 @@ export default function AjudaPage() {
                 <Card className="overflow-hidden transition hover:shadow-lg">
                   <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800">
                     <img
-                      src={`https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`}
+                      src={`https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg`}
                       alt={video.title}
                       className="h-full w-full object-cover"
                     />
@@ -73,7 +95,9 @@ export default function AjudaPage() {
                   </div>
                   <CardContent className="p-4">
                     <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{video.title}</h3>
-                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{video.description}</p>
+                    {video.description && (
+                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{video.description}</p>
+                    )}
                   </CardContent>
                 </Card>
               </a>

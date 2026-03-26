@@ -9,6 +9,7 @@ import {
   Image,
   Users,
   ScrollText,
+  PlayCircle,
   ArrowLeft,
   Shield,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ const sidebarItems = [
   { label: 'Planos', href: '/admin/planos', icon: CreditCard },
   { label: 'Assinaturas', href: '/admin/assinaturas', icon: Receipt },
   { label: 'Contratos', href: '/admin/contratos', icon: ScrollText },
+  { label: 'Vídeos', href: '/admin/videos', icon: PlayCircle },
   { label: 'Banners', href: '/admin/banners', icon: Image },
   { label: 'Usuários', href: '/admin/usuarios', icon: Users },
 ]
