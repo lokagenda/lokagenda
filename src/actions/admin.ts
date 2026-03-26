@@ -184,33 +184,46 @@ export async function createFreeSubscription(companyId: string) {
 
   const planId = plans[0].id
 
-  // Check if company already has an active subscription
+  const now = new Date().toISOString()
+
+  // Check if company already has a subscription (any status)
   const { data: existing } = await admin
     .from('subscriptions')
     .select('id')
     .eq('company_id', companyId)
-    .in('status', ['active', 'trial'])
     .limit(1)
 
   if (existing && existing.length > 0) {
-    throw new Error('Empresa já possui uma assinatura ativa')
+    // Update existing subscription to free/active
+    const { error } = await admin
+      .from('subscriptions')
+      .update({
+        plan_id: planId,
+        status: 'active',
+        billing_cycle: 'monthly',
+        current_price: 0,
+        current_period_end: '2099-12-31T23:59:59.000Z',
+        updated_at: now,
+      })
+      .eq('id', existing[0].id)
+
+    if (error) throw new Error('Erro ao atualizar assinatura: ' + error.message)
+  } else {
+    // Create new free subscription
+    const { error } = await admin.from('subscriptions').insert({
+      company_id: companyId,
+      plan_id: planId,
+      status: 'active',
+      billing_cycle: 'monthly',
+      current_price: 0,
+      current_period_start: now,
+      current_period_end: '2099-12-31T23:59:59.000Z',
+      created_at: now,
+      updated_at: now,
+    })
+
+    if (error) throw new Error('Erro ao criar assinatura: ' + error.message)
   }
-
-  const now = new Date().toISOString()
-
-  const { error } = await admin.from('subscriptions').insert({
-    company_id: companyId,
-    plan_id: planId,
-    status: 'active',
-    billing_cycle: 'monthly',
-    current_price: 0,
-    current_period_start: now,
-    current_period_end: '2099-12-31T23:59:59.000Z',
-    created_at: now,
-    updated_at: now,
-  })
-
-  if (error) throw new Error('Erro ao criar assinatura: ' + error.message)
   revalidatePath('/admin/assinaturas')
   revalidatePath('/admin/empresas')
 }
