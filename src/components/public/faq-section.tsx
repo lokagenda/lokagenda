@@ -22,7 +22,7 @@ const faqItems = [
   {
     question: 'Quantos produtos posso cadastrar?',
     answer:
-      'Depende do plano escolhido. O plano Básico permite até 30 produtos, o Profissional até 100 e o Premium oferece produtos ilimitados. Você pode fazer upgrade a qualquer momento.',
+      'O LokAgenda oferece cadastro ilimitado de produtos, locações e usuários em todos os planos.',
   },
   {
     question: 'O sistema funciona no celular?',

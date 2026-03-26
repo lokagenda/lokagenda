@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function AuthLayout({
@@ -31,14 +32,16 @@ export default function AuthLayout({
         <div className="mb-10 flex justify-center">
           <div className="relative">
             <div className="absolute -inset-8 rounded-full bg-blue-400/20 blur-3xl dark:bg-blue-500/15" />
-            <Image
-              src="/logo.png"
-              alt="LokAgenda"
-              width={300}
-              height={300}
-              className="relative h-[160px] w-[160px] drop-shadow-2xl"
-              priority
-            />
+            <Link href="/">
+              <Image
+                src="/logo.png"
+                alt="LokAgenda"
+                width={300}
+                height={300}
+                className="relative h-[160px] w-[160px] drop-shadow-2xl"
+                priority
+              />
+            </Link>
           </div>
         </div>
 

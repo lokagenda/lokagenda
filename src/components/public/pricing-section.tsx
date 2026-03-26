@@ -138,15 +138,6 @@ export function PricingSection({ plans }: { plans: Plan[] }) {
               })}
             </div>
 
-            {/* Limits */}
-            <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
-              <span>{plan.max_products === -1 ? 'Produtos ilimitados' : `Até ${plan.max_products} produtos`}</span>
-              <span className="text-zinc-300 dark:text-zinc-600">|</span>
-              <span>{plan.max_rentals_month === -1 ? 'Locações ilimitadas' : `Até ${plan.max_rentals_month} locações/mês`}</span>
-              <span className="text-zinc-300 dark:text-zinc-600">|</span>
-              <span>{plan.max_users === -1 ? 'Usuários ilimitados' : `Até ${plan.max_users} ${plan.max_users === 1 ? 'usuário' : 'usuários'}`}</span>
-            </div>
-
             {/* Features */}
             <ul className="mt-8 grid gap-3 sm:grid-cols-2">
               {features.map((feature, idx) => (

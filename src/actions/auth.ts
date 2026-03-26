@@ -93,6 +93,25 @@ export async function signUp(formData: FormData) {
       })
   }
 
+  // 5. Copy default global contract template if exists
+  const { data: globalTemplate } = await (admin as any)
+    .from('global_contract_templates')
+    .select('name, content')
+    .eq('is_default', true)
+    .limit(1)
+    .single()
+
+  if (globalTemplate) {
+    await admin
+      .from('contract_templates')
+      .insert({
+        company_id: company.id,
+        name: globalTemplate.name,
+        content: globalTemplate.content,
+        is_default: true,
+      })
+  }
+
   return { success: true }
 }
 

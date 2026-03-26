@@ -8,6 +8,7 @@ import {
   Receipt,
   Image,
   Users,
+  ScrollText,
   ArrowLeft,
   Shield,
 } from 'lucide-react'
@@ -17,8 +18,9 @@ const sidebarItems = [
   { label: 'Empresas', href: '/admin/empresas', icon: Building2 },
   { label: 'Planos', href: '/admin/planos', icon: CreditCard },
   { label: 'Assinaturas', href: '/admin/assinaturas', icon: Receipt },
+  { label: 'Contratos', href: '/admin/contratos', icon: ScrollText },
   { label: 'Banners', href: '/admin/banners', icon: Image },
-  { label: 'Usuarios', href: '/admin/usuarios', icon: Users },
+  { label: 'Usuários', href: '/admin/usuarios', icon: Users },
 ]
 
 export default async function AdminLayout({

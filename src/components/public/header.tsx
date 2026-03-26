@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 
 const navLinks = [
   { label: 'Funcionalidades', href: '#funcionalidades' },
-  { label: 'Precos', href: '#precos' },
+  { label: 'Preços', href: '#precos' },
   { label: 'FAQ', href: '#faq' },
 ]
 
@@ -63,7 +63,7 @@ export function PublicHeader() {
             href="/register"
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
           >
-            Comecar gratis
+            Começar grátis
           </Link>
         </div>
 
@@ -108,7 +108,7 @@ export function PublicHeader() {
               onClick={() => setMobileOpen(false)}
               className="rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-white hover:bg-primary-hover"
             >
-              Comecar gratis
+              Começar grátis
             </Link>
           </div>
         </div>

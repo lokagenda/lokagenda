@@ -109,6 +109,7 @@ export default function RegisterPage() {
               placeholder="(00) 00000-0000"
               value={phone}
               onChange={handlePhoneChange}
+              required
               className={inputClass}
             />
           </div>

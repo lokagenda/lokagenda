@@ -15,6 +15,7 @@ import {
   Building2,
   CreditCard,
   Megaphone,
+  HelpCircle,
   LogOut,
   X,
   Menu,
@@ -39,6 +40,7 @@ const navigation = [
   { name: 'Empresa', href: '/dashboard/empresa', icon: Building2 },
   { name: 'Assinatura', href: '/dashboard/assinatura', icon: CreditCard },
   { name: 'Banners', href: '/dashboard/banners', icon: Megaphone },
+  { name: 'Ajuda', href: '/dashboard/ajuda', icon: HelpCircle },
 ]
 
 export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
@@ -65,13 +67,13 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
     <div className="flex h-full flex-col bg-gradient-to-b from-zinc-900 to-zinc-950">
       {/* Brand header */}
       <div className="flex h-16 items-center gap-3 border-b border-white/5 px-5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
           <Image
             src="/logo.png"
             alt="LokAgenda"
-            width={28}
-            height={28}
-            className="h-7 w-7 object-contain"
+            width={36}
+            height={36}
+            className="h-9 w-9 object-contain"
           />
         </div>
         <div className="flex flex-col min-w-0">

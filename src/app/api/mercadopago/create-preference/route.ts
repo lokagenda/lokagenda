@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     const errMsg = error instanceof Error ? error.message : String(error)
     console.error('[MercadoPago] Erro ao criar preferência:', errMsg, error)
     return NextResponse.json(
-      { error: `Erro ao processar pagamento: ${errMsg}` },
+      { error: 'Erro interno ao criar preferência de pagamento. Tente novamente.' },
       { status: 500 }
     )
   }
