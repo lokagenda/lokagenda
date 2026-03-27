@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Save, ImageIcon, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, ImageIcon, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createProduct } from '@/actions/products'
 
@@ -14,10 +14,25 @@ export default function NovoProdutoPage() {
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Imagem deve ter no máximo 5MB')
+        e.target.value = ''
+        return
+      }
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        toast.error('Formato inválido. Use PNG, JPG ou WEBP')
+        e.target.value = ''
+        return
+      }
       setPreview(URL.createObjectURL(file))
     } else {
       setPreview(null)
     }
+  }
+
+  function clearImage() {
+    setPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -148,11 +163,20 @@ export default function NovoProdutoPage() {
               className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-600 p-6 transition-colors hover:border-zinc-400 dark:hover:border-zinc-500"
             >
               {preview ? (
-                <img
-                  src={preview}
-                  alt="Preview"
-                  className="h-40 w-40 rounded-lg object-cover"
-                />
+                <div className="relative">
+                  <img
+                    src={preview}
+                    alt="Preview"
+                    className="h-40 w-40 rounded-lg object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); clearImage() }}
+                    className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md hover:bg-red-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               ) : (
                 <>
                   <ImageIcon className="h-10 w-10 text-zinc-400 dark:text-zinc-500 mb-2" />

@@ -226,6 +226,59 @@ export async function recordPayment(rentalId: string, amount: number, method?: s
   return { success: true }
 }
 
+export async function deletePayment(paymentId: string) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  // Fetch payment
+  const { data: payment, error: fetchError } = await supabase
+    .from('payments')
+    .select('id, rental_id, amount, company_id')
+    .eq('id', paymentId)
+    .single()
+
+  if (fetchError || !payment) {
+    return { error: 'Pagamento não encontrado' }
+  }
+
+  if (payment.company_id !== companyId) {
+    return { error: 'Sem permissão' }
+  }
+
+  // Delete payment
+  const { error: deleteError } = await supabase
+    .from('payments')
+    .delete()
+    .eq('id', paymentId)
+
+  if (deleteError) {
+    return { error: `Erro ao excluir: ${deleteError.message}` }
+  }
+
+  // Recalculate rental amount_paid
+  const { data: rental } = await supabase
+    .from('rentals')
+    .select('total, amount_paid')
+    .eq('id', payment.rental_id)
+    .single()
+
+  if (rental) {
+    const newAmountPaid = Math.max(0, (rental.amount_paid || 0) - payment.amount)
+    let paymentStatus: 'pending' | 'partial' | 'paid' = 'pending'
+    if (newAmountPaid >= rental.total) paymentStatus = 'paid'
+    else if (newAmountPaid > 0) paymentStatus = 'partial'
+
+    await supabase
+      .from('rentals')
+      .update({ amount_paid: newAmountPaid, payment_status: paymentStatus })
+      .eq('id', payment.rental_id)
+  }
+
+  revalidatePath('/dashboard/locacoes')
+  revalidatePath(`/dashboard/locacoes/${payment.rental_id}`)
+  return { success: true }
+}
+
 interface UpdateRentalInput {
   customer_name: string
   customer_phone?: string | null

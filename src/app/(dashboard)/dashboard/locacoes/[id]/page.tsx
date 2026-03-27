@@ -819,7 +819,7 @@ export default function LocacaoDetailPage({
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative flex-1">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">
                   R$
@@ -830,13 +830,13 @@ export default function LocacaoDetailPage({
                   placeholder="0,00"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-10 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-blue-500"
+                  className="w-full rounded-lg border border-zinc-300 bg-white py-2.5 pl-10 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-blue-500"
                 />
               </div>
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
-                className="rounded-lg border border-zinc-300 bg-white py-2 px-3 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-blue-500"
+                className="w-full rounded-lg border border-zinc-300 bg-white py-2.5 px-3 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-blue-500 sm:w-auto"
               >
                 <option value="pix">PIX</option>
                 <option value="dinheiro">Dinheiro</option>
@@ -847,6 +847,7 @@ export default function LocacaoDetailPage({
                 size="sm"
                 onClick={handleRecordPayment}
                 disabled={paymentLoading || !paymentAmount}
+                className="w-full sm:w-auto"
               >
                 {paymentLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -855,6 +856,45 @@ export default function LocacaoDetailPage({
                 )}
                 Registrar Pagamento
               </Button>
+            </div>
+          )}
+
+          {/* Histórico de pagamentos */}
+          {payments.length > 0 && (
+            <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+              <h4 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">Histórico de Pagamentos</h4>
+              <div className="space-y-2">
+                {payments.map((p: any) => (
+                  <div key={p.id} className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/50">
+                    <div className="flex items-center gap-3">
+                      <span className="text-zinc-500 dark:text-zinc-400">{formatDate(p.paid_at)}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        p.method === 'pix' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        p.method === 'cartao' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        p.method === 'dinheiro' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                        'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300'
+                      }`}>
+                        {p.method === 'pix' ? 'PIX' : p.method === 'cartao' ? 'Cartão' : p.method === 'dinheiro' ? 'Dinheiro' : p.method === 'transferencia' ? 'Transf.' : p.method}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatCurrency(p.amount)}</span>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('Excluir este pagamento?')) return
+                          const { deletePayment } = await import('@/actions/rentals')
+                          const result = await deletePayment(p.id)
+                          if (result.error) { toast.error(result.error) } else { toast.success('Pagamento excluído'); loadData() }
+                        }}
+                        className="rounded p-1 text-zinc-400 transition hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                        title="Excluir pagamento"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>

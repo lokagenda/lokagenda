@@ -18,6 +18,7 @@ interface CreateQuoteInput {
   customer_phone?: string | null
   customer_email?: string | null
   event_date: string
+  event_end_date?: string | null
   event_address?: string | null
   event_city?: string | null
   event_state?: string | null
@@ -100,6 +101,7 @@ export async function createQuote(input: CreateQuoteInput) {
       customer_phone: input.customer_phone || null,
       customer_email: input.customer_email || null,
       event_date: input.event_date,
+      event_end_date: input.event_end_date || null,
       event_address: input.event_address || null,
       event_city: input.event_city || null,
       event_state: input.event_state || null,
@@ -158,6 +160,7 @@ export async function updateQuote(id: string, input: CreateQuoteInput) {
       customer_phone: input.customer_phone || null,
       customer_email: input.customer_email || null,
       event_date: input.event_date,
+      event_end_date: input.event_end_date || null,
       event_address: input.event_address || null,
       event_city: input.event_city || null,
       event_state: input.event_state || null,
@@ -307,6 +310,7 @@ export async function convertQuoteToRental(quoteId: string) {
       customer_phone: quote.customer_phone,
       customer_email: quote.customer_email,
       event_date: quote.event_date,
+      event_end_date: (quote as any).event_end_date || null,
       event_address: quote.event_address,
       event_city: quote.event_city,
       event_state: quote.event_state,

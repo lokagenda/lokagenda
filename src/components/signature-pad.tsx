@@ -147,7 +147,7 @@ export function SignaturePad({
       </label>
       <canvas
         ref={canvasRef}
-        className="cursor-crosshair rounded-lg border border-zinc-300 bg-white touch-none dark:border-zinc-700 dark:bg-zinc-950"
+        className="cursor-crosshair rounded-lg border border-zinc-300 bg-white touch-none dark:border-zinc-700"
         style={{ width: canvasSize.width, height: canvasSize.height }}
         onMouseDown={startDraw}
         onMouseMove={draw}

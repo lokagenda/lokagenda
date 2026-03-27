@@ -217,6 +217,7 @@ export interface Database {
           customer_phone: string | null;
           customer_email: string | null;
           event_date: string;
+          event_end_date: string | null;
           event_address: string | null;
           event_city: string | null;
           event_state: string | null;
@@ -245,6 +246,7 @@ export interface Database {
           customer_phone?: string | null;
           customer_email?: string | null;
           event_date: string;
+          event_end_date?: string | null;
           event_address?: string | null;
           event_city?: string | null;
           event_state?: string | null;
@@ -373,6 +375,7 @@ export interface Database {
           customer_email: string | null;
           customer_document: string | null;
           event_date: string;
+          event_end_date: string | null;
           event_address: string | null;
           event_city: string | null;
           event_state: string | null;
@@ -404,6 +407,7 @@ export interface Database {
           customer_email?: string | null;
           customer_document?: string | null;
           event_date: string;
+          event_end_date?: string | null;
           event_address?: string | null;
           event_city?: string | null;
           event_state?: string | null;
