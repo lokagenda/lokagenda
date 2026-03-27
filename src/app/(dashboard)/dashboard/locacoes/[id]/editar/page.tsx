@@ -29,6 +29,7 @@ export default function EditarLocacaoPage({
     customer_email: '',
     customer_document: '',
     event_date: '',
+    event_end_date: '',
     delivery_time: '',
     pickup_time: '',
     event_address: '',
@@ -56,6 +57,7 @@ export default function EditarLocacaoPage({
         customer_email: r.customer_email || '',
         customer_document: r.customer_document || '',
         event_date: r.event_date || '',
+        event_end_date: (r as any).event_end_date || '',
         delivery_time: r.delivery_time || '',
         pickup_time: r.pickup_time || '',
         event_address: r.event_address || '',
@@ -106,6 +108,7 @@ export default function EditarLocacaoPage({
         customer_email: form.customer_email || null,
         customer_document: form.customer_document || null,
         event_date: form.event_date,
+        event_end_date: form.event_end_date || null,
         delivery_time: form.delivery_time || null,
         pickup_time: form.pickup_time || null,
         event_address: form.event_address || null,
@@ -244,6 +247,19 @@ export default function EditarLocacaoPage({
                   type="date"
                   required
                   value={form.event_date}
+                  onChange={handleChange}
+                  className={inputClasses}
+                />
+              </div>
+              <div>
+                <label htmlFor="event_end_date" className={labelClasses}>
+                  Data de Retirada
+                </label>
+                <input
+                  id="event_end_date"
+                  name="event_end_date"
+                  type="date"
+                  value={form.event_end_date}
                   onChange={handleChange}
                   className={inputClasses}
                 />

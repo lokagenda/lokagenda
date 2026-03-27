@@ -192,26 +192,15 @@ export default function OrcamentoDetailPage({
 
         <div className="flex flex-wrap gap-2">
           {(quote.status === 'pending' || quote.status === 'approved') && (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleConvert}
-                disabled={actionLoading}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Converter em Locação
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleStatusChange('rejected')}
-                disabled={actionLoading}
-              >
-                <X className="h-4 w-4" />
-                Cancelar Orçamento
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleStatusChange('rejected')}
+              disabled={actionLoading}
+            >
+              <X className="h-4 w-4" />
+              Cancelar Orçamento
+            </Button>
           )}
           <Button
             size="sm"
@@ -295,6 +284,16 @@ export default function OrcamentoDetailPage({
                 {formatDate(quote.event_date)}
               </div>
             </div>
+            {(quote as any).event_end_date && (
+              <div>
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Retirada
+                </div>
+                <div className="mt-1 text-sm text-zinc-900 dark:text-zinc-50">
+                  {formatDate((quote as any).event_end_date)}
+                </div>
+              </div>
+            )}
             {quote.delivery_time && (
               <div>
                 <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">

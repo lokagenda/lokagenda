@@ -624,6 +624,12 @@ export default function LocacaoDetailPage({
                 {formatDate(rental.event_date)}
               </div>
             </div>
+            {(rental as any).event_end_date && (
+              <div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Retirada</p>
+                <p className="font-medium text-zinc-900 dark:text-zinc-50">{formatDate((rental as any).event_end_date)}</p>
+              </div>
+            )}
             {rental.delivery_time && (
               <div>
                 <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">

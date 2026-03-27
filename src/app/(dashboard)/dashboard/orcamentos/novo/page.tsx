@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createQuote, updateQuote } from '@/actions/quotes'
+import { createQuote, updateQuote, convertQuoteToRental } from '@/actions/quotes'
 import { generateQuoteMessage, getWhatsAppUrl } from '@/lib/whatsapp'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +17,7 @@ import {
   MessageCircle,
   Search,
   X,
+  CheckCircle2,
 } from 'lucide-react'
 import type { Product, Customer, Company } from '@/types/database'
 
@@ -50,6 +51,7 @@ export default function NovoOrcamentoPage() {
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [eventDate, setEventDate] = useState('')
+  const [eventEndDate, setEventEndDate] = useState('')
   const [eventAddress, setEventAddress] = useState('')
   const [eventCity, setEventCity] = useState('')
   const [eventState, setEventState] = useState('')
@@ -126,6 +128,7 @@ export default function NovoOrcamentoPage() {
         setCustomerEmail(q.customer_email || '')
         setCustomerSearch(q.customer_name || '')
         setEventDate(q.event_date || '')
+        setEventEndDate((q as any).event_end_date || '')
         setEventAddress(q.event_address || '')
         setEventCity(q.event_city || '')
         setEventState(q.event_state || '')
@@ -162,10 +165,12 @@ export default function NovoOrcamentoPage() {
     if (!itemsParam || products.length === 0) return
 
     const dateParam = searchParams.get('date')
+    const endDateParam = searchParams.get('end_date')
     const deliveryParam = searchParams.get('delivery')
     const pickupParam = searchParams.get('pickup')
 
     if (dateParam) setEventDate(dateParam)
+    if (endDateParam) setEventEndDate(endDateParam)
     if (deliveryParam) setDeliveryTime(deliveryParam)
     if (pickupParam) setPickupTime(pickupParam)
 
@@ -288,6 +293,7 @@ export default function NovoOrcamentoPage() {
       customer_phone: customerPhone || undefined,
       customer_email: customerEmail || undefined,
       event_date: eventDate,
+      event_end_date: eventEndDate || null,
       event_address: eventAddress || undefined,
       event_city: eventCity || undefined,
       event_state: eventState || undefined,
@@ -332,6 +338,7 @@ export default function NovoOrcamentoPage() {
       customer_phone: customerPhone || undefined,
       customer_email: customerEmail || undefined,
       event_date: eventDate,
+      event_end_date: eventEndDate || null,
       event_address: eventAddress || undefined,
       event_city: eventCity || undefined,
       event_state: eventState || undefined,
@@ -501,6 +508,12 @@ export default function NovoOrcamentoPage() {
               type="date"
               value={eventDate}
               onChange={(e) => setEventDate(e.target.value)}
+            />
+            <Input
+              label="Data de retirada"
+              type="date"
+              value={eventEndDate}
+              onChange={(e) => setEventEndDate(e.target.value)}
             />
             <Input
               label="Horário de entrega"
@@ -725,14 +738,137 @@ export default function NovoOrcamentoPage() {
         <Button variant="outline" onClick={() => router.back()} disabled={loading}>
           Cancelar
         </Button>
-        <Button variant="secondary" onClick={handleSave} disabled={loading}>
-          <Save className="h-4 w-4" />
-          {loading ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Salvar Rascunho'}
-        </Button>
-        <Button onClick={handleSendWhatsApp} disabled={loading}>
-          <MessageCircle className="h-4 w-4" />
-          {loading ? 'Salvando...' : 'Salvar e Enviar WhatsApp'}
-        </Button>
+        {isEditing ? (
+          <Button variant="secondary" onClick={handleSave} disabled={loading}>
+            <Save className="h-4 w-4" />
+            {loading ? 'Salvando...' : 'Salvar Alterações'}
+          </Button>
+        ) : (
+          <>
+            <Button
+              disabled={loading}
+              className="bg-green-600 text-white hover:bg-green-700"
+              onClick={async () => {
+                if (!customerName || !eventDate || items.length === 0) {
+                  alert('Preencha o cliente, data do evento e adicione pelo menos um item.')
+                  return
+                }
+                setLoading(true)
+                const quoteData = {
+                  customer_id: selectedCustomerId,
+                  customer_name: customerName,
+                  customer_phone: customerPhone || undefined,
+                  customer_email: customerEmail || undefined,
+                  event_date: eventDate,
+                  event_end_date: eventEndDate || null,
+                  event_address: eventAddress || undefined,
+                  event_city: eventCity || undefined,
+                  event_state: eventState || undefined,
+                  event_zip_code: eventZip || undefined,
+                  delivery_time: deliveryTime || undefined,
+                  pickup_time: pickupTime || undefined,
+                  notes: notes || undefined,
+                  discount,
+                  freight,
+                  items,
+                }
+                const result = await createQuote(quoteData)
+                if (result.error) {
+                  alert(result.error)
+                  setLoading(false)
+                  return
+                }
+                const conv = await convertQuoteToRental(result.id!)
+                if (conv.error) {
+                  alert(conv.error)
+                  setLoading(false)
+                  return
+                }
+                router.push('/dashboard/locacoes/' + conv.rentalId)
+              }}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              {loading ? 'Salvando...' : 'Confirmar Locação'}
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!customerName || !eventDate || items.length === 0) {
+                  alert('Preencha o cliente, data do evento e adicione pelo menos um item.')
+                  return
+                }
+                if (!customerPhone) {
+                  alert('Informe o telefone do cliente para enviar via WhatsApp.')
+                  return
+                }
+                setLoading(true)
+                const quoteData = {
+                  customer_id: selectedCustomerId,
+                  customer_name: customerName,
+                  customer_phone: customerPhone || undefined,
+                  customer_email: customerEmail || undefined,
+                  event_date: eventDate,
+                  event_end_date: eventEndDate || null,
+                  event_address: eventAddress || undefined,
+                  event_city: eventCity || undefined,
+                  event_state: eventState || undefined,
+                  event_zip_code: eventZip || undefined,
+                  delivery_time: deliveryTime || undefined,
+                  pickup_time: pickupTime || undefined,
+                  notes: notes || undefined,
+                  discount,
+                  freight,
+                  items,
+                }
+                const result = await createQuote(quoteData)
+                if (result.error) {
+                  alert(result.error)
+                  setLoading(false)
+                  return
+                }
+                // Send WhatsApp
+                if (company) {
+                  const quoteObj = {
+                    id: result.id!,
+                    company_id: company.id,
+                    customer_id: selectedCustomerId,
+                    customer_name: customerName,
+                    customer_phone: customerPhone,
+                    customer_email: customerEmail,
+                    event_date: eventDate,
+                    event_address: eventAddress,
+                    event_city: eventCity,
+                    event_state: eventState,
+                    event_zip_code: eventZip,
+                    delivery_time: deliveryTime,
+                    pickup_time: pickupTime,
+                    notes,
+                    status: 'pending' as const,
+                    total,
+                    discount,
+                    created_by: '',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  }
+                  const message = generateQuoteMessage(quoteObj, items, company)
+                  const url = getWhatsAppUrl(customerPhone, message)
+                  window.open(url, '_blank')
+                }
+                // Convert to rental
+                const conv = await convertQuoteToRental(result.id!)
+                if (conv.error) {
+                  alert(conv.error)
+                  setLoading(false)
+                  return
+                }
+                router.push('/dashboard/locacoes/' + conv.rentalId)
+              }}
+              disabled={loading}
+            >
+              <MessageCircle className="h-4 w-4" />
+              {loading ? 'Salvando...' : 'Salvar e Enviar WhatsApp'}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   )
