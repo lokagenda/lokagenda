@@ -747,48 +747,10 @@ export default function NovoOrcamentoPage() {
           <>
             <Button
               disabled={loading}
-              className="bg-green-600 text-white hover:bg-green-700"
-              onClick={async () => {
-                if (!customerName || !eventDate || items.length === 0) {
-                  alert('Preencha o cliente, data do evento e adicione pelo menos um item.')
-                  return
-                }
-                setLoading(true)
-                const quoteData = {
-                  customer_id: selectedCustomerId,
-                  customer_name: customerName,
-                  customer_phone: customerPhone || undefined,
-                  customer_email: customerEmail || undefined,
-                  event_date: eventDate,
-                  event_end_date: eventEndDate || null,
-                  event_address: eventAddress || undefined,
-                  event_city: eventCity || undefined,
-                  event_state: eventState || undefined,
-                  event_zip_code: eventZip || undefined,
-                  delivery_time: deliveryTime || undefined,
-                  pickup_time: pickupTime || undefined,
-                  notes: notes || undefined,
-                  discount,
-                  freight,
-                  items,
-                }
-                const result = await createQuote(quoteData)
-                if (result.error) {
-                  alert(result.error)
-                  setLoading(false)
-                  return
-                }
-                const conv = await convertQuoteToRental(result.id!)
-                if (conv.error) {
-                  alert(conv.error)
-                  setLoading(false)
-                  return
-                }
-                router.push('/dashboard/locacoes/' + conv.rentalId)
-              }}
+              onClick={handleSave}
             >
-              <CheckCircle2 className="h-4 w-4" />
-              {loading ? 'Salvando...' : 'Confirmar Locação'}
+              <Save className="h-4 w-4" />
+              {loading ? 'Salvando...' : 'Salvar Rascunho'}
             </Button>
             <Button
               onClick={async () => {
@@ -853,14 +815,7 @@ export default function NovoOrcamentoPage() {
                   const url = getWhatsAppUrl(customerPhone, message)
                   window.open(url, '_blank')
                 }
-                // Convert to rental
-                const conv = await convertQuoteToRental(result.id!)
-                if (conv.error) {
-                  alert(conv.error)
-                  setLoading(false)
-                  return
-                }
-                router.push('/dashboard/locacoes/' + conv.rentalId)
+                router.push('/dashboard/orcamentos/' + result.id)
               }}
               disabled={loading}
             >

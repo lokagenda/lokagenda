@@ -192,15 +192,26 @@ export default function OrcamentoDetailPage({
 
         <div className="flex flex-wrap gap-2">
           {(quote.status === 'pending' || quote.status === 'approved') && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleStatusChange('rejected')}
-              disabled={actionLoading}
-            >
-              <X className="h-4 w-4" />
-              Cancelar Orçamento
-            </Button>
+            <>
+              <Button
+                size="sm"
+                onClick={handleConvert}
+                disabled={actionLoading}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Converter em Locação
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleStatusChange('rejected')}
+                disabled={actionLoading}
+              >
+                <X className="h-4 w-4" />
+                Cancelar Orçamento
+              </Button>
+            </>
           )}
           <Button
             size="sm"
