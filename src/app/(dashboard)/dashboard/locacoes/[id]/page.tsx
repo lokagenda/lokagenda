@@ -33,6 +33,8 @@ import {
   Download,
   Edit,
   MessageCircle,
+  ChevronDown,
+  Check,
 } from 'lucide-react'
 import type { Rental, RentalItem, Payment, Company } from '@/types/database'
 
@@ -84,6 +86,8 @@ export default function LocacaoDetailPage({
   const [whatsappLoading, setWhatsappLoading] = useState(false)
   const [company, setCompany] = useState<Company | null>(null)
   const pdfContainerRef = useRef<HTMLDivElement>(null)
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
@@ -115,6 +119,19 @@ export default function LocacaoDetailPage({
     loadData()
   }, [loadData])
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        statusDropdownRef.current &&
+        !statusDropdownRef.current.contains(event.target as Node)
+      ) {
+        setStatusDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   async function handleStatusAdvance() {
     if (!rental) return
     const flow = STATUS_FLOW[rental.status]
@@ -125,6 +142,22 @@ export default function LocacaoDetailPage({
       id,
       flow.next as Rental['status']
     )
+    if (result.error) {
+      alert(result.error)
+    } else {
+      await loadData()
+    }
+    setActionLoading(false)
+  }
+
+  async function handleStatusChange(newStatus: string) {
+    if (!rental || newStatus === rental.status) {
+      setStatusDropdownOpen(false)
+      return
+    }
+    setStatusDropdownOpen(false)
+    setActionLoading(true)
+    const result = await updateRentalStatus(id, newStatus as Rental['status'])
     if (result.error) {
       alert(result.error)
     } else {
@@ -461,11 +494,32 @@ export default function LocacaoDetailPage({
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                 Locação
               </h1>
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig.classes}`}
-              >
-                {statusConfig.label}
-              </span>
+              <div className="relative inline-flex" ref={statusDropdownRef}>
+                <button
+                  onClick={() => setStatusDropdownOpen((o) => !o)}
+                  disabled={actionLoading}
+                  className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition-opacity hover:opacity-80 ${statusConfig.classes}`}
+                >
+                  {statusConfig.label}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+                {statusDropdownOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                    {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                      <button
+                        key={key}
+                        onClick={() => handleStatusChange(key)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      >
+                        {cfg.label}
+                        {key === rental.status && (
+                          <Check className="ml-auto h-3 w-3 text-zinc-500" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Evento em {formatDate(rental.event_date)}
