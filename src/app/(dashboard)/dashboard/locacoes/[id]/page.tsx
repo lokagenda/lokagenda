@@ -128,8 +128,15 @@ export default function LocacaoDetailPage({
         setStatusDropdownOpen(false)
       }
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setStatusDropdownOpen(false)
+    }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
   }, [])
 
   async function handleStatusAdvance() {
@@ -150,14 +157,14 @@ export default function LocacaoDetailPage({
     setActionLoading(false)
   }
 
-  async function handleStatusChange(newStatus: string) {
+  async function handleStatusChange(newStatus: Rental['status']) {
     if (!rental || newStatus === rental.status) {
       setStatusDropdownOpen(false)
       return
     }
     setStatusDropdownOpen(false)
     setActionLoading(true)
-    const result = await updateRentalStatus(id, newStatus as Rental['status'])
+    const result = await updateRentalStatus(id, newStatus)
     if (result.error) {
       alert(result.error)
     } else {
@@ -498,18 +505,24 @@ export default function LocacaoDetailPage({
                 <button
                   onClick={() => setStatusDropdownOpen((o) => !o)}
                   disabled={actionLoading}
+                  aria-haspopup="listbox"
+                  aria-expanded={statusDropdownOpen}
+                  aria-label={`Status: ${statusConfig.label}. Clique para alterar.`}
                   className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition-opacity hover:opacity-80 ${statusConfig.classes}`}
                 >
                   {statusConfig.label}
                   <ChevronDown className="h-3 w-3" />
                 </button>
                 {statusDropdownOpen && (
-                  <div className="absolute left-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                  <div role="listbox" className="absolute left-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
                     {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                       <button
                         key={key}
-                        onClick={() => handleStatusChange(key)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        role="option"
+                        aria-selected={key === rental.status}
+                        onClick={() => handleStatusChange(key as Rental['status'])}
+                        disabled={actionLoading}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
                       >
                         {cfg.label}
                         {key === rental.status && (
