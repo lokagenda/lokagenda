@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { createQuote, updateQuote, convertQuoteToRental } from '@/actions/quotes'
-import { generateQuoteMessage, getWhatsAppUrl } from '@/lib/whatsapp'
+import { createRental } from '@/actions/rentals'
+import { generateQuoteMessage, generateRentalConfirmationMessage, getWhatsAppUrl } from '@/lib/whatsapp'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ export default function NovoOrcamentoPage() {
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
   const isEditing = Boolean(editId)
+  const isLocacao = searchParams.get('mode') === 'locacao'
 
   const [loading, setLoading] = useState(false)
   const [loadingQuote, setLoadingQuote] = useState(false)
@@ -287,6 +289,35 @@ export default function NovoOrcamentoPage() {
     }
 
     setLoading(true)
+
+    if (isLocacao) {
+      const rentalData = {
+        customer_id: selectedCustomerId,
+        customer_name: customerName,
+        customer_phone: customerPhone || undefined,
+        customer_email: customerEmail || undefined,
+        event_date: eventDate,
+        event_address: eventAddress || undefined,
+        event_city: eventCity || undefined,
+        event_state: eventState || undefined,
+        event_zip_code: eventZip || undefined,
+        delivery_time: deliveryTime || undefined,
+        pickup_time: pickupTime || undefined,
+        notes: notes || undefined,
+        discount,
+        freight,
+        items,
+      }
+      const result = await createRental(rentalData)
+      setLoading(false)
+      if (result.error) {
+        alert(result.error)
+        return
+      }
+      router.push(`/dashboard/locacoes/${(result as { id: string }).id}`)
+      return
+    }
+
     const quoteData = {
       customer_id: selectedCustomerId,
       customer_name: customerName,
@@ -414,11 +445,13 @@ export default function NovoOrcamentoPage() {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            {isEditing ? 'Editar Orçamento' : 'Novo Orçamento'}
+            {isEditing ? 'Editar Orçamento' : isLocacao ? 'Nova Locação' : 'Novo Orçamento'}
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             {isEditing
               ? 'Edite os dados do orçamento'
+              : isLocacao
+              ? 'Crie uma nova locação confirmada para seu cliente'
               : 'Crie um novo orçamento para seu cliente'}
           </p>
         </div>
@@ -750,7 +783,7 @@ export default function NovoOrcamentoPage() {
               onClick={handleSave}
             >
               <Save className="h-4 w-4" />
-              {loading ? 'Salvando...' : 'Salvar Rascunho'}
+              {loading ? 'Salvando...' : isLocacao ? 'Confirmar Locação' : 'Salvar Rascunho'}
             </Button>
             <Button
               onClick={async () => {
@@ -763,6 +796,53 @@ export default function NovoOrcamentoPage() {
                   return
                 }
                 setLoading(true)
+
+                if (isLocacao) {
+                  const rentalData = {
+                    customer_id: selectedCustomerId,
+                    customer_name: customerName,
+                    customer_phone: customerPhone || undefined,
+                    customer_email: customerEmail || undefined,
+                    event_date: eventDate,
+                    event_address: eventAddress || undefined,
+                    event_city: eventCity || undefined,
+                    event_state: eventState || undefined,
+                    event_zip_code: eventZip || undefined,
+                    delivery_time: deliveryTime || undefined,
+                    pickup_time: pickupTime || undefined,
+                    notes: notes || undefined,
+                    discount,
+                    freight,
+                    items,
+                  }
+                  const result = await createRental(rentalData)
+                  if (result.error) {
+                    alert(result.error)
+                    setLoading(false)
+                    return
+                  }
+                  if (company) {
+                    const rentalObj = {
+                      customer_name: customerName,
+                      event_date: eventDate,
+                      event_address: eventAddress || undefined,
+                      event_city: eventCity || undefined,
+                      event_state: eventState || undefined,
+                      delivery_time: deliveryTime || undefined,
+                      pickup_time: pickupTime || undefined,
+                      notes: notes || undefined,
+                      total,
+                      discount,
+                      freight,
+                    }
+                    const message = generateRentalConfirmationMessage(rentalObj, items, company)
+                    const url = getWhatsAppUrl(customerPhone, message)
+                    window.open(url, '_blank')
+                  }
+                  router.push('/dashboard/locacoes/' + (result as { id: string }).id)
+                  return
+                }
+
                 const quoteData = {
                   customer_id: selectedCustomerId,
                   customer_name: customerName,
@@ -820,7 +900,7 @@ export default function NovoOrcamentoPage() {
               disabled={loading}
             >
               <MessageCircle className="h-4 w-4" />
-              {loading ? 'Salvando...' : 'Salvar e Enviar WhatsApp'}
+              {loading ? 'Salvando...' : isLocacao ? 'Confirmar e Enviar WhatsApp' : 'Salvar e Enviar WhatsApp'}
             </Button>
           </>
         )}
