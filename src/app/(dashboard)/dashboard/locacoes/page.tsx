@@ -193,7 +193,7 @@ export default async function LocacoesPage({
         </div>
         <div className="flex items-center gap-3">
           <ExportButton type="rentals" label="Exportar" />
-          <Link href="/dashboard/orcamentos/novo">
+          <Link href="/dashboard/orcamentos/novo?mode=locacao">
             <Button>
               <Plus className="h-4 w-4" />
               Nova Locação
