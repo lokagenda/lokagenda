@@ -839,6 +839,7 @@ export default function NovoOrcamentoPage() {
                     const url = getWhatsAppUrl(customerPhone, message)
                     window.open(url, '_blank')
                   }
+                  setLoading(false)
                   router.push('/dashboard/locacoes/' + (result as { id: string }).id)
                   return
                 }
