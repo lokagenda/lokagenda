@@ -27,6 +27,7 @@ interface CreateRentalInput {
   pickup_time?: string | null
   notes?: string | null
   discount?: number
+  freight?: number
   items: RentalItemInput[]
 }
 
@@ -70,7 +71,8 @@ export async function createRental(input: CreateRentalInput) {
 
   const subtotal = input.items.reduce((sum, item) => sum + item.subtotal, 0)
   const discount = input.discount || 0
-  const total = subtotal - discount
+  const freight = input.freight || 0
+  const total = subtotal - discount + freight
 
   const { data: rental, error: rentalError } = await supabase
     .from('rentals')
@@ -90,6 +92,7 @@ export async function createRental(input: CreateRentalInput) {
       pickup_time: input.pickup_time || null,
       notes: input.notes || null,
       discount,
+      freight,
       total,
       status: 'confirmed',
       created_by: userId,
