@@ -42,6 +42,7 @@ function timesOverlap(
 export default function DisponibilidadePage() {
   const router = useRouter()
   const [date, setDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [deliveryTime, setDeliveryTime] = useState('')
   const [pickupTime, setPickupTime] = useState('')
   const [loading, setLoading] = useState(false)
@@ -87,23 +88,26 @@ export default function DisponibilidadePage() {
         return
       }
 
-      // Fetch rentals for this date (active ones)
+      // Fetch rentals that overlap with the queried date range
+      const rangeEnd = endDate || date
       const { data: rentals } = await supabase
         .from('rentals')
-        .select('id, delivery_time, pickup_time')
+        .select('id, delivery_time, pickup_time, event_date, event_end_date')
         .eq('company_id', companyId)
-        .eq('event_date', date)
+        .lte('event_date', rangeEnd)
         .not('status', 'in', '("cancelled","returned")')
 
-      // Filter overlapping rentals
-      const overlappingRentals = (rentals || []).filter(r =>
-        timesOverlap(
+      // Filter: rental must end on or after query start date, and times must overlap
+      const overlappingRentals = (rentals || []).filter(r => {
+        const rentalEnd = r.event_end_date ?? r.event_date
+        if (rentalEnd < date) return false
+        return timesOverlap(
           r.delivery_time,
           r.pickup_time,
           deliveryTime || null,
           pickupTime || null
         )
-      )
+      })
 
       const overlappingRentalIds = overlappingRentals.map(r => r.id)
 
@@ -123,22 +127,24 @@ export default function DisponibilidadePage() {
         }
       }
 
-      // Fetch pending quotes for this date
+      // Fetch pending quotes that overlap with the queried date range
       const { data: quotes } = await supabase
         .from('quotes')
-        .select('id, delivery_time, pickup_time')
+        .select('id, delivery_time, pickup_time, event_date, event_end_date')
         .eq('company_id', companyId)
-        .eq('event_date', date)
+        .lte('event_date', rangeEnd)
         .eq('status', 'pending')
 
-      const overlappingQuotes = (quotes || []).filter(r =>
-        timesOverlap(
+      const overlappingQuotes = (quotes || []).filter(r => {
+        const quoteEnd = r.event_end_date ?? r.event_date
+        if (quoteEnd < date) return false
+        return timesOverlap(
           r.delivery_time,
           r.pickup_time,
           deliveryTime || null,
           pickupTime || null
         )
-      )
+      })
 
       const overlappingQuoteIds = overlappingQuotes.map(q => q.id)
 
@@ -201,6 +207,7 @@ export default function DisponibilidadePage() {
 
     const params = new URLSearchParams()
     params.set('date', date)
+    if (endDate) params.set('end_date', endDate)
     if (deliveryTime) params.set('delivery', deliveryTime)
     if (pickupTime) params.set('pickup', pickupTime)
     params.set('items', items)
@@ -237,6 +244,21 @@ export default function DisponibilidadePage() {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
+              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-zinc-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Data de retirada
+          </label>
+          <div className="relative">
+            <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+            <input
+              type="date"
+              value={endDate}
+              min={date || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
               className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-zinc-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
