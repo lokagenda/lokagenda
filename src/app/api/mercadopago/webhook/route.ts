@@ -148,6 +148,25 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`[MercadoPago Webhook] Pagamento aprovado para empresa ${companyId}, plano ${planId}`)
+
+      // Send plan activated WhatsApp (fire-and-forget)
+      import('@/lib/whatsapp-api/sender').then(async ({ sendTemplateMessage }) => {
+        const { data: company } = await admin
+          .from('companies')
+          .select('name, phone')
+          .eq('id', companyId)
+          .single()
+
+        if (company?.phone) {
+          const dataValidade = periodEnd.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+          sendTemplateMessage(
+            'plan_activated',
+            company.phone,
+            { nome_empresa: company.name, data_validade: dataValidade },
+            companyId
+          ).catch(() => {})
+        }
+      }).catch(() => {})
     } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
       // Atualizar para past_due
       const { data: existing } = await admin

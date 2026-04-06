@@ -112,6 +112,21 @@ export async function signUp(formData: FormData) {
       })
   }
 
+  // 6. Copy demo data (products, customers, quotes, rentals) for new company
+  try {
+    const { copyDemoDataForNewCompany } = await import('@/lib/demo-data-copy')
+    await copyDemoDataForNewCompany(company.id, authData.user.id)
+  } catch {
+    // Demo data copy is non-critical, don't block registration
+  }
+
+  // 7. Send WhatsApp welcome message (fire-and-forget)
+  if (phone) {
+    import('@/lib/whatsapp-api/sender').then(({ sendTemplateMessage }) => {
+      sendTemplateMessage('welcome', phone, { nome_empresa: companyName }, company.id).catch(() => {})
+    }).catch(() => {})
+  }
+
   return { success: true }
 }
 

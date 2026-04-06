@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
 import { getCompanyDetails } from '@/actions/admin'
-import { Eye, Loader2, Building2, User, Package, FileText, Truck, CreditCard } from 'lucide-react'
+import { Eye, Loader2, Building2, User, Package, FileText, Truck, CreditCard, ScrollText } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type StatusVariant = 'success' | 'warning' | 'danger' | 'neutral' | 'info'
@@ -39,6 +40,7 @@ interface CompanyDetailsButtonProps {
 }
 
 export function CompanyDetailsButton({ companyId, companyName, variant = 'button' }: CompanyDetailsButtonProps) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [details, setDetails] = useState<any>(null)
@@ -199,6 +201,30 @@ export function CompanyDetailsButton({ companyId, companyName, variant = 'button
               ) : (
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">Sem assinatura</p>
               )}
+            </div>
+
+            {/* Navigation buttons */}
+            <div className="flex items-center gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpen(false)
+                  router.push(`/admin/empresas/${companyId}/produtos`)
+                }}
+              >
+                <Package className="h-4 w-4" />
+                Produtos
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpen(false)
+                  router.push(`/admin/empresas/${companyId}/contratos`)
+                }}
+              >
+                <ScrollText className="h-4 w-4" />
+                Contratos
+              </Button>
             </div>
           </div>
         ) : null}

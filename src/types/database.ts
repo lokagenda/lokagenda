@@ -275,6 +275,7 @@ export interface Database {
           customer_phone?: string | null;
           customer_email?: string | null;
           event_date?: string;
+          event_end_date?: string | null;
           event_address?: string | null;
           event_city?: string | null;
           event_state?: string | null;
@@ -439,6 +440,7 @@ export interface Database {
           customer_email?: string | null;
           customer_document?: string | null;
           event_date?: string;
+          event_end_date?: string | null;
           event_address?: string | null;
           event_city?: string | null;
           event_state?: string | null;
@@ -802,6 +804,364 @@ export interface Database {
           },
         ];
       };
+      demo_products: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          image_url: string | null;
+          price: number;
+          stock: number;
+          position: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          image_url?: string | null;
+          price?: number;
+          stock?: number;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          image_url?: string | null;
+          price?: number;
+          stock?: number;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      demo_customers: {
+        Row: {
+          id: string;
+          name: string;
+          phone: string | null;
+          email: string | null;
+          document: string | null;
+          address: string | null;
+          city: string | null;
+          state: string | null;
+          zip_code: string | null;
+          notes: string | null;
+          position: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          phone?: string | null;
+          email?: string | null;
+          document?: string | null;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          zip_code?: string | null;
+          notes?: string | null;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          phone?: string | null;
+          email?: string | null;
+          document?: string | null;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          zip_code?: string | null;
+          notes?: string | null;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      demo_quotes: {
+        Row: {
+          id: string;
+          customer_name: string;
+          customer_phone: string | null;
+          customer_email: string | null;
+          event_date_offset: number;
+          event_address: string | null;
+          event_city: string | null;
+          event_state: string | null;
+          delivery_time: string | null;
+          pickup_time: string | null;
+          notes: string | null;
+          discount: number;
+          freight: number;
+          items: Json;
+          position: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_name: string;
+          customer_phone?: string | null;
+          customer_email?: string | null;
+          event_date_offset?: number;
+          event_address?: string | null;
+          event_city?: string | null;
+          event_state?: string | null;
+          delivery_time?: string | null;
+          pickup_time?: string | null;
+          notes?: string | null;
+          discount?: number;
+          freight?: number;
+          items?: Json;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_name?: string;
+          customer_phone?: string | null;
+          customer_email?: string | null;
+          event_date_offset?: number;
+          event_address?: string | null;
+          event_city?: string | null;
+          event_state?: string | null;
+          delivery_time?: string | null;
+          pickup_time?: string | null;
+          notes?: string | null;
+          discount?: number;
+          freight?: number;
+          items?: Json;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      demo_rentals: {
+        Row: {
+          id: string;
+          customer_name: string;
+          customer_phone: string | null;
+          customer_email: string | null;
+          customer_document: string | null;
+          event_date_offset: number;
+          event_address: string | null;
+          event_city: string | null;
+          event_state: string | null;
+          delivery_time: string | null;
+          pickup_time: string | null;
+          notes: string | null;
+          discount: number;
+          freight: number;
+          status: string;
+          items: Json;
+          position: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_name: string;
+          customer_phone?: string | null;
+          customer_email?: string | null;
+          customer_document?: string | null;
+          event_date_offset?: number;
+          event_address?: string | null;
+          event_city?: string | null;
+          event_state?: string | null;
+          delivery_time?: string | null;
+          pickup_time?: string | null;
+          notes?: string | null;
+          discount?: number;
+          freight?: number;
+          status?: string;
+          items?: Json;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_name?: string;
+          customer_phone?: string | null;
+          customer_email?: string | null;
+          customer_document?: string | null;
+          event_date_offset?: number;
+          event_address?: string | null;
+          event_city?: string | null;
+          event_state?: string | null;
+          delivery_time?: string | null;
+          pickup_time?: string | null;
+          notes?: string | null;
+          discount?: number;
+          freight?: number;
+          status?: string;
+          items?: Json;
+          position?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      demo_data_logs: {
+        Row: {
+          id: string;
+          company_id: string;
+          pushed_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          pushed_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          pushed_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "demo_data_logs_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      whatsapp_config: {
+        Row: {
+          id: string;
+          provider: "evolution_api" | "z_api" | "twilio" | "meta_cloud";
+          api_url: string | null;
+          api_key: string | null;
+          instance_id: string | null;
+          phone_number_id: string | null;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider: "evolution_api" | "z_api" | "twilio" | "meta_cloud";
+          api_url?: string | null;
+          api_key?: string | null;
+          instance_id?: string | null;
+          phone_number_id?: string | null;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider?: "evolution_api" | "z_api" | "twilio" | "meta_cloud";
+          api_url?: string | null;
+          api_key?: string | null;
+          instance_id?: string | null;
+          phone_number_id?: string | null;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      whatsapp_templates: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          content: string;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          content: string;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          name?: string;
+          content?: string;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      whatsapp_message_log: {
+        Row: {
+          id: string;
+          company_id: string | null;
+          template_slug: string | null;
+          phone: string;
+          message: string;
+          status: "pending" | "sent" | "failed" | "delivered";
+          provider_response: Json | null;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id?: string | null;
+          template_slug?: string | null;
+          phone: string;
+          message: string;
+          status?: "pending" | "sent" | "failed" | "delivered";
+          provider_response?: Json | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string | null;
+          template_slug?: string | null;
+          phone?: string;
+          message?: string;
+          status?: "pending" | "sent" | "failed" | "delivered";
+          provider_response?: Json | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_message_log_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       contract_templates: {
         Row: {
           id: string;
@@ -891,3 +1251,11 @@ export type Notification = Tables<"notifications">;
 export type Banner = Tables<"banners">;
 export type Plan = Tables<"plans">;
 export type Subscription = Tables<"subscriptions">;
+export type DemoProduct = Tables<"demo_products">;
+export type DemoCustomer = Tables<"demo_customers">;
+export type DemoQuote = Tables<"demo_quotes">;
+export type DemoRental = Tables<"demo_rentals">;
+export type DemoDataLog = Tables<"demo_data_logs">;
+export type WhatsAppConfig = Tables<"whatsapp_config">;
+export type WhatsAppTemplate = Tables<"whatsapp_templates">;
+export type WhatsAppMessageLog = Tables<"whatsapp_message_log">;

@@ -16,6 +16,8 @@ import {
   Shield,
   Menu,
   X,
+  Package,
+  MessageCircle,
 } from 'lucide-react'
 
 const sidebarItems = [
@@ -25,6 +27,8 @@ const sidebarItems = [
   { label: 'Assinaturas', href: '/admin/assinaturas', icon: Receipt },
   { label: 'Contratos', href: '/admin/contratos', icon: ScrollText },
   { label: 'Vídeos', href: '/admin/videos', icon: PlayCircle },
+  { label: 'Dados Demo', href: '/admin/demo-dados', icon: Package },
+  { label: 'WhatsApp', href: '/admin/whatsapp', icon: MessageCircle },
   { label: 'Banners', href: '/admin/banners', icon: Image },
   { label: 'Usuários', href: '/admin/usuarios', icon: Users },
 ]
