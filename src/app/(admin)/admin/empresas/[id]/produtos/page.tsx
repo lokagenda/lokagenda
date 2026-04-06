@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition, use } from 'react'
+import { useState, useEffect, useTransition, use, useRef } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -42,6 +42,8 @@ export default function AdminCompanyProductsPage({
   const [isPending, startTransition] = useTransition()
   const [isDeleting, startDeleteTransition] = useTransition()
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function loadData() {
     try {
@@ -65,11 +67,13 @@ export default function AdminCompanyProductsPage({
 
   function openCreateModal() {
     setEditingProduct(null)
+    setImagePreview(null)
     setModalOpen(true)
   }
 
   function openEditModal(product: any) {
     setEditingProduct(product)
+    setImagePreview(null)
     setModalOpen(true)
   }
 
@@ -314,14 +318,30 @@ export default function AdminCompanyProductsPage({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Imagem
             </label>
-            <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-400 bg-zinc-50 p-3 transition-colors hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-blue-400 dark:hover:bg-zinc-700">
+            <input
+              ref={fileInputRef}
+              name="image"
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) setImagePreview(URL.createObjectURL(file))
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-400 bg-zinc-50 p-3 transition-colors hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-blue-400 dark:hover:bg-zinc-700"
+            >
               <Upload className="h-5 w-5 text-zinc-400" />
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">Clique para selecionar uma imagem</span>
-              <input name="image" type="file" accept="image/*" className="hidden" />
-            </label>
-            {editingProduct?.image_url && (
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                {imagePreview ? 'Imagem selecionada - clique para trocar' : 'Clique para selecionar uma imagem'}
+              </span>
+            </button>
+            {(imagePreview || editingProduct?.image_url) && (
               <div className="mt-2">
-                <img src={editingProduct.image_url} alt="" className="h-16 w-16 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                <img src={imagePreview || editingProduct?.image_url} alt="" className="h-16 w-16 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
               </div>
             )}
           </div>

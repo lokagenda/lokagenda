@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,8 @@ function ProductsTab() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -83,7 +85,7 @@ function ProductsTab() {
   return (
     <>
       <div className="flex justify-end mb-4">
-        <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true) }}>
+        <Button size="sm" onClick={() => { setEditing(null); setImagePreview(null); setModalOpen(true) }}>
           <Plus className="h-4 w-4" /> Adicionar Produto
         </Button>
       </div>
@@ -106,7 +108,7 @@ function ProductsTab() {
               <p className="text-sm text-zinc-500 dark:text-zinc-400">{formatCurrency(p.price)}</p>
               <p className="text-xs text-zinc-400">Estoque: {p.stock}</p>
               <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => { setEditing(p); setModalOpen(true) }}>
+                <Button size="sm" variant="outline" onClick={() => { setEditing(p); setImagePreview(null); setModalOpen(true) }}>
                   <Pencil className="h-3 w-3" />
                 </Button>
                 <Button size="sm" variant="danger" onClick={() => handleDelete(p.id)}>
@@ -147,14 +149,32 @@ function ProductsTab() {
           </div>
           <div>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Imagem</label>
-            <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-400 bg-zinc-50 p-3 transition-colors hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-blue-400 dark:hover:bg-zinc-700">
+            <input
+              ref={fileInputRef}
+              name="image"
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) {
+                  setImagePreview(URL.createObjectURL(file))
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-400 bg-zinc-50 p-3 transition-colors hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-blue-400 dark:hover:bg-zinc-700"
+            >
               <Upload className="h-5 w-5 text-zinc-400" />
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">Clique para selecionar uma imagem</span>
-              <input name="image" type="file" accept="image/*" className="hidden" />
-            </label>
-            {editing?.image_url && (
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                {imagePreview ? 'Imagem selecionada - clique para trocar' : 'Clique para selecionar uma imagem'}
+              </span>
+            </button>
+            {(imagePreview || editing?.image_url) && (
               <div className="mt-2">
-                <img src={editing.image_url} alt="" className="h-16 w-16 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                <img src={imagePreview || editing?.image_url} alt="" className="h-16 w-16 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
               </div>
             )}
           </div>
