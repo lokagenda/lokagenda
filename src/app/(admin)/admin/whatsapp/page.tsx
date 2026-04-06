@@ -73,8 +73,9 @@ function getProviderFields(provider: WhatsAppProvider) {
     case 'z_api':
       return [
         { key: 'api_url', label: 'API URL', placeholder: 'https://api.z-api.io' },
-        { key: 'api_key', label: 'API Key', placeholder: 'Seu Token' },
+        { key: 'api_key', label: 'Token', placeholder: 'Seu Token da instancia' },
         { key: 'instance_id', label: 'Instance ID', placeholder: 'Seu Instance ID' },
+        { key: 'phone_number_id', label: 'Client-Token (Seguranca)', placeholder: 'Token de seguranca da conta (opcional)' },
       ]
     case 'twilio':
       return [
