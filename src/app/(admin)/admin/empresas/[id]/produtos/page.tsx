@@ -13,7 +13,7 @@ import {
   deleteProductForCompany,
 } from '@/actions/admin-company-items'
 import { getCompanyDetails } from '@/actions/admin'
-import { ArrowLeft, Plus, Pencil, Trash2, Package, Loader2, ImageIcon } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Package, Loader2, ImageIcon, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type StatusVariant = 'success' | 'warning' | 'danger' | 'neutral'
@@ -142,6 +142,9 @@ export default function AdminCompanyProductsPage({
               Produtos
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">{companyName}</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Cadastre produtos diretamente para esta empresa
+            </p>
           </div>
         </div>
         <Button onClick={openCreateModal}>
@@ -311,12 +314,16 @@ export default function AdminCompanyProductsPage({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Imagem
             </label>
-            <input
-              name="image"
-              type="file"
-              accept="image/*"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-xs file:font-medium file:text-blue-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:file:bg-blue-500/10 dark:file:text-blue-400"
-            />
+            <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-400 bg-zinc-50 p-3 transition-colors hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-blue-400 dark:hover:bg-zinc-700">
+              <Upload className="h-5 w-5 text-zinc-400" />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">Clique para selecionar uma imagem</span>
+              <input name="image" type="file" accept="image/*" className="hidden" />
+            </label>
+            {editingProduct?.image_url && (
+              <div className="mt-2">
+                <img src={editingProduct.image_url} alt="" className="h-16 w-16 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button

@@ -133,6 +133,9 @@ export default function AdminCompanyContractsPage({
               Modelos de Contrato
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">{companyName}</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Cadastre e edite contratos diretamente para esta empresa
+            </p>
           </div>
         </div>
         <Button onClick={openCreateModal}>

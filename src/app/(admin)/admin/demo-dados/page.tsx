@@ -7,18 +7,19 @@ import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import toast from 'react-hot-toast'
 import {
-  Package, Users, FileText, Truck, Plus, Pencil, Trash2, Send, Loader2,
+  Package, Users, FileText, Truck, Plus, Pencil, Trash2, Send, Loader2, ScrollText, Upload, ImageIcon,
 } from 'lucide-react'
 import {
   listDemoProducts, createDemoProduct, updateDemoProduct, deleteDemoProduct,
   listDemoCustomers, createDemoCustomer, updateDemoCustomer, deleteDemoCustomer,
   listDemoQuotes, createDemoQuote, updateDemoQuote, deleteDemoQuote,
   listDemoRentals, createDemoRental, updateDemoRental, deleteDemoRental,
+  listDemoContracts, createDemoContract, updateDemoContract, deleteDemoContract,
   pushDemoDataToCompany, pushDemoDataToAllCompanies,
 } from '@/actions/demo-data'
 import { listCompaniesForSelect } from '@/actions/admin'
 
-type Tab = 'produtos' | 'clientes' | 'orcamentos' | 'locacoes'
+type Tab = 'produtos' | 'clientes' | 'orcamentos' | 'locacoes' | 'contratos'
 
 interface DemoQuoteItem {
   product_name: string
@@ -146,7 +147,16 @@ function ProductsTab() {
           </div>
           <div>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Imagem</label>
-            <input name="image" type="file" accept="image/*" className="mt-1 w-full text-sm text-zinc-500 dark:text-zinc-400" />
+            <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-400 bg-zinc-50 p-3 transition-colors hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-blue-400 dark:hover:bg-zinc-700">
+              <Upload className="h-5 w-5 text-zinc-400" />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">Clique para selecionar uma imagem</span>
+              <input name="image" type="file" accept="image/*" className="hidden" />
+            </label>
+            {editing?.image_url && (
+              <div className="mt-2">
+                <img src={editing.image_url} alt="" className="h-16 w-16 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => { setModalOpen(false); setEditing(null) }}>Cancelar</Button>
@@ -770,6 +780,123 @@ function RentalsTab() {
   )
 }
 
+// ── Contracts Tab ────────────────────────────────────────
+
+function ContractsTab() {
+  const [contracts, setContracts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState<any>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const data = await listDemoContracts()
+      setContracts(data || [])
+    } catch (err: any) { toast.error(err.message || 'Erro ao carregar dados') }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    // Convert checkbox to string 'true'/'false' for FormData
+    form.set('is_default', form.get('is_default') === 'on' ? 'true' : 'false')
+
+    const result = editing
+      ? await updateDemoContract(editing.id, form)
+      : await createDemoContract(form)
+
+    if (result && 'error' in result) {
+      toast.error(result.error || 'Erro')
+    } else {
+      toast.success(editing ? 'Contrato atualizado!' : 'Contrato criado!')
+      setModalOpen(false)
+      setEditing(null)
+      load()
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Excluir este contrato demo?')) return
+    const result = await deleteDemoContract(id)
+    if (result && 'error' in result) {
+      toast.error(result.error || 'Erro')
+    } else {
+      toast.success('Contrato excluido!')
+      load()
+    }
+  }
+
+  function stripHtml(html: string) {
+    return html.replace(/<[^>]+>/g, '').slice(0, 120) + '...'
+  }
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>
+
+  return (
+    <>
+      <div className="flex justify-end mb-4">
+        <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true) }}>
+          <Plus className="h-4 w-4 mr-1" /> Adicionar Contrato
+        </Button>
+      </div>
+
+      {contracts.length === 0 ? (
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-8 text-center dark:border-zinc-700 dark:bg-zinc-800">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Nenhum contrato demo encontrado.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {contracts.map((c: any) => (
+            <Card key={c.id}>
+              <CardContent className="flex items-center justify-between p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">{c.name}</p>
+                    {c.is_default && <Badge variant="success">Padrao</Badge>}
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 truncate">{stripHtml(c.content || '')}</p>
+                </div>
+                <div className="flex items-center gap-2 ml-4">
+                  <Button size="sm" variant="outline" onClick={() => { setEditing(c); setModalOpen(true) }}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleDelete(c.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? 'Editar Contrato Demo' : 'Novo Contrato Demo'} className="max-w-2xl">
+        <form key={editing?.id || 'create'} onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nome *</label>
+            <input name="name" defaultValue={editing?.name || ''} required className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Conteudo HTML *</label>
+            <textarea name="content" defaultValue={editing?.content || ''} required rows={12} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-mono dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+          </div>
+          <div className="flex items-center gap-2">
+            <input id="is_default_contract" name="is_default" type="checkbox" defaultChecked={editing?.is_default || false} className="h-4 w-4 rounded border-zinc-300" />
+            <label htmlFor="is_default_contract" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Modelo padrao</label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => { setModalOpen(false); setEditing(null) }}>Cancelar</Button>
+            <Button type="submit">{editing ? 'Salvar' : 'Criar'}</Button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────
 
 const tabs: { key: Tab; label: string; icon: typeof Package }[] = [
@@ -777,6 +904,7 @@ const tabs: { key: Tab; label: string; icon: typeof Package }[] = [
   { key: 'clientes', label: 'Clientes', icon: Users },
   { key: 'orcamentos', label: 'Orcamentos', icon: FileText },
   { key: 'locacoes', label: 'Locacoes', icon: Truck },
+  { key: 'contratos', label: 'Contratos', icon: ScrollText },
 ]
 
 export default function AdminDemoDadosPage() {
@@ -830,6 +958,9 @@ export default function AdminDemoDadosPage() {
       <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
         Dados Demo
       </h2>
+      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        Cadastre aqui produtos, clientes, orcamentos, locacoes e contratos de exemplo. Esses dados aparecem automaticamente em toda nova empresa que se registrar.
+      </p>
 
       {/* Global Actions */}
       <Card>
@@ -888,6 +1019,7 @@ export default function AdminDemoDadosPage() {
       {activeTab === 'clientes' && <CustomersTab />}
       {activeTab === 'orcamentos' && <QuotesTab />}
       {activeTab === 'locacoes' && <RentalsTab />}
+      {activeTab === 'contratos' && <ContractsTab />}
     </div>
   )
 }

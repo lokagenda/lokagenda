@@ -499,6 +499,91 @@ export async function deleteDemoRental(id: string) {
   return { success: true }
 }
 
+// ── Demo Contracts (global_contract_templates) ───────────
+
+export async function listDemoContracts() {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const { data, error } = await (admin as any)
+    .from('global_contract_templates')
+    .select('*')
+    .order('name', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function createDemoContract(formData: FormData) {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const name = formData.get('name') as string
+  const content = formData.get('content') as string
+  const isDefault = formData.get('is_default') === 'true'
+
+  if (!name?.trim()) return { error: 'Nome do contrato e obrigatorio' }
+  if (!content?.trim()) return { error: 'Conteudo do contrato e obrigatorio' }
+
+  // Insert first
+  const { data: newContract, error } = await (admin as any).from('global_contract_templates').insert({
+    name: name.trim(),
+    content: content,
+    is_default: isDefault,
+  }).select('id').single()
+
+  if (error) return { error: 'Erro ao criar contrato: ' + error.message }
+
+  // Unset other defaults after successful insert
+  if (isDefault && newContract) {
+    await (admin as any).from('global_contract_templates')
+      .update({ is_default: false })
+      .eq('is_default', true)
+      .neq('id', newContract.id)
+  }
+
+  revalidatePath('/admin/demo-dados')
+  return { success: true }
+}
+
+export async function updateDemoContract(id: string, formData: FormData) {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const name = formData.get('name') as string
+  const content = formData.get('content') as string
+  const isDefault = formData.get('is_default') === 'true'
+
+  if (!name?.trim()) return { error: 'Nome do contrato e obrigatorio' }
+  if (!content?.trim()) return { error: 'Conteudo do contrato e obrigatorio' }
+
+  const { error } = await (admin as any).from('global_contract_templates')
+    .update({
+      name: name.trim(),
+      content: content,
+      is_default: isDefault,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (error) return { error: 'Erro ao atualizar contrato: ' + error.message }
+
+  if (isDefault) {
+    await (admin as any).from('global_contract_templates')
+      .update({ is_default: false })
+      .eq('is_default', true)
+      .neq('id', id)
+  }
+
+  revalidatePath('/admin/demo-dados')
+  return { success: true }
+}
+
+export async function deleteDemoContract(id: string) {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const { error } = await (admin as any).from('global_contract_templates').delete().eq('id', id)
+  if (error) return { error: 'Erro ao excluir contrato: ' + error.message }
+  revalidatePath('/admin/demo-dados')
+  return { success: true }
+}
+
 // ── Push Functions ────────────────────────────────────────
 
 async function pushDemoDataInternal(companyId: string, ownerId: string) {
