@@ -55,7 +55,8 @@ export async function getAvailableStock(
   productId: string,
   eventDate: string,
   deliveryTime?: string | null,
-  pickupTime?: string | null
+  pickupTime?: string | null,
+  excludeRentalId?: string
 ): Promise<number> {
   const supabase = await createClient()
 
@@ -72,12 +73,18 @@ export async function getAvailableStock(
   if (!product) return 0
 
   // Get rentals for this date that are active (not cancelled/returned)
-  const { data: rentals } = await supabase
+  let rentalQuery = supabase
     .from('rentals')
     .select('id, delivery_time, pickup_time')
     .eq('company_id', companyId)
     .eq('event_date', normalizedDate)
     .not('status', 'in', '("cancelled","returned")')
+
+  if (excludeRentalId) {
+    rentalQuery = rentalQuery.neq('id', excludeRentalId)
+  }
+
+  const { data: rentals } = await rentalQuery
 
   if (!rentals || rentals.length === 0) return product.stock
 

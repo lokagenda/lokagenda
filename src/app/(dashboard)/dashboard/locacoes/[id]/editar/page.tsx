@@ -10,8 +10,8 @@ import { updateRental } from '@/actions/rentals'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, Loader2, Package } from 'lucide-react'
-import type { Rental, RentalItem } from '@/types/database'
+import { ArrowLeft, Save, Loader2, Package, Search, Trash2 } from 'lucide-react'
+import type { Rental, RentalItem, Product } from '@/types/database'
 
 export default function EditarLocacaoPage({
   params,
@@ -22,7 +22,16 @@ export default function EditarLocacaoPage({
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [items, setItems] = useState<RentalItem[]>([])
+  const [items, setItems] = useState<Array<{
+    product_id: string | null
+    product_name: string
+    quantity: number
+    unit_price: number
+    subtotal: number
+  }>>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [productSearch, setProductSearch] = useState('')
+  const [showProductDropdown, setShowProductDropdown] = useState(false)
   const [form, setForm] = useState({
     customer_name: '',
     customer_phone: '',
@@ -44,9 +53,21 @@ export default function EditarLocacaoPage({
   const loadData = useCallback(async () => {
     const supabase = createClient()
 
-    const [rentalRes, itemsRes] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    const [rentalRes, itemsRes, productsRes] = await Promise.all([
       supabase.from('rentals').select('*').eq('id', id).single(),
       supabase.from('rental_items').select('*').eq('rental_id', id),
+      profile
+        ? supabase.from('products').select('*').eq('company_id', profile.company_id).eq('status', 'active').order('name')
+        : Promise.resolve({ data: [] }),
     ])
 
     if (rentalRes.data) {
@@ -70,7 +91,14 @@ export default function EditarLocacaoPage({
       })
     }
 
-    setItems(itemsRes.data || [])
+    setItems((itemsRes.data || []).map((item: RentalItem) => ({
+      product_id: item.product_id,
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      subtotal: item.subtotal,
+    })))
+    setProducts((productsRes as any).data || [])
     setLoading(false)
   }, [id])
 
@@ -87,6 +115,57 @@ export default function EditarLocacaoPage({
       [name]: name === 'discount' || name === 'freight' ? parseFloat(value) || 0 : value,
     }))
   }
+
+  const filteredProducts = products.filter((p) =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase())
+  )
+
+  function addProduct(product: Product) {
+    const existing = items.find((i) => i.product_id === product.id)
+    if (existing) {
+      setItems(
+        items.map((i) =>
+          i.product_id === product.id
+            ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unit_price }
+            : i
+        )
+      )
+    } else {
+      setItems([
+        ...items,
+        {
+          product_id: product.id,
+          product_name: product.name,
+          quantity: 1,
+          unit_price: product.price,
+          subtotal: product.price,
+        },
+      ])
+    }
+    setProductSearch('')
+    setShowProductDropdown(false)
+  }
+
+  function updateItemQuantity(index: number, quantity: number) {
+    if (quantity < 1) return
+    setItems(items.map((item, i) =>
+      i === index ? { ...item, quantity, subtotal: quantity * item.unit_price } : item
+    ))
+  }
+
+  function updateItemPrice(index: number, price: number) {
+    if (price < 0) return
+    setItems(items.map((item, i) =>
+      i === index ? { ...item, unit_price: price, subtotal: item.quantity * price } : item
+    ))
+  }
+
+  function removeItem(index: number) {
+    setItems(items.filter((_, i) => i !== index))
+  }
+
+  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0)
+  const total = subtotal - form.discount + form.freight
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -118,6 +197,7 @@ export default function EditarLocacaoPage({
         notes: form.notes || null,
         discount: form.discount,
         freight: form.freight,
+        items: items.length > 0 ? items : undefined,
       })
 
       if (result.error) {
@@ -352,7 +432,7 @@ export default function EditarLocacaoPage({
           </CardContent>
         </Card>
 
-        {/* Items (read-only) */}
+        {/* Items */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -360,48 +440,144 @@ export default function EditarLocacaoPage({
               Itens da Locação
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-              Os itens são exibidos apenas para consulta. Para alterar itens, crie uma nova locação.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="pb-3 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
-                      Produto
-                    </th>
-                    <th className="pb-3 pr-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
-                      Preço Unit.
-                    </th>
-                    <th className="pb-3 pr-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
-                      Qtd
-                    </th>
-                    <th className="pb-3 text-right font-medium text-zinc-500 dark:text-zinc-400">
-                      Subtotal
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="py-3 pr-4 text-zinc-900 dark:text-zinc-50">
-                        {item.product_name}
-                      </td>
-                      <td className="py-3 pr-4 text-right text-zinc-600 dark:text-zinc-400">
-                        {formatCurrency(item.unit_price)}
-                      </td>
-                      <td className="py-3 pr-4 text-right text-zinc-600 dark:text-zinc-400">
-                        {item.quantity}
-                      </td>
-                      <td className="py-3 text-right font-medium text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(item.subtotal)}
-                      </td>
-                    </tr>
+          <CardContent className="space-y-4">
+            {/* Add product search */}
+            <div className="relative">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar produto para adicionar..."
+                  value={productSearch}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value)
+                    setShowProductDropdown(true)
+                  }}
+                  onFocus={() => setShowProductDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
+                  className={`${inputClasses} pl-9`}
+                />
+              </div>
+              {showProductDropdown && productSearch && filteredProducts.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                  {filteredProducts.slice(0, 8).map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => addProduct(product)}
+                      className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    >
+                      <div>
+                        <div className="font-medium text-zinc-900 dark:text-zinc-50">
+                          {product.name}
+                        </div>
+                        <div className="text-xs text-zinc-500">
+                          Estoque: {product.stock}
+                        </div>
+                      </div>
+                      <div className="font-medium text-blue-700 dark:text-blue-400">
+                        {formatCurrency(product.price)}
+                      </div>
+                    </button>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
+
+            {/* Items list */}
+            {items.length === 0 ? (
+              <div className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                Nenhum item adicionado. Busque um produto acima para adicionar.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="hidden grid-cols-12 gap-4 px-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 md:grid">
+                  <div className="col-span-5">Produto</div>
+                  <div className="col-span-2">Preço Unit.</div>
+                  <div className="col-span-2">Quantidade</div>
+                  <div className="col-span-2">Subtotal</div>
+                  <div className="col-span-1" />
+                </div>
+
+                {items.map((item, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-1 items-center gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 md:grid-cols-12 md:gap-4"
+                  >
+                    <div className="font-medium text-zinc-900 dark:text-zinc-50 md:col-span-5">
+                      {item.product_name}
+                    </div>
+                    <div className="md:col-span-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unit_price}
+                        onChange={(e) => updateItemPrice(index, Number(e.target.value))}
+                        className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 md:col-span-2">
+                      <button
+                        type="button"
+                        onClick={() => updateItemQuantity(index, item.quantity - 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateItemQuantity(index, item.quantity + 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="font-medium text-zinc-900 dark:text-zinc-50 md:col-span-2">
+                      {formatCurrency(item.subtotal)}
+                    </div>
+                    <div className="flex justify-end md:col-span-1">
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Total summary */}
+                <div className="mt-4 flex justify-end border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-8">
+                      <span className="text-zinc-500">Subtotal:</span>
+                      <span className="font-medium">{formatCurrency(subtotal)}</span>
+                    </div>
+                    {form.discount > 0 && (
+                      <div className="flex justify-between gap-8">
+                        <span className="text-zinc-500">Desconto:</span>
+                        <span className="font-medium text-red-600">-{formatCurrency(form.discount)}</span>
+                      </div>
+                    )}
+                    {form.freight > 0 && (
+                      <div className="flex justify-between gap-8">
+                        <span className="text-zinc-500">Frete:</span>
+                        <span className="font-medium">+{formatCurrency(form.freight)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-8 border-t pt-1">
+                      <span className="font-semibold">Total:</span>
+                      <span className="font-bold text-blue-700 dark:text-blue-400">{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

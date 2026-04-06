@@ -245,6 +245,8 @@ export async function updateSubscription(id: string, data: {
   status?: SubscriptionStatus
   trial_ends_at?: string
   current_period_end?: string
+  current_price?: number
+  billing_cycle?: string
 }) {
   await requireSuperAdmin()
   const admin = createAdminClient()

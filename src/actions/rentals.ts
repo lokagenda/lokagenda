@@ -298,6 +298,7 @@ interface UpdateRentalInput {
   notes?: string | null
   discount?: number
   freight?: number
+  items?: RentalItemInput[]
 }
 
 export async function updateRental(id: string, data: UpdateRentalInput) {
@@ -319,13 +320,60 @@ export async function updateRental(id: string, data: UpdateRentalInput) {
     return { error: 'Sem permissão para esta locação' }
   }
 
+  // If items are provided, validate stock and replace them
+  if (data.items && data.items.length > 0) {
+    for (const item of data.items) {
+      if (item.product_id) {
+        const available = await getAvailableStock(
+          companyId,
+          item.product_id,
+          data.event_date,
+          data.delivery_time,
+          data.pickup_time,
+          id // exclude current rental from availability check
+        )
+
+        if (available < item.quantity) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('name')
+            .eq('id', item.product_id)
+            .single()
+
+          const productName = product?.name || item.product_name
+          return {
+            error: `Estoque insuficiente para "${productName}" na data ${data.event_date}: disponível ${available}, necessário ${item.quantity}`,
+          }
+        }
+      }
+    }
+
+    // Delete old items and insert new ones
+    await supabase.from('rental_items').delete().eq('rental_id', id)
+
+    const { error: itemsError } = await supabase.from('rental_items').insert(
+      data.items.map((item) => ({
+        rental_id: id,
+        product_id: item.product_id || null,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+      }))
+    )
+
+    if (itemsError) {
+      return { error: `Erro ao atualizar itens: ${itemsError.message}` }
+    }
+  }
+
   // Recalculate total based on items + discount/freight
-  const { data: items } = await supabase
+  const { data: currentItems } = await supabase
     .from('rental_items')
     .select('subtotal')
     .eq('rental_id', id)
 
-  const subtotal = (items || []).reduce((sum, item) => sum + item.subtotal, 0)
+  const subtotal = (currentItems || []).reduce((sum, item) => sum + item.subtotal, 0)
   const discount = data.discount || 0
   const freight = data.freight || 0
   const total = subtotal - discount + freight
@@ -357,6 +405,45 @@ export async function updateRental(id: string, data: UpdateRentalInput) {
 
   revalidatePath('/dashboard/locacoes')
   revalidatePath(`/dashboard/locacoes/${id}`)
+  return { success: true }
+}
+
+export async function updateMultipleRentalStatus(
+  ids: string[],
+  status: 'confirmed' | 'delivered' | 'returned' | 'cancelled'
+) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  if (ids.length === 0) {
+    return { error: 'Nenhuma locação selecionada' }
+  }
+
+  // Verify all rentals belong to this company
+  const { data: rentals, error: fetchError } = await supabase
+    .from('rentals')
+    .select('id, company_id')
+    .in('id', ids)
+
+  if (fetchError) {
+    return { error: `Erro ao buscar locações: ${fetchError.message}` }
+  }
+
+  const unauthorized = (rentals || []).some(r => r.company_id !== companyId)
+  if (unauthorized) {
+    return { error: 'Sem permissão para uma ou mais locações' }
+  }
+
+  const { error } = await supabase
+    .from('rentals')
+    .update({ status })
+    .in('id', ids)
+
+  if (error) {
+    return { error: `Erro ao atualizar status: ${error.message}` }
+  }
+
+  revalidatePath('/dashboard/locacoes')
   return { success: true }
 }
 

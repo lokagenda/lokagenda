@@ -12,6 +12,9 @@ interface SubscriptionActionsProps {
     id: string
     status: string
     trial_ends_at: string | null
+    current_period_end: string | null
+    current_price: number
+    billing_cycle: string
   }
 }
 
@@ -28,6 +31,9 @@ export function SubscriptionActions({ subscription }: SubscriptionActionsProps) 
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState(subscription.status)
   const [trialEnd, setTrialEnd] = useState(subscription.trial_ends_at?.split('T')[0] || '')
+  const [periodEnd, setPeriodEnd] = useState(subscription.current_period_end?.split('T')[0] || '')
+  const [price, setPrice] = useState(subscription.current_price?.toString() || '0')
+  const [billingCycle, setBillingCycle] = useState(subscription.billing_cycle || 'monthly')
 
   function handleSave() {
     startTransition(async () => {
@@ -35,6 +41,9 @@ export function SubscriptionActions({ subscription }: SubscriptionActionsProps) 
         await updateSubscription(subscription.id, {
           status: status as any,
           trial_ends_at: trialEnd ? new Date(trialEnd + 'T23:59:59').toISOString() : undefined,
+          current_period_end: periodEnd ? new Date(periodEnd + 'T23:59:59').toISOString() : undefined,
+          current_price: price ? parseFloat(price) : undefined,
+          billing_cycle: billingCycle || undefined,
         })
         toast.success('Assinatura atualizada')
         setOpen(false)
@@ -75,6 +84,37 @@ export function SubscriptionActions({ subscription }: SubscriptionActionsProps) 
             value={trialEnd}
             onChange={(e) => setTrialEnd(e.target.value)}
           />
+
+          <Input
+            label="Data de Vencimento"
+            type="date"
+            value={periodEnd}
+            onChange={(e) => setPeriodEnd(e.target.value)}
+          />
+
+          <Input
+            label="Valor Pago (R$)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Ciclo de Cobrança
+            </label>
+            <select
+              value={billingCycle}
+              onChange={(e) => setBillingCycle(e.target.value)}
+              className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            >
+              <option value="monthly">Mensal</option>
+              <option value="semiannual">Semestral</option>
+              <option value="annual">Anual</option>
+            </select>
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" onClick={() => setOpen(false)}>

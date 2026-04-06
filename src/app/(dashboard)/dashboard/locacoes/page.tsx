@@ -1,15 +1,10 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { buildFullAddress, getGoogleMapsUrl, getWazeUrl } from '@/lib/maps'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Plus,
   Package,
-  Eye,
-  MapPin,
-  Navigation,
   CalendarDays,
   List,
   Search,
@@ -17,49 +12,9 @@ import {
 import { ExportButton } from '@/components/export-button'
 import { Pagination } from '@/components/pagination'
 import { DateFilter } from '@/components/date-filter'
+import { RentalBatchList } from '@/components/rental-batch-actions'
 
 const ITEMS_PER_PAGE = 12
-
-const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
-  confirmed: {
-    label: 'Confirmada',
-    classes: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  },
-  delivered: {
-    label: 'Entregue',
-    classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-  },
-  returned: {
-    label: 'Devolvida',
-    classes: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  },
-  cancelled: {
-    label: 'Cancelada',
-    classes: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  },
-}
-
-function groupByDate(
-  rentals: Array<{
-    id: string
-    customer_name: string
-    event_date: string
-    event_address: string | null
-    event_city: string | null
-    event_state: string | null
-    event_zip_code: string | null
-    total: number
-    status: string
-  }>
-) {
-  const groups: Record<string, typeof rentals> = {}
-  for (const rental of rentals) {
-    const date = rental.event_date
-    if (!groups[date]) groups[date] = []
-    groups[date].push(rental)
-  }
-  return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
-}
 
 export default async function LocacoesPage({
   searchParams,
@@ -172,7 +127,6 @@ export default async function LocacoesPage({
   if (customerSearch) urlParams.set('customer', customerSearch)
   const baseUrl = `/dashboard/locacoes${urlParams.toString() ? `?${urlParams.toString()}` : ''}`
   const rentalsList = rentals || []
-  const grouped = groupByDate(rentalsList)
 
   // Count rentals per date for highlighting busy dates
   const dateCounts: Record<string, number> = {}
@@ -348,203 +302,8 @@ export default async function LocacoesPage({
             </Link>
           </CardContent>
         </Card>
-      ) : view === 'calendar' ? (
-        /* Calendar / Agenda View */
-        <div className="space-y-6">
-          {grouped.map(([date, dateRentals]) => {
-            const count = dateCounts[date] || 0
-            const isBusy = count >= 3
-
-            return (
-              <div key={date}>
-                <div className="mb-3 flex items-center gap-3">
-                  <div
-                    className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-                      isBusy
-                        ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-                        : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
-                    }`}
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                    {formatDate(date)}
-                    {isBusy && (
-                      <span className="ml-1 text-xs">({count} locações)</span>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {dateRentals.map((rental) => {
-                    const statusConfig =
-                      STATUS_CONFIG[rental.status] || STATUS_CONFIG.confirmed
-                    const fullAddress = buildFullAddress({
-                      address: rental.event_address,
-                      city: rental.event_city,
-                      state: rental.event_state,
-                      zip: rental.event_zip_code,
-                    })
-
-                    return (
-                      <Card key={rental.id}>
-                        <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                                {rental.customer_name}
-                              </span>
-                              <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.classes}`}
-                              >
-                                {statusConfig.label}
-                              </span>
-                            </div>
-                            {fullAddress && (
-                              <div className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-                                <MapPin className="h-3 w-3" />
-                                {fullAddress}
-                              </div>
-                            )}
-                            <div className="text-sm font-medium text-blue-700 dark:text-blue-400">
-                              {formatCurrency(rental.total)}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            {fullAddress && (
-                              <>
-                                <a
-                                  href={getGoogleMapsUrl(fullAddress)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <Button variant="outline" size="sm">
-                                    <MapPin className="h-4 w-4" />
-                                    Maps
-                                  </Button>
-                                </a>
-                                <a
-                                  href={getWazeUrl(fullAddress)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <Button variant="outline" size="sm">
-                                    <Navigation className="h-4 w-4" />
-                                    Waze
-                                  </Button>
-                                </a>
-                              </>
-                            )}
-                            <Link href={`/dashboard/locacoes/${rental.id}`}>
-                              <Button variant="ghost" size="sm">
-                                <Eye className="h-4 w-4" />
-                                Ver
-                              </Button>
-                            </Link>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
       ) : (
-        /* List View */
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {rentalsList.length} locaç{rentalsList.length !== 1 ? 'ões' : 'ão'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="pb-4 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
-                      Cliente
-                    </th>
-                    <th className="pb-4 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
-                      Data
-                    </th>
-                    <th className="pb-4 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
-                      Endereço
-                    </th>
-                    <th className="pb-4 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
-                      Valor
-                    </th>
-                    <th className="pb-4 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
-                      Status
-                    </th>
-                    <th className="pb-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {rentalsList.map((rental) => {
-                    const statusConfig =
-                      STATUS_CONFIG[rental.status] || STATUS_CONFIG.confirmed
-                    const fullAddress = buildFullAddress({
-                      address: rental.event_address,
-                      city: rental.event_city,
-                      state: rental.event_state,
-                      zip: rental.event_zip_code,
-                    })
-
-                    return (
-                      <tr key={rental.id}>
-                        <td className="py-4 pr-4">
-                          <div className="font-medium text-zinc-900 dark:text-zinc-50">
-                            {rental.customer_name}
-                          </div>
-                        </td>
-                        <td className="py-4 pr-4 text-zinc-700 dark:text-zinc-300">
-                          {formatDate(rental.event_date)}
-                        </td>
-                        <td className="py-4 pr-4 text-zinc-600 dark:text-zinc-400">
-                          <div className="flex items-center gap-2">
-                            <span className="max-w-[200px] truncate">
-                              {fullAddress || '—'}
-                            </span>
-                            {fullAddress && (
-                              <a
-                                href={getGoogleMapsUrl(fullAddress)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-700 hover:text-blue-800 dark:text-blue-400"
-                              >
-                                <MapPin className="h-3.5 w-3.5" />
-                              </a>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-4 pr-4 font-medium text-zinc-900 dark:text-zinc-50">
-                          {formatCurrency(rental.total)}
-                        </td>
-                        <td className="py-4 pr-4">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig.classes}`}
-                          >
-                            {statusConfig.label}
-                          </span>
-                        </td>
-                        <td className="py-4 text-right">
-                          <Link href={`/dashboard/locacoes/${rental.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                              Ver
-                            </Button>
-                          </Link>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <RentalBatchList rentals={rentalsList} view={view} dateCounts={dateCounts} />
       )}
 
       {rentalsList.length > 0 && (
