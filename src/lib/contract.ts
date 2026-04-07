@@ -11,6 +11,7 @@ export function replaceVariables(
 
 export function getDefaultTemplate(): string {
   return `<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #333;">
+  <div style="text-align: center; margin-bottom: 20px;">{{logo_empresa}}</div>
   <div style="text-align: center; margin-bottom: 30px;">
     <h1 style="font-size: 24px; margin-bottom: 5px;">{{nome_empresa}}</h1>
     <p style="font-size: 14px; color: #666;">CNPJ/CPF: {{cnpj_empresa}} | Tel: {{telefone_empresa}}</p>
@@ -111,6 +112,7 @@ export function getSampleData(): Record<string, string> {
     valor_pago: 'R$ 200,00',
     valor_restante: 'R$ 330,00',
     status_pagamento: 'Parcial',
+    logo_empresa: '',
     nome_empresa: 'Festas Divertidas LTDA',
     telefone_empresa: '(11) 3333-4444',
     cnpj_empresa: '12.345.678/0001-99',

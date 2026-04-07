@@ -94,7 +94,7 @@ export default function LocacaoDetailPage({
 
     const [rentalRes, itemsRes, paymentsRes] = await Promise.all([
       supabase.from('rentals').select('*').eq('id', id).single(),
-      supabase.from('rental_items').select('*').eq('rental_id', id),
+      supabase.from('rental_items').select('*, products:product_id(image_url)').eq('rental_id', id),
       supabase.from('payments').select('*').eq('rental_id', id).order('paid_at', { ascending: false }),
     ])
 
@@ -767,6 +767,9 @@ export default function LocacaoDetailPage({
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-700">
                   <th className="pb-3 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
+                    Foto
+                  </th>
+                  <th className="pb-3 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
                     Produto
                   </th>
                   <th className="pb-3 pr-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
@@ -781,8 +784,17 @@ export default function LocacaoDetailPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {items.map((item) => (
+                {items.map((item: any) => (
                   <tr key={item.id}>
+                    <td className="py-2 pr-3">
+                      {item.products?.image_url ? (
+                        <img src={item.products.image_url} alt="" className="h-10 w-10 rounded-md object-cover" />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800">
+                          <Package className="h-5 w-5 text-zinc-400" />
+                        </div>
+                      )}
+                    </td>
                     <td className="py-3 pr-4 text-zinc-900 dark:text-zinc-50">
                       {item.product_name}
                     </td>

@@ -22,6 +22,9 @@ import {
   Trash2,
   Edit,
   FileText,
+  FileDown,
+  Loader2,
+  Package,
 } from 'lucide-react'
 import type { Quote, QuoteItem, Company } from '@/types/database'
 
@@ -60,6 +63,7 @@ export default function OrcamentoDetailPage({
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
@@ -76,7 +80,7 @@ export default function OrcamentoDetailPage({
 
     const [quoteRes, itemsRes, companyRes] = await Promise.all([
       supabase.from('quotes').select('*').eq('id', id).single(),
-      supabase.from('quote_items').select('*').eq('quote_id', id),
+      supabase.from('quote_items').select('*, products:product_id(image_url)').eq('quote_id', id),
       supabase.from('companies').select('*').eq('id', profile.company_id).single(),
     ])
 
@@ -134,6 +138,162 @@ export default function OrcamentoDetailPage({
     const message = generateQuoteMessage(quote, items, company)
     const url = getWhatsAppUrl(quote.customer_phone, message)
     window.open(url, '_blank')
+  }
+
+  async function handleExportPdf() {
+    if (!quote) return
+    setPdfLoading(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const { jsPDF } = await import('jspdf')
+
+      const fmt = (v: number) =>
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+
+      const fmtDate = (d: string | null | undefined) => {
+        if (!d) return '—'
+        const [y, m, day] = d.split('-')
+        return `${day}/${m}/${y}`
+      }
+
+      const subtotal = items.reduce((s, i) => s + i.subtotal, 0)
+
+      const addressParts = [
+        quote.event_address,
+        quote.event_city,
+        quote.event_state,
+        quote.event_zip_code,
+      ].filter(Boolean).join(', ')
+
+      const itemsHtml = items.map((item: any) => {
+        const imgCell = item.products?.image_url
+          ? `<img src="${item.products.image_url}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" crossorigin="anonymous" />`
+          : `<div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 4px;"></div>`
+        return `<tr>
+          <td style="padding: 8px; border-bottom: 1px solid #eee;">${imgCell}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.product_name}</td>
+          <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">${item.quantity}</td>
+          <td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(item.unit_price)}</td>
+          <td style="padding: 8px; text-align: right; border-bottom: 1px solid #eee;">${fmt(item.subtotal)}</td>
+        </tr>`
+      }).join('')
+
+      const logoHtml = company?.logo_url
+        ? `<div style="text-align: center; margin-bottom: 24px;"><img src="${company.logo_url}" style="max-height: 80px;" crossorigin="anonymous" /></div>`
+        : ''
+
+      const notesHtml = quote.notes
+        ? `<div style="margin-top: 24px; padding: 12px; background: #fafafa; border-radius: 8px;"><strong>Observações:</strong><br/><span style="white-space: pre-wrap;">${quote.notes}</span></div>`
+        : ''
+
+      const html = `
+        <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 794px; background: white; color: #1a1a1a;">
+          ${logoHtml}
+          <h1 style="text-align: center; font-size: 24px; margin-bottom: 24px; color: #1a1a1a;">ORÇAMENTO</h1>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 24px;">
+            <div>
+              <strong>${company?.name || ''}</strong><br/>
+              ${company?.phone || ''}<br/>
+              ${(company as any)?.document || ''}
+            </div>
+            <div style="text-align: right;">
+              <strong>Cliente:</strong> ${quote.customer_name}<br/>
+              ${quote.customer_phone ? `<strong>Telefone:</strong> ${quote.customer_phone}<br/>` : ''}
+              ${quote.customer_email ? `<strong>Email:</strong> ${quote.customer_email}` : ''}
+            </div>
+          </div>
+          <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 24px;">
+            <strong>Data do Evento:</strong> ${fmtDate(quote.event_date)}<br/>
+            ${addressParts ? `<strong>Local:</strong> ${addressParts}<br/>` : ''}
+            ${quote.delivery_time ? `<strong>Entrega:</strong> ${quote.delivery_time}` : ''}
+            ${quote.delivery_time && quote.pickup_time ? ' | ' : ''}
+            ${quote.pickup_time ? `<strong>Retirada:</strong> ${quote.pickup_time}` : ''}
+          </div>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+            <thead>
+              <tr style="background: #f0f0f0;">
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Foto</th>
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Produto</th>
+                <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Qtd</th>
+                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #ddd;">Valor Un.</th>
+                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #ddd;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+          <div style="text-align: right; line-height: 2;">
+            Subtotal: ${fmt(subtotal)}<br/>
+            ${quote.discount > 0 ? `Desconto: -${fmt(quote.discount)}<br/>` : ''}
+            ${quote.freight > 0 ? `Frete: +${fmt(quote.freight)}<br/>` : ''}
+            <strong style="font-size: 18px;">Total: ${fmt(quote.total)}</strong>
+          </div>
+          ${notesHtml}
+        </div>
+      `
+
+      const container = document.createElement('div')
+      container.style.position = 'absolute'
+      container.style.left = '-9999px'
+      container.style.top = '0'
+      container.style.width = '794px'
+      container.innerHTML = html
+      document.body.appendChild(container)
+
+      const images = container.querySelectorAll('img')
+      await Promise.all(
+        Array.from(images).map((img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                img.onload = () => resolve()
+                img.onerror = () => resolve()
+              })
+        )
+      )
+
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      })
+      document.body.removeChild(container)
+
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pdfWidth
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width
+
+      let heightLeft = imgHeight
+      let position = 0
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pdfHeight
+
+      while (heightLeft > 0) {
+        position = position - pdfHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pdfHeight
+      }
+
+      const customerName = quote.customer_name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, '_')
+      const dateStr = quote.event_date?.replace(/-/g, '') || 'sem_data'
+      pdf.save(`orcamento_${customerName}_${dateStr}.pdf`)
+
+      alert('PDF exportado com sucesso!')
+    } catch (err) {
+      console.error('Erro ao exportar PDF:', err)
+      alert('Erro ao exportar PDF.')
+    } finally {
+      setPdfLoading(false)
+    }
   }
 
   if (loading) {
@@ -220,6 +380,15 @@ export default function OrcamentoDetailPage({
           >
             <MessageCircle className="h-4 w-4" />
             WhatsApp
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportPdf}
+            disabled={pdfLoading}
+          >
+            {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Exportar PDF
           </Button>
           {quote.status === 'pending' && (
             <Link href={`/dashboard/orcamentos/novo?edit=${id}`}>
@@ -357,6 +526,9 @@ export default function OrcamentoDetailPage({
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-700">
                   <th className="pb-3 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
+                    Foto
+                  </th>
+                  <th className="pb-3 pr-4 text-left font-medium text-zinc-500 dark:text-zinc-400">
                     Produto
                   </th>
                   <th className="pb-3 pr-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
@@ -371,8 +543,17 @@ export default function OrcamentoDetailPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {items.map((item) => (
+                {items.map((item: any) => (
                   <tr key={item.id}>
+                    <td className="py-2 pr-3">
+                      {item.products?.image_url ? (
+                        <img src={item.products.image_url} alt="" className="h-10 w-10 rounded-md object-cover" />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800">
+                          <Package className="h-5 w-5 text-zinc-400" />
+                        </div>
+                      )}
+                    </td>
                     <td className="py-3 pr-4 text-zinc-900 dark:text-zinc-50">
                       {item.product_name}
                     </td>

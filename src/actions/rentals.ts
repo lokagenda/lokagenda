@@ -282,6 +282,26 @@ export async function deletePayment(paymentId: string) {
   return { success: true }
 }
 
+export async function getRentalsForMonth(year: number, month: number) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  const { data } = await supabase
+    .from('rentals')
+    .select('id, customer_name, event_date, total, status, rental_items(product_name, product_id, products:product_id(image_url))')
+    .eq('company_id', companyId)
+    .in('status', ['confirmed', 'delivered'])
+    .gte('event_date', startDate)
+    .lte('event_date', endDate)
+    .order('event_date')
+
+  return data || []
+}
+
 interface UpdateRentalInput {
   customer_name: string
   customer_phone?: string | null

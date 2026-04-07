@@ -7,7 +7,6 @@ import {
   FileText,
   Calendar,
   Users,
-  CalendarClock,
   TrendingUp,
   TrendingDown,
   ArrowUpRight,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { BannerCarousel } from '@/components/banner-carousel'
+import { DashboardCalendar } from '@/components/dashboard-calendar'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -35,7 +35,6 @@ export default async function DashboardPage() {
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
-  const today = now.toISOString().split('T')[0]
 
   // Previous month range for comparison
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]
@@ -48,7 +47,6 @@ export default async function DashboardPage() {
     customersCount,
     monthRentals,
     prevMonthRentals,
-    upcomingRentals,
     pendingQuotes,
   ] = await Promise.all([
     // Row 1 stats
@@ -60,8 +58,6 @@ export default async function DashboardPage() {
     supabase.from('rentals').select('total, amount_paid, payment_status, event_date').eq('company_id', companyId).gte('event_date', monthStart).lte('event_date', monthEnd),
     // Previous month rentals for comparison
     supabase.from('rentals').select('total').eq('company_id', companyId).gte('event_date', prevMonthStart).lte('event_date', prevMonthEnd),
-    // Row 3 - upcoming rentals
-    supabase.from('rentals').select('id, customer_name, event_date, total, status').eq('company_id', companyId).gte('event_date', today).in('status', ['confirmed', 'delivered']).order('event_date', { ascending: true }).limit(5),
     // Row 3 - pending quotes
     supabase.from('quotes').select('id, customer_name, created_at, total').eq('company_id', companyId).eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
   ])
@@ -135,7 +131,6 @@ export default async function DashboardPage() {
   const maxRevenue = Math.max(...dailyRevenue, 1)
 
   // Row 3 data
-  const upcoming = upcomingRentals.data ?? []
   const quotes = pendingQuotes.data ?? []
 
   return (
@@ -325,59 +320,8 @@ export default async function DashboardPage() {
 
       {/* Row 3 - Two columns */}
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-        {/* Próximas Locações */}
-        <Card>
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Próximas Locações</CardTitle>
-              {upcoming.length > 0 && (
-                <Link
-                  href="/dashboard/locacoes"
-                  className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  Ver todas
-                  <ArrowUpRight className="h-3 w-3" />
-                </Link>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {upcoming.length === 0 ? (
-              <EmptyState
-                icon={<CalendarClock className="h-6 w-6" />}
-                title="Nenhuma locação agendada"
-                description="Quando você criar locações, elas aparecerão aqui organizadas por data."
-              />
-            ) : (
-              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {upcoming.map((rental) => (
-                  <Link
-                    key={rental.id}
-                    href={`/dashboard/locacoes/${rental.id}`}
-                    className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0 transition-colors hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 -mx-2 px-2 rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                        <CalendarClock className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                          {rental.customer_name}
-                        </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {formatDate(rental.event_date)}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                      {formatCurrency(rental.total)}
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Calendario de Locacoes */}
+        <DashboardCalendar />
 
         {/* Orçamentos Pendentes */}
         <Card>

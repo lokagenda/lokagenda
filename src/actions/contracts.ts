@@ -206,6 +206,9 @@ export async function generateContract(rentalId: string) {
     valor_pago: formatCurrency(rental.amount_paid || 0),
     valor_restante: formatCurrency((rental.total || 0) - (rental.amount_paid || 0)),
     status_pagamento: rental.payment_status === 'paid' ? 'Pago' : rental.payment_status === 'partial' ? 'Parcial' : 'Pendente',
+    logo_empresa: company.logo_url
+      ? `<img src="${company.logo_url}" style="max-height: 80px; display: block; margin: 0 auto;" />`
+      : '',
     nome_empresa: company.name,
     telefone_empresa: company.phone || '-',
     cnpj_empresa: company.document || '-',
