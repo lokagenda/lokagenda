@@ -5,28 +5,31 @@ import Link from 'next/link'
 import { ArrowLeft, Save, ImageIcon, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createProduct } from '@/actions/products'
+import { compressImage, replaceInputFile } from '@/lib/compress-image'
 
 export default function NovoProdutoPage() {
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Imagem deve ter no máximo 5MB')
-        e.target.value = ''
-        return
-      }
-      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-        toast.error('Formato inválido. Use PNG, JPG ou WEBP')
-        e.target.value = ''
-        return
-      }
-      setPreview(URL.createObjectURL(file))
-    } else {
-      setPreview(null)
+    if (!file) { setPreview(null); return }
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']
+    if (!validTypes.includes(file.type)) {
+      toast.error('Formato inválido. Use PNG, JPG ou WEBP')
+      e.target.value = ''
+      return
+    }
+
+    try {
+      const compressed = await compressImage(file)
+      replaceInputFile(fileInputRef.current, compressed)
+      setPreview(URL.createObjectURL(compressed))
+    } catch {
+      toast.error('Erro ao processar imagem. Tente outra foto.')
+      e.target.value = ''
     }
   }
 
@@ -49,7 +52,12 @@ export default function NovoProdutoPage() {
         toast.success('Produto criado com sucesso!')
         return
       }
-      toast.error(message)
+      const lower = message.toLowerCase()
+      if (lower.includes('unexpected response') || lower.includes('failed to fetch') || lower.includes('body exceeded')) {
+        toast.error('A imagem é muito grande. Tente outra foto.')
+      } else {
+        toast.error(message)
+      }
       setLoading(false)
     }
   }

@@ -7,6 +7,7 @@ import { createBanner, updateBanner, deleteBanner, toggleBanner } from '@/action
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { compressImage } from '@/lib/compress-image'
 
 interface Banner {
   id: string
@@ -104,13 +105,19 @@ export default function BannersPage() {
     setModalOpen(true)
   }
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) {
-      setImageFile(file)
+    if (!file) return
+    try {
+      // Banners podem ser maiores (wide) - 1920px limite
+      const compressed = await compressImage(file, { maxDimension: 1920, quality: 0.85 })
+      setImageFile(compressed)
       const reader = new FileReader()
       reader.onloadend = () => setImagePreview(reader.result as string)
-      reader.readAsDataURL(file)
+      reader.readAsDataURL(compressed)
+    } catch {
+      setToast({ type: 'error', message: 'Erro ao processar imagem. Tente outra foto.' })
+      e.target.value = ''
     }
   }
 

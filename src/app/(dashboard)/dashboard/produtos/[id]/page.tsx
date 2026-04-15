@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Trash2, ImageIcon, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { updateProduct, deleteProduct } from '@/actions/products'
 import { createBrowserClient } from '@supabase/ssr'
+import { compressImage, replaceInputFile } from '@/lib/compress-image'
 
 type Product = {
   id: string
@@ -75,10 +76,24 @@ export default function EditarProdutoPage({
     fetchProduct()
   }, [id, router])
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) {
-      setPreview(URL.createObjectURL(file))
+    if (!file) return
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']
+    if (!validTypes.includes(file.type)) {
+      toast.error('Formato inválido. Use PNG, JPG ou WEBP')
+      e.target.value = ''
+      return
+    }
+
+    try {
+      const compressed = await compressImage(file)
+      replaceInputFile(fileInputRef.current, compressed)
+      setPreview(URL.createObjectURL(compressed))
+    } catch {
+      toast.error('Erro ao processar imagem. Tente outra foto.')
+      e.target.value = ''
     }
   }
 
@@ -96,7 +111,12 @@ export default function EditarProdutoPage({
         toast.success('Produto atualizado com sucesso!')
         return
       }
-      toast.error(message)
+      const lower = message.toLowerCase()
+      if (lower.includes('unexpected response') || lower.includes('failed to fetch') || lower.includes('body exceeded')) {
+        toast.error('A imagem é muito grande. Tente outra foto.')
+      } else {
+        toast.error(message)
+      }
       setLoading(false)
     }
   }

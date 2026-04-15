@@ -18,6 +18,7 @@ import {
   pushDemoDataToCompany, pushDemoDataToAllCompanies,
 } from '@/actions/demo-data'
 import { listCompaniesForSelect } from '@/actions/admin'
+import { compressImage, replaceInputFile } from '@/lib/compress-image'
 
 type Tab = 'produtos' | 'clientes' | 'orcamentos' | 'locacoes' | 'contratos'
 
@@ -155,10 +156,16 @@ function ProductsTab() {
               type="file"
               accept="image/*"
               className="sr-only"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0]
-                if (file) {
-                  setImagePreview(URL.createObjectURL(file))
+                if (!file) return
+                try {
+                  const compressed = await compressImage(file)
+                  replaceInputFile(fileInputRef.current, compressed)
+                  setImagePreview(URL.createObjectURL(compressed))
+                } catch {
+                  toast.error('Erro ao processar imagem. Tente outra foto.')
+                  e.target.value = ''
                 }
               }}
             />

@@ -15,6 +15,7 @@ import {
 import { getCompanyDetails } from '@/actions/admin'
 import { ArrowLeft, Plus, Pencil, Trash2, Package, Loader2, ImageIcon, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { compressImage, replaceInputFile } from '@/lib/compress-image'
 
 type StatusVariant = 'success' | 'warning' | 'danger' | 'neutral'
 
@@ -324,9 +325,17 @@ export default function AdminCompanyProductsPage({
               type="file"
               accept="image/*"
               className="sr-only"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0]
-                if (file) setImagePreview(URL.createObjectURL(file))
+                if (!file) return
+                try {
+                  const compressed = await compressImage(file)
+                  replaceInputFile(fileInputRef.current, compressed)
+                  setImagePreview(URL.createObjectURL(compressed))
+                } catch {
+                  toast.error('Erro ao processar imagem. Tente outra foto.')
+                  e.target.value = ''
+                }
               }}
             />
             <button

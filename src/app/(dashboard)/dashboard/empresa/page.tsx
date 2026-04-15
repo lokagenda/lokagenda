@@ -6,6 +6,7 @@ import { updateCompany } from '@/actions/company'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { compressImage } from '@/lib/compress-image'
 
 export default function EmpresaPage() {
   const [isPending, startTransition] = useTransition()
@@ -83,15 +84,21 @@ export default function EmpresaPage() {
     }
   }, [toast])
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) {
-      setLogoFile(file)
+    if (!file) return
+    try {
+      // Logo usa dimensao menor (512px basta) e qualidade alta
+      const compressed = await compressImage(file, { maxDimension: 512, quality: 0.9 })
+      setLogoFile(compressed)
       const reader = new FileReader()
       reader.onloadend = () => {
         setLogoPreview(reader.result as string)
       }
-      reader.readAsDataURL(file)
+      reader.readAsDataURL(compressed)
+    } catch {
+      setToast({ type: 'error', message: 'Erro ao processar imagem. Tente outra foto.' })
+      e.target.value = ''
     }
   }
 
