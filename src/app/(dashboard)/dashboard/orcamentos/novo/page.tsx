@@ -199,14 +199,18 @@ export default function NovoOrcamentoPage() {
     }
   }, [isEditing, products, searchParams])
 
+  // Normaliza acentos para busca (ex: "tigrão" → "tigrao" matches "tigra")
+  const normalize = (str: string) =>
+    str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
   const filteredCustomers = customers.filter(
     (c) =>
-      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+      normalize(c.name).includes(normalize(customerSearch)) ||
       (c.phone && c.phone.includes(customerSearch))
   )
 
   const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(productSearch.toLowerCase())
+    normalize(p.name).includes(normalize(productSearch))
   )
 
   function selectCustomer(customer: Customer) {

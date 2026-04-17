@@ -116,8 +116,11 @@ export default function EditarLocacaoPage({
     }))
   }
 
+  const normalize = (str: string) =>
+    str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
   const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(productSearch.toLowerCase())
+    normalize(p.name).includes(normalize(productSearch))
   )
 
   function addProduct(product: Product) {
