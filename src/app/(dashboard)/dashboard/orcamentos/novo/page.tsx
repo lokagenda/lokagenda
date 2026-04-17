@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { createQuote, updateQuote, convertQuoteToRental } from '@/actions/quotes'
+import { createQuote, updateQuote, convertQuoteToRental, getQuoteFormData, getQuoteById } from '@/actions/quotes'
 import { createRental } from '@/actions/rentals'
 import { generateQuoteMessage, generateRentalConfirmationMessage, getWhatsAppUrl } from '@/lib/whatsapp'
 import { formatCurrency } from '@/lib/utils'
@@ -69,40 +68,14 @@ export default function NovoOrcamentoPage() {
   const total = subtotal - discount + freight
 
   const loadData = useCallback(async () => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) return
-
-    const [productsRes, customersRes, companyRes] = await Promise.all([
-      supabase
-        .from('products')
-        .select('*')
-        .eq('company_id', profile.company_id)
-        .eq('status', 'active')
-        .order('name'),
-      supabase
-        .from('customers')
-        .select('*')
-        .eq('company_id', profile.company_id)
-        .order('name'),
-      supabase
-        .from('companies')
-        .select('*')
-        .eq('id', profile.company_id)
-        .single(),
-    ])
-
-    setProducts(productsRes.data || [])
-    setCustomers(customersRes.data || [])
-    setCompany(companyRes.data)
+    try {
+      const data = await getQuoteFormData()
+      setProducts(data.products)
+      setCustomers(data.customers)
+      setCompany(data.company)
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err)
+    }
   }, [])
 
   useEffect(() => {
@@ -115,15 +88,11 @@ export default function NovoOrcamentoPage() {
 
     async function loadQuote() {
       setLoadingQuote(true)
-      const supabase = createClient()
+      try {
+      const { quote: quoteData, items: itemsData } = await getQuoteById(editId!)
 
-      const [quoteRes, itemsRes] = await Promise.all([
-        supabase.from('quotes').select('*').eq('id', editId!).single(),
-        supabase.from('quote_items').select('*').eq('quote_id', editId!),
-      ])
-
-      if (quoteRes.data) {
-        const q = quoteRes.data
+      if (quoteData) {
+        const q = quoteData
         setSelectedCustomerId(q.customer_id || null)
         setCustomerName(q.customer_name || '')
         setCustomerPhone(q.customer_phone || '')
@@ -142,9 +111,9 @@ export default function NovoOrcamentoPage() {
         setFreight(q.freight || 0)
       }
 
-      if (itemsRes.data) {
+      if (itemsData && itemsData.length > 0) {
         setItems(
-          itemsRes.data.map((item) => ({
+          itemsData.map((item) => ({
             product_id: item.product_id || null,
             product_name: item.product_name,
             quantity: item.quantity,
@@ -154,6 +123,9 @@ export default function NovoOrcamentoPage() {
         )
       }
 
+      } catch (err) {
+        console.error('Erro ao carregar orçamento:', err)
+      }
       setLoadingQuote(false)
     }
 

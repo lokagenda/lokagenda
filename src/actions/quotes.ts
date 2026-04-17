@@ -359,3 +359,50 @@ export async function convertQuoteToRental(quoteId: string) {
   revalidatePath('/dashboard/locacoes')
   return { success: true, rentalId: rental.id }
 }
+
+// ── Data loaders for quote form ──────────────────────────
+
+export async function getQuoteFormData() {
+  const supabase = await createClient()
+  const { userId, companyId } = await getCompanyId(supabase)
+
+  const [productsRes, customersRes, companyRes] = await Promise.all([
+    supabase
+      .from('products')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('status', 'active')
+      .order('name'),
+    supabase
+      .from('customers')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('name'),
+    supabase
+      .from('companies')
+      .select('*')
+      .eq('id', companyId)
+      .single(),
+  ])
+
+  return {
+    products: productsRes.data || [],
+    customers: customersRes.data || [],
+    company: companyRes.data || null,
+  }
+}
+
+export async function getQuoteById(quoteId: string) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const [quoteRes, itemsRes] = await Promise.all([
+    supabase.from('quotes').select('*').eq('id', quoteId).eq('company_id', companyId).single(),
+    supabase.from('quote_items').select('*').eq('quote_id', quoteId),
+  ])
+
+  return {
+    quote: quoteRes.data || null,
+    items: itemsRes.data || [],
+  }
+}
