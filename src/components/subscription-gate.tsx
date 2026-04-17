@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { AlertTriangle, Clock, CreditCard } from 'lucide-react'
 
 interface SubscriptionGateProps {
@@ -14,6 +15,9 @@ export function SubscriptionGate({
   trialDaysRemaining = 0,
   children,
 }: SubscriptionGateProps) {
+  const pathname = usePathname()
+  const isAssinaturaPage = pathname === '/dashboard/assinatura'
+
   const needsSubscription = status === 'none' || status === 'expired' || status === 'cancelled'
   const isTrial = status === 'trial' && trialDaysRemaining > 0
   const isTrialExpired = status === 'trial' && trialDaysRemaining <= 0
@@ -66,7 +70,7 @@ export function SubscriptionGate({
         {children}
 
         {/* Overlay para assinatura expirada/inexistente */}
-        {(needsSubscription || isTrialExpired) && (
+        {(needsSubscription || isTrialExpired) && !isAssinaturaPage && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
             <div className="mx-4 w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/10">
