@@ -197,6 +197,7 @@ export async function generateContract(rentalId: string) {
     email_cliente: rental.customer_email || '-',
     endereco_evento: [rental.event_address, rental.event_city, rental.event_state].filter(Boolean).join(', ') || '-',
     data_evento: rental.event_date ? formatDate(rental.event_date) : '-',
+    data_retirada: (rental as any).event_end_date ? formatDate((rental as any).event_end_date) : (rental.event_date ? formatDate(rental.event_date) : '-'),
     horario_entrega: rental.delivery_time || '-',
     horario_retirada: rental.pickup_time || '-',
     itens_locacao: itemsHtml,

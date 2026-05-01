@@ -16,6 +16,7 @@ const AVAILABLE_VARIABLES = [
   { var: '{{email_cliente}}', desc: 'E-mail do cliente' },
   { var: '{{endereco_evento}}', desc: 'Endereço do evento' },
   { var: '{{data_evento}}', desc: 'Data do evento' },
+  { var: '{{data_retirada}}', desc: 'Data de retirada' },
   { var: '{{horario_entrega}}', desc: 'Horário de entrega' },
   { var: '{{horario_retirada}}', desc: 'Horário de retirada' },
   { var: '{{itens_locacao}}', desc: 'Lista de itens da locação' },

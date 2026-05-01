@@ -103,6 +103,7 @@ export function getSampleData(): Record<string, string> {
     email_cliente: 'maria@exemplo.com',
     endereco_evento: 'Rua das Flores, 123 - Jardim Primavera',
     data_evento: '25/03/2026',
+    data_retirada: '26/03/2026',
     horario_entrega: '08:00',
     horario_retirada: '18:00',
     itens_locacao: '2x Cama Elástica Grande - R$ 200,00<br/>1x Piscina de Bolinhas - R$ 150,00<br/>1x Tobogã Inflável - R$ 180,00',
