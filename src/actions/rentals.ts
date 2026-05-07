@@ -19,6 +19,7 @@ interface CreateRentalInput {
   customer_email?: string | null
   customer_document?: string | null
   event_date: string
+  event_end_date?: string | null
   event_address?: string | null
   event_city?: string | null
   event_state?: string | null
@@ -84,6 +85,7 @@ export async function createRental(input: CreateRentalInput) {
       customer_email: input.customer_email || null,
       customer_document: input.customer_document || null,
       event_date: input.event_date,
+      event_end_date: input.event_end_date || null,
       event_address: input.event_address || null,
       event_city: input.event_city || null,
       event_state: input.event_state || null,
@@ -406,6 +408,7 @@ export async function updateRental(id: string, data: UpdateRentalInput) {
       customer_email: data.customer_email || null,
       customer_document: data.customer_document || null,
       event_date: data.event_date,
+      event_end_date: data.event_end_date || null,
       event_address: data.event_address || null,
       event_city: data.event_city || null,
       event_state: data.event_state || null,
