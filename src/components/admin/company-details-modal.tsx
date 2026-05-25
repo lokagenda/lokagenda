@@ -110,16 +110,14 @@ export function CompanyDetailsButton({ companyId, companyName, variant = 'button
                 </div>
                 <div>
                   <span className="text-zinc-500 dark:text-zinc-400">E-mail:</span>
-                  <p className="font-medium text-zinc-900 dark:text-zinc-50">{details.email || '-'}</p>
+                  <p className="font-medium text-zinc-900 dark:text-zinc-50">{details.email || details.owner_email || '-'}</p>
                 </div>
-                {(details.address || details.city || details.state) && (
-                  <div className="sm:col-span-2">
-                    <span className="text-zinc-500 dark:text-zinc-400">Endereço:</span>
-                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {[details.address, details.city, details.state].filter(Boolean).join(', ') || '-'}
-                    </p>
-                  </div>
-                )}
+                <div className="sm:col-span-2">
+                  <span className="text-zinc-500 dark:text-zinc-400">Endereço:</span>
+                  <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                    {[details.address, details.city, details.state, details.zip_code].filter(Boolean).join(', ') || '-'}
+                  </p>
+                </div>
                 <div>
                   <span className="text-zinc-500 dark:text-zinc-400">Cadastro:</span>
                   <p className="font-medium text-zinc-900 dark:text-zinc-50">{formatDate(details.created_at)}</p>
@@ -137,6 +135,10 @@ export function CompanyDetailsButton({ companyId, companyName, variant = 'button
                 <div>
                   <span className="text-zinc-500 dark:text-zinc-400">Nome:</span>
                   <p className="font-medium text-zinc-900 dark:text-zinc-50">{owner?.full_name || '-'}</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500 dark:text-zinc-400">E-mail (login):</span>
+                  <p className="font-medium text-zinc-900 dark:text-zinc-50">{details.owner_email || '-'}</p>
                 </div>
                 <div>
                   <span className="text-zinc-500 dark:text-zinc-400">Desde:</span>

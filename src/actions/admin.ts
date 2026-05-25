@@ -64,7 +64,20 @@ export async function getCompanyDetails(id: string) {
     .single()
 
   if (error) throw new Error(error.message)
-  return data
+
+  // Buscar email de login do proprietário (auth.users)
+  const owner = (data as any).profiles?.find((p: any) => p.role === 'owner')
+  let ownerEmail: string | null = null
+  if (owner?.id) {
+    try {
+      const { data: userData } = await admin.auth.admin.getUserById(owner.id)
+      ownerEmail = userData?.user?.email ?? null
+    } catch {
+      // Ignora falha ao buscar email do owner
+    }
+  }
+
+  return { ...data, owner_email: ownerEmail }
 }
 
 export async function toggleCompanyStatus(companyId: string, suspend: boolean) {
