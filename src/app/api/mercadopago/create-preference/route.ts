@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferenceClient } from '@/lib/mercadopago'
 import { getPlanPrice, getCycleLabel } from '@/lib/plans'
+import { validateCoupon } from '@/actions/coupons'
 import type { BillingCycle } from '@/lib/plans'
 import type { Plan } from '@/types/database'
 
@@ -16,10 +17,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { planId, billingCycle, companyId } = body as {
+    const { planId, billingCycle, companyId, couponCode } = body as {
       planId: string
       billingCycle: BillingCycle
       companyId: string
+      couponCode?: string
     }
 
     if (!planId || !billingCycle || !companyId) {
@@ -50,8 +52,20 @@ export async function POST(request: NextRequest) {
     }
 
     const typedPlan = plan as Plan
-    const price = getPlanPrice(typedPlan, billingCycle)
+    const basePrice = getPlanPrice(typedPlan, billingCycle)
     const cycleLabel = getCycleLabel(billingCycle)
+
+    // Aplicar cupom de desconto (validacao server-side)
+    let price = basePrice
+    let appliedCouponCode: string | null = null
+    if (couponCode) {
+      const couponResult = await validateCoupon(couponCode, basePrice)
+      if (couponResult.valid && typeof couponResult.finalPrice === 'number') {
+        price = couponResult.finalPrice
+        appliedCouponCode = couponCode.trim().toUpperCase()
+      }
+      // Cupom invalido: ignora silenciosamente e cobra o preco normal.
+    }
 
     const host = request.headers.get('host') || 'lokagenda-one.vercel.app'
     const protocol = host.includes('localhost') ? 'http' : 'https'
@@ -73,6 +87,7 @@ export async function POST(request: NextRequest) {
           companyId,
           planId,
           billingCycle,
+          couponCode: appliedCouponCode,
         }),
         back_urls: {
           success: `${appUrl}/dashboard/assinatura?status=success`,

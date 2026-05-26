@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse da referência externa
-    let externalRef: { companyId: string; planId: string; billingCycle: string }
+    let externalRef: { companyId: string; planId: string; billingCycle: string; couponCode?: string | null }
     try {
       externalRef = JSON.parse(payment.external_reference)
     } catch {
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
-    const { companyId, planId, billingCycle } = externalRef
+    const { companyId, planId, billingCycle, couponCode } = externalRef
     const admin = createAdminClient()
 
     if (payment.status === 'approved') {
@@ -109,6 +109,28 @@ export async function POST(request: NextRequest) {
           break
       }
 
+      const paidAmount = payment.transaction_amount || 0
+      const normalizedCoupon = couponCode ? couponCode.trim().toUpperCase() : null
+
+      // Calcular desconto aplicado (preco original do plano - valor pago)
+      let discountApplied: number | null = null
+      if (normalizedCoupon) {
+        const { data: plan } = await admin
+          .from('plans')
+          .select('price_monthly, price_semiannual, price_annual')
+          .eq('id', planId)
+          .single()
+
+        if (plan) {
+          let originalPrice = plan.price_monthly
+          if (billingCycle === 'semiannual') originalPrice = plan.price_semiannual ?? plan.price_monthly * 6
+          else if (billingCycle === 'annual') originalPrice = plan.price_annual ?? plan.price_monthly * 12
+
+          const diff = Math.round((originalPrice - paidAmount) * 100) / 100
+          if (diff > 0) discountApplied = diff
+        }
+      }
+
       // Verificar se já existe assinatura para a empresa
       const { data: existing } = await admin
         .from('subscriptions')
@@ -126,10 +148,12 @@ export async function POST(request: NextRequest) {
             plan_id: planId,
             status: 'active',
             billing_cycle: billingCycle as 'monthly' | 'semiannual' | 'annual',
-            current_price: payment.transaction_amount || 0,
+            current_price: paidAmount,
             mercadopago_payer_id: payment.payer?.id?.toString() || null,
             current_period_start: now.toISOString(),
             current_period_end: periodEnd.toISOString(),
+            coupon_code: normalizedCoupon,
+            discount_applied: discountApplied,
             updated_at: now.toISOString(),
           })
           .eq('id', existing.id)
@@ -140,11 +164,29 @@ export async function POST(request: NextRequest) {
           plan_id: planId,
           status: 'active',
           billing_cycle: billingCycle as 'monthly' | 'semiannual' | 'annual',
-          current_price: payment.transaction_amount || 0,
+          current_price: paidAmount,
           mercadopago_payer_id: payment.payer?.id?.toString() || null,
           current_period_start: now.toISOString(),
           current_period_end: periodEnd.toISOString(),
+          coupon_code: normalizedCoupon,
+          discount_applied: discountApplied,
         })
+      }
+
+      // Incrementar contador de usos do cupom
+      if (normalizedCoupon) {
+        const { data: coupon } = await admin
+          .from('coupons')
+          .select('id, used_count')
+          .eq('code', normalizedCoupon)
+          .maybeSingle()
+
+        if (coupon) {
+          await admin
+            .from('coupons')
+            .update({ used_count: (coupon.used_count || 0) + 1, updated_at: now.toISOString() })
+            .eq('id', coupon.id)
+        }
       }
 
       console.log(`[MercadoPago Webhook] Pagamento aprovado para empresa ${companyId}, plano ${planId}`)

@@ -18,6 +18,8 @@ import {
   X,
   Package,
   MessageCircle,
+  Ticket,
+  RefreshCw,
 } from 'lucide-react'
 
 const sidebarItems = [
@@ -25,10 +27,12 @@ const sidebarItems = [
   { label: 'Empresas', href: '/admin/empresas', icon: Building2 },
   { label: 'Planos', href: '/admin/planos', icon: CreditCard },
   { label: 'Assinaturas', href: '/admin/assinaturas', icon: Receipt },
+  { label: 'Cupons', href: '/admin/cupons', icon: Ticket },
   { label: 'Contratos', href: '/admin/contratos', icon: ScrollText },
   { label: 'Vídeos', href: '/admin/videos', icon: PlayCircle },
   { label: 'Dados Demo', href: '/admin/demo-dados', icon: Package },
   { label: 'WhatsApp', href: '/admin/whatsapp', icon: MessageCircle },
+  { label: 'Reativação', href: '/admin/reativacao', icon: RefreshCw },
   { label: 'Banners', href: '/admin/banners', icon: Image },
   { label: 'Usuários', href: '/admin/usuarios', icon: Users },
 ]

@@ -752,6 +752,8 @@ export interface Database {
           current_period_start: string | null;
           current_period_end: string | null;
           cancelled_at: string | null;
+          coupon_code: string | null;
+          discount_applied: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -768,6 +770,8 @@ export interface Database {
           current_period_start?: string | null;
           current_period_end?: string | null;
           cancelled_at?: string | null;
+          coupon_code?: string | null;
+          discount_applied?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -784,6 +788,8 @@ export interface Database {
           current_period_start?: string | null;
           current_period_end?: string | null;
           cancelled_at?: string | null;
+          coupon_code?: string | null;
+          discount_applied?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1162,6 +1168,89 @@ export interface Database {
           },
         ];
       };
+      employees: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          phone: string;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          phone: string;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          phone?: string;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "employees_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      coupons: {
+        Row: {
+          id: string;
+          code: string;
+          discount_type: "percentage" | "fixed";
+          discount_value: number;
+          duration_months: number;
+          valid_from: string | null;
+          valid_until: string | null;
+          max_uses: number | null;
+          used_count: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          discount_type: "percentage" | "fixed";
+          discount_value: number;
+          duration_months?: number;
+          valid_from?: string | null;
+          valid_until?: string | null;
+          max_uses?: number | null;
+          used_count?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          discount_type?: "percentage" | "fixed";
+          discount_value?: number;
+          duration_months?: number;
+          valid_from?: string | null;
+          valid_until?: string | null;
+          max_uses?: number | null;
+          used_count?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       contract_templates: {
         Row: {
           id: string;
@@ -1259,3 +1348,5 @@ export type DemoDataLog = Tables<"demo_data_logs">;
 export type WhatsAppConfig = Tables<"whatsapp_config">;
 export type WhatsAppTemplate = Tables<"whatsapp_templates">;
 export type WhatsAppMessageLog = Tables<"whatsapp_message_log">;
+export type Employee = Tables<"employees">;
+export type Coupon = Tables<"coupons">;

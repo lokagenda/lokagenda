@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { getSubscription, getPlans, cancelSubscription } from '@/actions/subscriptions'
+import { validateCoupon } from '@/actions/coupons'
 import type { Plan, Subscription } from '@/types/database'
 import { isSubscriptionActive, getTrialDaysRemaining } from '@/lib/plans'
 
@@ -90,6 +91,15 @@ export default function AssinaturaPage() {
   const [cancelling, setCancelling] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [couponInput, setCouponInput] = useState('')
+  const [applyingCoupon, setApplyingCoupon] = useState(false)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string
+    discountType: string
+    discountValue: number
+    durationMonths: number
+  } | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -130,6 +140,56 @@ export default function AssinaturaPage() {
     }
   }, [loadData])
 
+  // Calcula o preco final de um total aplicando o cupom ativo.
+  const applyDiscountToTotal = (total: number): number => {
+    if (!appliedCoupon) return total
+    let final: number
+    if (appliedCoupon.discountType === 'percentage') {
+      final = total * (1 - appliedCoupon.discountValue / 100)
+    } else {
+      final = Math.max(0, total - appliedCoupon.discountValue)
+    }
+    return Math.round(final * 100) / 100
+  }
+
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim()
+    if (!code || !plan) return
+    setApplyingCoupon(true)
+    setCouponError(null)
+
+    try {
+      // Valida contra o preco mensal como referencia. O desconto real eh
+      // recalculado por ciclo no servidor (create-preference).
+      const referencePrice = buildCycleConfig(plan).monthly.totalPrice
+      const result = await validateCoupon(code, referencePrice)
+
+      if (!result.valid) {
+        setAppliedCoupon(null)
+        setCouponError(result.error || 'Cupom invalido')
+      } else {
+        setAppliedCoupon({
+          code: code.toUpperCase(),
+          discountType: result.discountType || 'percentage',
+          discountValue: result.discountValue ?? 0,
+          durationMonths: result.durationMonths ?? 1,
+        })
+        setCouponError(null)
+      }
+    } catch {
+      setAppliedCoupon(null)
+      setCouponError('Erro ao validar cupom. Tente novamente.')
+    } finally {
+      setApplyingCoupon(false)
+    }
+  }
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponInput('')
+    setCouponError(null)
+  }
+
   const handleSubscribe = async (cycle: BillingCycle) => {
     if (!plan) return
     setSubscribing(cycle)
@@ -156,6 +216,7 @@ export default function AssinaturaPage() {
           planId: plan.id,
           billingCycle: cycle,
           companyId,
+          couponCode: appliedCoupon?.code || undefined,
         }),
       })
 
@@ -393,6 +454,59 @@ export default function AssinaturaPage() {
             </div>
           </div>
 
+          {/* Cupom de desconto */}
+          <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Cupom de desconto
+            </label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                disabled={!!appliedCoupon}
+                placeholder="Digite o codigo do cupom"
+                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm uppercase placeholder:normal-case disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+              {appliedCoupon ? (
+                <button
+                  type="button"
+                  onClick={handleRemoveCoupon}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Remover
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  disabled={applyingCoupon || !couponInput.trim()}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {applyingCoupon && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Aplicar
+                </button>
+              )}
+            </div>
+            {couponError && (
+              <p className="mt-2 flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
+                <XCircle className="h-4 w-4 shrink-0" />
+                {couponError}
+              </p>
+            )}
+            {appliedCoupon && (
+              <p className="mt-2 flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+                <Check className="h-4 w-4 shrink-0" />
+                Cupom <strong>{appliedCoupon.code}</strong> aplicado:{' '}
+                {appliedCoupon.discountType === 'percentage'
+                  ? `${appliedCoupon.discountValue}% de desconto`
+                  : `${formatCurrency(appliedCoupon.discountValue)} de desconto`}
+                {appliedCoupon.durationMonths > 0 &&
+                  ` (por ${appliedCoupon.durationMonths} ${appliedCoupon.durationMonths === 1 ? 'mes' : 'meses'})`}
+              </p>
+            )}
+          </div>
+
           {/* 3 pricing columns */}
           <div className="grid gap-6 md:grid-cols-3">
             {(['monthly', 'semiannual', 'annual'] as BillingCycle[]).map((cycle) => {
@@ -445,6 +559,21 @@ export default function AssinaturaPage() {
                         <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-600 dark:text-green-400">
                           Economia de {config.savings}
                         </span>
+                      </div>
+                    )}
+                    {appliedCoupon && (
+                      <div className="mt-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2">
+                        <div className="flex items-center gap-2 text-xs text-zinc-500 line-through dark:text-zinc-400">
+                          {formatCurrency(config.totalPrice)}
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-bold text-green-700 dark:text-green-400">
+                            {formatCurrency(applyDiscountToTotal(config.totalPrice))}
+                          </span>
+                          <span className="text-xs text-green-700 dark:text-green-400">
+                            com cupom {appliedCoupon.code}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
