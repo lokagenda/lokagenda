@@ -239,6 +239,12 @@ export default function AssinaturaPage() {
         return
       }
 
+      // Cupom de 100%: assinatura ativada gratuitamente, sem passar pelo checkout
+      if (data.free && data.redirect) {
+        window.location.href = data.redirect
+        return
+      }
+
       const checkoutUrl = data.init_point || data.sandbox_init_point
       if (checkoutUrl) {
         window.location.href = checkoutUrl

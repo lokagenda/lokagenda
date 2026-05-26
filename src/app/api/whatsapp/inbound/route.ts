@@ -30,6 +30,9 @@ interface ZApiInboundPayload {
   fromMe?: boolean
   text?: { message?: string }
   message?: string
+  isGroup?: boolean
+  isStatusReply?: boolean
+  isNewsletter?: boolean
   // Outros campos da Z-API são ignorados.
 }
 
@@ -50,8 +53,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
-    // Ignorar mensagens enviadas por nós mesmos.
-    if (payload.fromMe === true) {
+    // Ignorar: mensagens nossas, grupos, status e newsletters (evita responder em grupo
+    // e evita loops de IA-com-IA).
+    if (payload.fromMe === true || payload.isGroup || payload.isStatusReply || payload.isNewsletter) {
       return NextResponse.json({ received: true })
     }
 
@@ -66,14 +70,29 @@ export async function POST(request: NextRequest) {
     const phone = normalizePhone(rawPhone)
     const admin = createAdminClient()
 
-    // 1. Tentar resolver a empresa via campaign_contact existente para esse telefone.
-    //    Comparamos pelo telefone normalizado e também pelo formato cru, por segurança.
+    // Anti-loop: se a IA já respondeu este contato nos últimos 8 segundos, ignora
+    // (evita conversas IA-com-IA e respostas duplicadas em rajada).
+    const { data: recentReply } = await admin
+      .from('ai_conversations')
+      .select('id')
+      .eq('contact_phone', phone)
+      .eq('role', 'assistant')
+      .gte('created_at', new Date(Date.now() - 8000).toISOString())
+      .limit(1)
+      .maybeSingle()
+
+    if (recentReply) {
+      return NextResponse.json({ received: true })
+    }
+
+    // 1. Tentar resolver a empresa via campaign_contact existente para esse telefone
+    //    (telefone já normalizado; comparamos apenas pelo valor normalizado).
     let companyId: string | null = null
 
     const { data: contact } = await admin
       .from('campaign_contacts')
       .select('id, company_id')
-      .or(`phone.eq.${phone},phone.eq.${rawPhone}`)
+      .eq('phone', phone)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle()

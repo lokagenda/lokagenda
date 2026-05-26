@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getPreferenceClient } from '@/lib/mercadopago'
 import { getPlanPrice, getCycleLabel } from '@/lib/plans'
 import { validateCoupon } from '@/actions/coupons'
@@ -65,6 +66,60 @@ export async function POST(request: NextRequest) {
         appliedCouponCode = couponCode.trim().toUpperCase()
       }
       // Cupom invalido: ignora silenciosamente e cobra o preco normal.
+    }
+
+    // Cupom de 100% (ou que zera o valor): MercadoPago rejeita unit_price <= 0.
+    // Ativamos a assinatura gratuitamente de forma direta e retornamos { free: true }.
+    if (price <= 0) {
+      const admin = createAdminClient()
+      const now = new Date()
+      const periodEnd = new Date(now)
+      if (billingCycle === 'monthly') periodEnd.setMonth(periodEnd.getMonth() + 1)
+      else if (billingCycle === 'semiannual') periodEnd.setMonth(periodEnd.getMonth() + 6)
+      else if (billingCycle === 'annual') periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+
+      const { data: existing } = await admin
+        .from('subscriptions')
+        .select('id')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const subData = {
+        plan_id: planId,
+        status: 'active' as const,
+        billing_cycle: billingCycle,
+        current_price: 0,
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+        coupon_code: appliedCouponCode,
+        discount_applied: basePrice,
+        updated_at: now.toISOString(),
+      }
+
+      if (existing) {
+        await admin.from('subscriptions').update(subData).eq('id', existing.id)
+      } else {
+        await admin.from('subscriptions').insert({ company_id: companyId, ...subData })
+      }
+
+      // Incrementar uso do cupom
+      if (appliedCouponCode) {
+        const { data: coupon } = await admin
+          .from('coupons')
+          .select('id, used_count')
+          .eq('code', appliedCouponCode)
+          .maybeSingle()
+        if (coupon) {
+          await admin
+            .from('coupons')
+            .update({ used_count: (coupon.used_count || 0) + 1, updated_at: now.toISOString() })
+            .eq('id', coupon.id)
+        }
+      }
+
+      return NextResponse.json({ free: true, redirect: '/dashboard/assinatura?status=success' })
     }
 
     const host = request.headers.get('host') || 'lokagenda-one.vercel.app'

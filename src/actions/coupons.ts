@@ -95,6 +95,15 @@ export async function updateCoupon(id: string, data: UpdateCouponData): Promise<
       updated_at: new Date().toISOString(),
     }
 
+    // Validar valor do desconto (mesma regra do create)
+    if (data.discount_value !== undefined) {
+      if (data.discount_value <= 0) return { error: 'O valor do desconto deve ser maior que zero' }
+      const tipo = data.discount_type
+      if (tipo === 'percentage' && data.discount_value > 100) {
+        return { error: 'Desconto percentual não pode passar de 100%' }
+      }
+    }
+
     if (data.code !== undefined) payload.code = data.code.trim().toUpperCase()
     if (data.discount_type !== undefined) payload.discount_type = data.discount_type
     if (data.discount_value !== undefined) payload.discount_value = data.discount_value
@@ -200,14 +209,14 @@ export async function validateCoupon(code: string, planPrice: number): Promise<V
     return { valid: false, error: 'Cupom esgotou o limite de usos' }
   }
 
-  // Calcular preco final
+  // Calcular preco final (clamp em 0 nos dois casos por seguranca)
   let finalPrice: number
   if (coupon.discount_type === 'percentage') {
     finalPrice = planPrice * (1 - coupon.discount_value / 100)
   } else {
-    finalPrice = Math.max(0, planPrice - coupon.discount_value)
+    finalPrice = planPrice - coupon.discount_value
   }
-  finalPrice = Math.round(finalPrice * 100) / 100
+  finalPrice = Math.max(0, Math.round(finalPrice * 100) / 100)
 
   return {
     valid: true,
