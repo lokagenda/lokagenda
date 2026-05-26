@@ -49,6 +49,19 @@ export async function createQuote(input: CreateQuoteInput) {
   const supabase = await createClient()
   const { userId, companyId } = await getCompanyId(supabase)
 
+  // Validate the event date is not within a blocked period (férias/folga)
+  const { data: blocked } = await supabase
+    .from('blocked_periods')
+    .select('id')
+    .eq('company_id', companyId)
+    .lte('start_date', input.event_date)
+    .gte('end_date', input.event_date)
+    .limit(1)
+
+  if (blocked && blocked.length > 0) {
+    return { error: 'Esta data está bloqueada na agenda (período de férias/folga). Escolha outra data.' }
+  }
+
   const subtotal = input.items.reduce((sum, item) => sum + item.subtotal, 0)
   const discount = input.discount || 0
   const freight = input.freight || 0

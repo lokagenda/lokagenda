@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CalendarClock, ChevronLeft, ChevronRight, Package } from 'lucide-react'
-import { getRentalsForMonth } from '@/actions/rentals'
+import { CalendarClock, ChevronLeft, ChevronRight, Package, Users } from 'lucide-react'
+import { getRentalsForMonth, getBlockedPeriodsForMonth } from '@/actions/rentals'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import {
@@ -24,6 +24,7 @@ import Image from 'next/image'
 type RentalItem = {
   product_name: string
   product_id: string | null
+  quantity: number
   products: { image_url: string | null } | null
 }
 
@@ -36,21 +37,37 @@ type CalendarRental = {
   rental_items: RentalItem[]
 }
 
+type BlockedPeriodRange = {
+  id: string
+  start_date: string
+  end_date: string
+  reason: string | null
+}
+
+type DetailFilter = 'customer' | 'product'
+
 export function DashboardCalendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [rentals, setRentals] = useState<CalendarRental[]>([])
+  const [blockedPeriods, setBlockedPeriods] = useState<BlockedPeriodRange[]>([])
   const [loading, setLoading] = useState(true)
+  const [detailFilter, setDetailFilter] = useState<DetailFilter>('customer')
 
   const fetchRentals = useCallback(async () => {
     setLoading(true)
     try {
       const year = currentMonth.getFullYear()
       const month = currentMonth.getMonth() + 1
-      const data = await getRentalsForMonth(year, month)
+      const [data, blocked] = await Promise.all([
+        getRentalsForMonth(year, month),
+        getBlockedPeriodsForMonth(year, month),
+      ])
       setRentals(data as CalendarRental[])
+      setBlockedPeriods(blocked as BlockedPeriodRange[])
     } catch {
       setRentals([])
+      setBlockedPeriods([])
     } finally {
       setLoading(false)
     }
@@ -70,10 +87,41 @@ export function DashboardCalendar() {
   // Rental dates set for quick lookup
   const rentalDateSet = new Set(rentals.map((r) => r.event_date))
 
-  // Rentals for selected date
-  const selectedRentals = selectedDate
-    ? rentals.filter((r) => r.event_date === selectedDate)
-    : []
+  // Returns true if a yyyy-MM-dd date falls within any blocked period
+  const isDateBlocked = (dateStr: string) =>
+    blockedPeriods.some((p) => dateStr >= p.start_date && dateStr <= p.end_date)
+
+  // Reason of the first matching blocked period (for the selected-day detail)
+  const blockedReasonFor = (dateStr: string) =>
+    blockedPeriods.find((p) => dateStr >= p.start_date && dateStr <= p.end_date)?.reason ?? null
+
+  // Rentals for selected date, sorted by customer name
+  const selectedRentals = (
+    selectedDate ? rentals.filter((r) => r.event_date === selectedDate) : []
+  )
+    .slice()
+    .sort((a, b) => a.customer_name.localeCompare(b.customer_name, 'pt-BR'))
+
+  // Products rented on the selected date, aggregated by product with quantities
+  const selectedProducts = (() => {
+    const map = new Map<string, { name: string; quantity: number; image_url: string | null }>()
+    for (const rental of selectedRentals) {
+      for (const item of rental.rental_items || []) {
+        const key = item.product_id || item.product_name
+        const existing = map.get(key)
+        if (existing) {
+          existing.quantity += item.quantity || 0
+        } else {
+          map.set(key, {
+            name: item.product_name,
+            quantity: item.quantity || 0,
+            image_url: item.products?.image_url ?? null,
+          })
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  })()
 
   const handlePrevMonth = () => {
     setCurrentMonth((m) => subMonths(m, 1))
@@ -177,6 +225,7 @@ export function DashboardCalendar() {
           {calendarDays.map(({ date, inMonth }, idx) => {
             const dateStr = format(date, 'yyyy-MM-dd')
             const hasRentals = rentalDateSet.has(dateStr)
+            const blocked = inMonth && isDateBlocked(dateStr)
             const isSelected = selectedDate === dateStr
             const todayDate = isToday(date)
 
@@ -185,19 +234,25 @@ export function DashboardCalendar() {
                 key={idx}
                 onClick={() => inMonth && handleDayClick(date)}
                 disabled={!inMonth}
+                title={blocked ? 'Período bloqueado' : undefined}
                 className={`
                   relative flex min-h-[40px] flex-col items-center justify-center rounded-lg py-1.5 text-sm transition-colors
                   ${!inMonth ? 'cursor-default text-zinc-300 dark:text-zinc-700' : 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800'}
                   ${isSelected && inMonth ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600' : ''}
+                  ${blocked && !isSelected ? 'bg-rose-50 text-rose-600 line-through hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20' : ''}
                   ${todayDate && inMonth && !isSelected ? 'font-bold ring-1 ring-blue-400 dark:ring-blue-500' : ''}
-                  ${inMonth && !isSelected && !todayDate ? 'text-zinc-900 dark:text-zinc-50' : ''}
+                  ${inMonth && !isSelected && !todayDate && !blocked ? 'text-zinc-900 dark:text-zinc-50' : ''}
                 `}
               >
                 <span>{date.getDate()}</span>
-                {hasRentals && inMonth && (
+                {(hasRentals || blocked) && inMonth && (
                   <span
                     className={`absolute bottom-0.5 h-1.5 w-1.5 rounded-full ${
-                      isSelected ? 'bg-white' : 'bg-blue-500 dark:bg-blue-400'
+                      isSelected
+                        ? 'bg-white'
+                        : blocked
+                          ? 'bg-rose-500 dark:bg-rose-400'
+                          : 'bg-blue-500 dark:bg-blue-400'
                     }`}
                   />
                 )}
@@ -217,14 +272,50 @@ export function DashboardCalendar() {
         {/* Selected day details */}
         {selectedDate && !loading && (
           <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-            <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              {format(new Date(selectedDate + 'T12:00:00'), "dd 'de' MMMM", { locale: ptBR })}
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                {format(new Date(selectedDate + 'T12:00:00'), "dd 'de' MMMM", { locale: ptBR })}
+              </p>
+              {/* Filter toggle: por cliente / por produto */}
+              <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+                <button
+                  onClick={() => setDetailFilter('customer')}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    detailFilter === 'customer'
+                      ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <Users className="h-3 w-3" />
+                  Por cliente
+                </button>
+                <button
+                  onClick={() => setDetailFilter('product')}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    detailFilter === 'product'
+                      ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-50'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <Package className="h-3 w-3" />
+                  Por produto
+                </button>
+              </div>
+            </div>
+
+            {/* Blocked period notice */}
+            {isDateBlocked(selectedDate) && (
+              <div className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                Período bloqueado na agenda
+                {blockedReasonFor(selectedDate) ? ` — ${blockedReasonFor(selectedDate)}` : ''}
+              </div>
+            )}
+
             {selectedRentals.length === 0 ? (
               <p className="py-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
                 Nenhuma locacao neste dia
               </p>
-            ) : (
+            ) : detailFilter === 'customer' ? (
               <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {selectedRentals.map((rental) => {
                   const imageUrl = getProductImage(rental)
@@ -260,6 +351,43 @@ export function DashboardCalendar() {
                     </Link>
                   )
                 })}
+              </div>
+            ) : selectedProducts.length === 0 ? (
+              <p className="py-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
+                Nenhum produto neste dia
+              </p>
+            ) : (
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {selectedProducts.map((product, i) => (
+                  <div
+                    key={i}
+                    className="-mx-2 flex items-center justify-between rounded-lg px-2 py-2.5"
+                  >
+                    <div className="flex items-center gap-3">
+                      {product.image_url ? (
+                        <div className="relative h-9 w-9 overflow-hidden rounded-lg">
+                          <Image
+                            src={product.image_url}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="36px"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                          <Package className="h-4 w-4" />
+                        </div>
+                      )}
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                        {product.name}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                      {product.quantity} un.
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </div>

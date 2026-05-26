@@ -35,6 +35,7 @@ export async function updateCompany(formData: FormData) {
   const city = formData.get('city') as string | null
   const state = formData.get('state') as string | null
   const zipCode = formData.get('zip_code') as string | null
+  const catalogEnabled = formData.get('catalog_enabled') === 'true'
   const logoFile = formData.get('logo') as File | null
 
   if (!name || name.trim() === '') {
@@ -79,6 +80,7 @@ export async function updateCompany(formData: FormData) {
     city: city?.trim() || null,
     state: state?.trim() || null,
     zip_code: zipCode?.trim() || null,
+    catalog_enabled: catalogEnabled,
     updated_at: new Date().toISOString(),
   }
 
@@ -96,6 +98,7 @@ export async function updateCompany(formData: FormData) {
   }
 
   revalidatePath('/dashboard/empresa')
+  revalidatePath('/catalogo', 'layout')
   return { success: true }
 }
 

@@ -3,11 +3,49 @@
 import { useState, useRef, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Trash2, ImageIcon, Loader2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Save,
+  Trash2,
+  ImageIcon,
+  Loader2,
+  TrendingUp,
+  History,
+  DollarSign,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
-import { updateProduct, deleteProduct } from '@/actions/products'
+import {
+  updateProduct,
+  deleteProduct,
+  getProductHistory,
+  type ProductHistory,
+  type ProductHistoryRental,
+} from '@/actions/products'
 import { createBrowserClient } from '@supabase/ssr'
 import { compressImage, replaceInputFile } from '@/lib/compress-image'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { formatCurrency, formatDate } from '@/lib/utils'
+
+const STATUS_LABELS: Record<ProductHistoryRental['status'], string> = {
+  confirmed: 'Confirmada',
+  delivered: 'Entregue',
+  returned: 'Devolvida',
+  cancelled: 'Cancelada',
+}
+
+const STATUS_VARIANTS: Record<
+  ProductHistoryRental['status'],
+  'default' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+> = {
+  confirmed: 'info',
+  delivered: 'warning',
+  returned: 'success',
+  cancelled: 'danger',
+}
 
 type Product = {
   id: string
@@ -35,6 +73,9 @@ export default function EditarProdutoPage({
   const [loadingData, setLoadingData] = useState(true)
   const [preview, setPreview] = useState<string | null>(null)
   const [trackStock, setTrackStock] = useState(true)
+  const [history, setHistory] = useState<ProductHistory | null>(null)
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  const [showAllPast, setShowAllPast] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -79,6 +120,25 @@ export default function EditarProdutoPage({
 
     fetchProduct()
   }, [id, router])
+
+  useEffect(() => {
+    let active = true
+    async function fetchHistory() {
+      setLoadingHistory(true)
+      try {
+        const data = await getProductHistory(id)
+        if (active) setHistory(data)
+      } catch {
+        if (active) setHistory(null)
+      } finally {
+        if (active) setLoadingHistory(false)
+      }
+    }
+    fetchHistory()
+    return () => {
+      active = false
+    }
+  }, [id])
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -387,6 +447,231 @@ export default function EditarProdutoPage({
           </button>
         </div>
       </form>
+
+      {/* Histórico e Desempenho */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <History className="h-5 w-5 text-zinc-500 dark:text-zinc-400" />
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Histórico e Desempenho
+          </h2>
+        </div>
+
+        {loadingHistory ? (
+          <Card>
+            <CardContent className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            </CardContent>
+          </Card>
+        ) : !history ? (
+          <Card>
+            <CardContent className="py-6 text-sm text-zinc-500 dark:text-zinc-400">
+              Não foi possível carregar o histórico deste produto.
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Cards de resumo */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Total já rendido */}
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <DollarSign className="h-4 w-4" />
+                    Total já rendido
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                    {formatCurrency(history.totalEarned)}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Vezes locado */}
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <Calendar className="h-4 w-4" />
+                    Vezes locado
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                    {history.timesRented}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Preço de custo */}
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <DollarSign className="h-4 w-4" />
+                    Preço de custo
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                    {history.costPrice != null ? formatCurrency(history.costPrice) : '—'}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* ROI */}
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <TrendingUp className="h-4 w-4" />
+                    ROI
+                  </div>
+                  {history.roi ? (
+                    <>
+                      <p
+                        className={`mt-2 text-2xl font-bold ${
+                          history.roi.profit >= 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}
+                      >
+                        {history.roi.multiplier.toFixed(1)}x
+                      </p>
+                      <p
+                        className={`mt-1 text-sm font-medium ${
+                          history.roi.profit >= 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}
+                      >
+                        {history.roi.profit >= 0 ? 'Lucro ' : 'Prejuízo '}
+                        {formatCurrency(history.roi.profit)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      Cadastre o preço de custo para ver o ROI.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Próximas locações */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  Próximas locações
+                  <span className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
+                    ({history.futureRentals.length})
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {history.futureRentals.length === 0 ? (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Nenhuma locação futura agendada para este produto.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {history.futureRentals.map((rental) => (
+                      <li key={rental.rentalId}>
+                        <Link
+                          href={`/dashboard/locacoes/${rental.rentalId}`}
+                          className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50 -mx-2 px-2 rounded-lg"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                              {rental.customerName}
+                            </p>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {formatDate(rental.eventDate)} · Qtd: {rental.quantity}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <Badge variant={STATUS_VARIANTS[rental.status]}>
+                              {STATUS_LABELS[rental.status]}
+                            </Badge>
+                            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                              {formatCurrency(rental.subtotal)}
+                            </span>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Locações anteriores */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <History className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+                  Locações anteriores
+                  <span className="text-sm font-normal text-zinc-400 dark:text-zinc-500">
+                    ({history.pastRentals.length})
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {history.pastRentals.length === 0 ? (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Este produto ainda não foi locado.
+                  </p>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                      {(showAllPast
+                        ? history.pastRentals
+                        : history.pastRentals.slice(0, 10)
+                      ).map((rental) => (
+                        <li key={rental.rentalId}>
+                          <Link
+                            href={`/dashboard/locacoes/${rental.rentalId}`}
+                            className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50 -mx-2 px-2 rounded-lg"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                                {rental.customerName}
+                              </p>
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                {formatDate(rental.eventDate)} · Qtd: {rental.quantity}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <Badge variant={STATUS_VARIANTS[rental.status]}>
+                                {STATUS_LABELS[rental.status]}
+                              </Badge>
+                              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                                {formatCurrency(rental.subtotal)}
+                              </span>
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    {history.pastRentals.length > 10 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllPast((v) => !v)}
+                        className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                      >
+                        {showAllPast ? (
+                          <>
+                            <ChevronUp className="h-4 w-4" />
+                            Ver menos
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4" />
+                            Ver todas ({history.pastRentals.length})
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </section>
     </div>
   )
 }

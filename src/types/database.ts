@@ -25,6 +25,7 @@ export interface Database {
           signature_url: string | null;
           reminder_days_before: number;
           reminder_auto_send: boolean;
+          catalog_enabled: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -43,6 +44,7 @@ export interface Database {
           signature_url?: string | null;
           reminder_days_before?: number;
           reminder_auto_send?: boolean;
+          catalog_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -61,6 +63,7 @@ export interface Database {
           signature_url?: string | null;
           reminder_days_before?: number;
           reminder_auto_send?: boolean;
+          catalog_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -1245,6 +1248,41 @@ export interface Database {
           },
         ];
       };
+      blocked_periods: {
+        Row: {
+          id: string;
+          company_id: string;
+          start_date: string;
+          end_date: string;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          start_date: string;
+          end_date: string;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          start_date?: string;
+          end_date?: string;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "blocked_periods_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       event_types: {
         Row: {
           id: string;
@@ -1458,3 +1496,4 @@ export type Employee = Tables<"employees">;
 export type Coupon = Tables<"coupons">;
 export type FinancialEntry = Tables<"financial_entries">;
 export type EventType = Tables<"event_types">;
+export type BlockedPeriod = Tables<"blocked_periods">;

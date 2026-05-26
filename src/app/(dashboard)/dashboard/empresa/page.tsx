@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
-import { Building2, Save, Upload, Image } from 'lucide-react'
+import { Building2, Save, Upload, Image, Globe, Copy, Check } from 'lucide-react'
 import { updateCompany } from '@/actions/company'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,10 @@ export default function EmpresaPage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [origin] = useState(() =>
+    typeof window !== 'undefined' ? window.location.origin : ''
+  )
 
   const [form, setForm] = useState({
     name: '',
@@ -25,6 +29,8 @@ export default function EmpresaPage() {
     state: '',
     zip_code: '',
     logo_url: '',
+    slug: '',
+    catalog_enabled: false,
   })
 
   useEffect(() => {
@@ -65,6 +71,8 @@ export default function EmpresaPage() {
           state: company.state || '',
           zip_code: company.zip_code || '',
           logo_url: company.logo_url || '',
+          slug: company.slug || '',
+          catalog_enabled: company.catalog_enabled ?? false,
         })
         if (company.logo_url) {
           setLogoPreview(company.logo_url)
@@ -83,6 +91,19 @@ export default function EmpresaPage() {
       return () => clearTimeout(timer)
     }
   }, [toast])
+
+  const catalogUrl = form.slug && origin ? `${origin}/catalogo/${form.slug}` : ''
+
+  async function handleCopyCatalogUrl() {
+    if (!catalogUrl) return
+    try {
+      await navigator.clipboard.writeText(catalogUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setToast({ type: 'error', message: 'Não foi possível copiar o link.' })
+    }
+  }
 
   async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -121,6 +142,7 @@ export default function EmpresaPage() {
     formData.set('city', form.city)
     formData.set('state', form.state)
     formData.set('zip_code', form.zip_code)
+    formData.set('catalog_enabled', form.catalog_enabled ? 'true' : 'false')
     if (logoFile) {
       formData.set('logo', logoFile)
     }
@@ -275,6 +297,77 @@ export default function EmpresaPage() {
               placeholder="00000-000"
             />
           </div>
+        </div>
+
+        {/* Catálogo Público */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-1 flex items-center gap-2">
+            <Globe className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Catálogo Público</h2>
+          </div>
+          <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
+            Publique seus produtos em uma página pública. Seus clientes podem montar um
+            carrinho e enviar um pedido de orçamento sem precisar de login.
+          </p>
+
+          {/* Toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div>
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                Ativar catálogo público
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {form.catalog_enabled ? 'Seu catálogo está visível.' : 'Seu catálogo está oculto.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.catalog_enabled}
+              onClick={() =>
+                setForm((prev) => ({ ...prev, catalog_enabled: !prev.catalog_enabled }))
+              }
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
+                form.catalog_enabled ? 'bg-blue-700 dark:bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  form.catalog_enabled ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Shareable link */}
+          {form.catalog_enabled && catalogUrl && (
+            <div className="mt-4">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Link do catálogo
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={catalogUrl}
+                  onFocus={(e) => e.target.select()}
+                  className="block w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCopyCatalogUrl}
+                  className="shrink-0"
+                >
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? 'Copiado' : 'Copiar'}
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Compartilhe este link com seus clientes. Lembre-se de salvar as alterações abaixo.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Save */}

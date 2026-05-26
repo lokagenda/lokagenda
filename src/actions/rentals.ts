@@ -52,6 +52,19 @@ export async function createRental(input: CreateRentalInput) {
   const supabase = await createClient()
   const { userId, companyId } = await getCompanyId(supabase)
 
+  // Validate the event date is not within a blocked period (férias/folga)
+  const { data: blocked } = await supabase
+    .from('blocked_periods')
+    .select('id')
+    .eq('company_id', companyId)
+    .lte('start_date', input.event_date)
+    .gte('end_date', input.event_date)
+    .limit(1)
+
+  if (blocked && blocked.length > 0) {
+    return { error: 'Esta data está bloqueada na agenda (período de férias/folga). Escolha outra data.' }
+  }
+
   // Validate date-based stock availability before creating the rental
   for (const item of input.items) {
     if (item.product_id) {
@@ -298,12 +311,33 @@ export async function getRentalsForMonth(year: number, month: number) {
 
   const { data } = await supabase
     .from('rentals')
-    .select('id, customer_name, event_date, total, status, rental_items(product_name, product_id, products:product_id(image_url))')
+    .select('id, customer_name, event_date, total, status, rental_items(product_name, product_id, quantity, products:product_id(image_url))')
     .eq('company_id', companyId)
     .in('status', ['confirmed', 'delivered'])
     .gte('event_date', startDate)
     .lte('event_date', endDate)
     .order('event_date')
+
+  return data || []
+}
+
+// Returns blocked periods that overlap the given month (for calendar markers)
+export async function getBlockedPeriodsForMonth(year: number, month: number) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  // Period overlaps the month if it starts on/before the month end and ends on/after the month start
+  const { data } = await supabase
+    .from('blocked_periods')
+    .select('id, start_date, end_date, reason')
+    .eq('company_id', companyId)
+    .lte('start_date', endDate)
+    .gte('end_date', startDate)
+    .order('start_date')
 
   return data || []
 }
