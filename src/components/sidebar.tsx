@@ -19,6 +19,8 @@ import {
   Building2,
   CreditCard,
   Megaphone,
+  Rocket,
+  UsersRound,
   HelpCircle,
   LogOut,
   X,
@@ -48,6 +50,8 @@ const navigation = [
   { name: 'Empresa', href: '/dashboard/empresa', icon: Building2 },
   { name: 'Assinatura', href: '/dashboard/assinatura', icon: CreditCard },
   { name: 'Banners', href: '/dashboard/banners', icon: Megaphone },
+  { name: 'Marketing', href: '/dashboard/marketing', icon: Rocket },
+  { name: 'Grupos', href: '/dashboard/grupos', icon: UsersRound },
   { name: 'Ajuda', href: '/dashboard/ajuda', icon: HelpCircle },
 ]
 

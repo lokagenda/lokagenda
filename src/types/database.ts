@@ -26,6 +26,9 @@ export interface Database {
           reminder_days_before: number;
           reminder_auto_send: boolean;
           catalog_enabled: boolean;
+          ai_agent_enabled: boolean;
+          ai_agent_prompt: string | null;
+          zapi_client_token: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -45,6 +48,9 @@ export interface Database {
           reminder_days_before?: number;
           reminder_auto_send?: boolean;
           catalog_enabled?: boolean;
+          ai_agent_enabled?: boolean;
+          ai_agent_prompt?: string | null;
+          zapi_client_token?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -64,6 +70,9 @@ export interface Database {
           reminder_days_before?: number;
           reminder_auto_send?: boolean;
           catalog_enabled?: boolean;
+          ai_agent_enabled?: boolean;
+          ai_agent_prompt?: string | null;
+          zapi_client_token?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1164,6 +1173,7 @@ export interface Database {
           status: "pending" | "sent" | "failed" | "delivered";
           provider_response: Json | null;
           error_message: string | null;
+          campaign_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -1175,6 +1185,7 @@ export interface Database {
           status?: "pending" | "sent" | "failed" | "delivered";
           provider_response?: Json | null;
           error_message?: string | null;
+          campaign_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -1186,6 +1197,7 @@ export interface Database {
           status?: "pending" | "sent" | "failed" | "delivered";
           provider_response?: Json | null;
           error_message?: string | null;
+          campaign_id?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -1247,6 +1259,175 @@ export interface Database {
             referencedColumns: ["id"];
           },
         ];
+      };
+      campaign_contacts: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string | null;
+          phone: string;
+          tags: string | null;
+          source: string | null;
+          status: "lead" | "contacted" | "qualified" | "converted" | "lost";
+          last_message_at: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name?: string | null;
+          phone: string;
+          tags?: string | null;
+          source?: string | null;
+          status?: "lead" | "contacted" | "qualified" | "converted" | "lost";
+          last_message_at?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string | null;
+          phone?: string;
+          tags?: string | null;
+          source?: string | null;
+          status?: "lead" | "contacted" | "qualified" | "converted" | "lost";
+          last_message_at?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_contacts_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaigns: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          message_template: string;
+          ai_enabled: boolean;
+          ai_prompt: string | null;
+          status: "draft" | "running" | "paused" | "completed";
+          daily_limit: number;
+          sent_count: number;
+          total_targets: number;
+          last_sent_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          message_template: string;
+          ai_enabled?: boolean;
+          ai_prompt?: string | null;
+          status?: "draft" | "running" | "paused" | "completed";
+          daily_limit?: number;
+          sent_count?: number;
+          total_targets?: number;
+          last_sent_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          message_template?: string;
+          ai_enabled?: boolean;
+          ai_prompt?: string | null;
+          status?: "draft" | "running" | "paused" | "completed";
+          daily_limit?: number;
+          sent_count?: number;
+          total_targets?: number;
+          last_sent_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_queue: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          company_id: string;
+          contact_id: string | null;
+          phone: string;
+          status: "pending" | "sent" | "failed" | "skipped";
+          sent_at: string | null;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          campaign_id: string;
+          company_id: string;
+          contact_id?: string | null;
+          phone: string;
+          status?: "pending" | "sent" | "failed" | "skipped";
+          sent_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          campaign_id?: string;
+          company_id?: string;
+          contact_id?: string | null;
+          phone?: string;
+          status?: "pending" | "sent" | "failed" | "skipped";
+          sent_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_conversations: {
+        Row: {
+          id: string;
+          company_id: string;
+          contact_phone: string;
+          role: "user" | "assistant";
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          contact_phone: string;
+          role: "user" | "assistant";
+          content: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          contact_phone?: string;
+          role?: "user" | "assistant";
+          content?: string;
+          created_at?: string;
+        };
+        Relationships: [];
       };
       blocked_periods: {
         Row: {
@@ -1497,3 +1678,7 @@ export type Coupon = Tables<"coupons">;
 export type FinancialEntry = Tables<"financial_entries">;
 export type EventType = Tables<"event_types">;
 export type BlockedPeriod = Tables<"blocked_periods">;
+export type CampaignContact = Tables<"campaign_contacts">;
+export type Campaign = Tables<"campaigns">;
+export type CampaignQueue = Tables<"campaign_queue">;
+export type AiConversation = Tables<"ai_conversations">;

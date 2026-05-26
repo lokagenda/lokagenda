@@ -36,6 +36,8 @@ export async function updateCompany(formData: FormData) {
   const state = formData.get('state') as string | null
   const zipCode = formData.get('zip_code') as string | null
   const catalogEnabled = formData.get('catalog_enabled') === 'true'
+  const aiAgentEnabled = formData.get('ai_agent_enabled') === 'true'
+  const aiAgentPrompt = formData.get('ai_agent_prompt') as string | null
   const logoFile = formData.get('logo') as File | null
 
   if (!name || name.trim() === '') {
@@ -81,6 +83,8 @@ export async function updateCompany(formData: FormData) {
     state: state?.trim() || null,
     zip_code: zipCode?.trim() || null,
     catalog_enabled: catalogEnabled,
+    ai_agent_enabled: aiAgentEnabled,
+    ai_agent_prompt: aiAgentPrompt?.trim() || null,
     updated_at: new Date().toISOString(),
   }
 

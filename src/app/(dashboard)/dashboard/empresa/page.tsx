@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
-import { Building2, Save, Upload, Image, Globe, Copy, Check } from 'lucide-react'
+import { Building2, Save, Upload, Image, Globe, Copy, Check, Bot } from 'lucide-react'
 import { updateCompany } from '@/actions/company'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,8 @@ export default function EmpresaPage() {
     logo_url: '',
     slug: '',
     catalog_enabled: false,
+    ai_agent_enabled: false,
+    ai_agent_prompt: '',
   })
 
   useEffect(() => {
@@ -73,6 +75,8 @@ export default function EmpresaPage() {
           logo_url: company.logo_url || '',
           slug: company.slug || '',
           catalog_enabled: company.catalog_enabled ?? false,
+          ai_agent_enabled: company.ai_agent_enabled ?? false,
+          ai_agent_prompt: company.ai_agent_prompt || '',
         })
         if (company.logo_url) {
           setLogoPreview(company.logo_url)
@@ -143,6 +147,8 @@ export default function EmpresaPage() {
     formData.set('state', form.state)
     formData.set('zip_code', form.zip_code)
     formData.set('catalog_enabled', form.catalog_enabled ? 'true' : 'false')
+    formData.set('ai_agent_enabled', form.ai_agent_enabled ? 'true' : 'false')
+    formData.set('ai_agent_prompt', form.ai_agent_prompt)
     if (logoFile) {
       formData.set('logo', logoFile)
     }
@@ -368,6 +374,75 @@ export default function EmpresaPage() {
               </p>
             </div>
           )}
+        </div>
+
+        {/* Atendente IA (WhatsApp) */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-1 flex items-center gap-2">
+            <Bot className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Atendente IA (WhatsApp)</h2>
+          </div>
+          <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
+            Quando ativado, uma inteligência artificial responde automaticamente às
+            mensagens recebidas no WhatsApp, qualificando os contatos com base nas
+            informações da sua empresa e nos seus produtos.
+          </p>
+
+          {/* Toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div>
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                Ativar atendente IA
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {form.ai_agent_enabled
+                  ? 'As respostas no WhatsApp são automáticas.'
+                  : 'As respostas automáticas estão desativadas.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.ai_agent_enabled}
+              onClick={() =>
+                setForm((prev) => ({ ...prev, ai_agent_enabled: !prev.ai_agent_enabled }))
+              }
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
+                form.ai_agent_enabled ? 'bg-blue-700 dark:bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  form.ai_agent_enabled ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Custom prompt */}
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Instruções personalizadas para a IA
+            </label>
+            <textarea
+              value={form.ai_agent_prompt}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, ai_agent_prompt: e.target.value }))
+              }
+              rows={5}
+              placeholder="Ex.: Atendemos a região de Campinas. Nosso horário é das 8h às 18h. Sempre ofereça o combo de aniversário quando o cliente mencionar festa infantil."
+              className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            />
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              Essas instruções complementam o comportamento padrão da IA. Os produtos
+              ativos do seu catálogo são enviados automaticamente como contexto.
+            </p>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
+            As respostas são automáticas quando o atendente está ativado. Lembre-se de
+            salvar as alterações abaixo.
+          </div>
         </div>
 
         {/* Save */}
