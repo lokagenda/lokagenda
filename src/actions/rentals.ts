@@ -26,6 +26,8 @@ interface CreateRentalInput {
   event_zip_code?: string | null
   delivery_time?: string | null
   pickup_time?: string | null
+  payment_date_signal?: string | null
+  payment_date_total?: string | null
   notes?: string | null
   discount?: number
   freight?: number
@@ -92,6 +94,8 @@ export async function createRental(input: CreateRentalInput) {
       event_zip_code: input.event_zip_code || null,
       delivery_time: input.delivery_time || null,
       pickup_time: input.pickup_time || null,
+      payment_date_signal: input.payment_date_signal || null,
+      payment_date_total: input.payment_date_total || null,
       notes: input.notes || null,
       discount,
       freight,
@@ -317,6 +321,8 @@ interface UpdateRentalInput {
   event_zip_code?: string | null
   delivery_time?: string | null
   pickup_time?: string | null
+  payment_date_signal?: string | null
+  payment_date_total?: string | null
   notes?: string | null
   discount?: number
   freight?: number
@@ -415,6 +421,8 @@ export async function updateRental(id: string, data: UpdateRentalInput) {
       event_zip_code: data.event_zip_code || null,
       delivery_time: data.delivery_time || null,
       pickup_time: data.pickup_time || null,
+      payment_date_signal: data.payment_date_signal || null,
+      payment_date_total: data.payment_date_total || null,
       notes: data.notes || null,
       discount,
       freight,

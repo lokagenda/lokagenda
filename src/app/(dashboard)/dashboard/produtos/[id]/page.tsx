@@ -15,6 +15,8 @@ type Product = {
   description: string | null
   price: number
   stock: number
+  track_stock: boolean | null
+  cost_price: number | null
   status: string | null
   image_url: string | null
 }
@@ -32,6 +34,7 @@ export default function EditarProdutoPage({
   const [product, setProduct] = useState<Product | null>(null)
   const [loadingData, setLoadingData] = useState(true)
   const [preview, setPreview] = useState<string | null>(null)
+  const [trackStock, setTrackStock] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -67,6 +70,7 @@ export default function EditarProdutoPage({
       }
 
       setProduct(data)
+      setTrackStock(data.track_stock !== false)
       if (data.image_url) {
         setPreview(data.image_url)
       }
@@ -258,21 +262,57 @@ export default function EditarProdutoPage({
             />
           </div>
 
-          {/* Quantidade */}
+          {/* Preço de custo */}
           <div>
-            <label htmlFor="stock" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              Quantidade em estoque
+            <label htmlFor="cost_price" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Preço de custo (R$)
             </label>
             <input
               type="number"
-              id="stock"
-              name="stock"
+              id="cost_price"
+              name="cost_price"
               min="0"
-              step="1"
-              defaultValue={product.stock}
+              step="0.01"
+              placeholder="0,00"
+              defaultValue={product.cost_price ?? ''}
               className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
+
+          {/* Controlar estoque */}
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                name="track_stock"
+                checked={trackStock}
+                onChange={(e) => setTrackStock(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+              />
+              Controlar estoque
+            </label>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+              Desmarque para produtos sem limite de quantidade (ex: pipoca, algodão doce).
+            </p>
+          </div>
+
+          {/* Quantidade */}
+          {trackStock && (
+            <div>
+              <label htmlFor="stock" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Quantidade em estoque
+              </label>
+              <input
+                type="number"
+                id="stock"
+                name="stock"
+                min="0"
+                step="1"
+                defaultValue={product.stock}
+                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          )}
 
           {/* Status */}
           <div>

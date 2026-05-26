@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createCustomer } from '@/actions/customers'
+import { listEventTypes } from '@/actions/lembretes'
 import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -30,6 +31,13 @@ export default function NovoClientePage() {
   const [loading, setLoading] = useState(false)
   const [phone, setPhone] = useState('')
   const [cpf, setCpf] = useState('')
+  const [eventTypes, setEventTypes] = useState<string[]>([])
+
+  useEffect(() => {
+    listEventTypes()
+      .then((types) => setEventTypes(types.map((t) => t.name)))
+      .catch(() => setEventTypes([]))
+  }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -130,6 +138,39 @@ export default function NovoClientePage() {
               onChange={(e) => setCpf(formatCPF(e.target.value))}
               className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               placeholder="000.000.000-00"
+            />
+          </div>
+
+          {/* Tipo de evento */}
+          <div>
+            <label htmlFor="event_type" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Tipo de evento
+            </label>
+            <input
+              type="text"
+              id="event_type"
+              name="event_type"
+              list="event-type-options"
+              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Ex: Aniversário, Festa junina..."
+            />
+            <datalist id="event-type-options">
+              {eventTypes.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+          </div>
+
+          {/* Aniversário */}
+          <div>
+            <label htmlFor="birthday" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Aniversário
+            </label>
+            <input
+              type="date"
+              id="birthday"
+              name="birthday"
+              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 

@@ -83,6 +83,7 @@ export default function LocacaoDetailPage({
   const [signatureCompany, setSignatureCompany] = useState<string | null>(null)
   const [signatureSaving, setSignatureSaving] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [reciboLoading, setReciboLoading] = useState(false)
   const [whatsappLoading, setWhatsappLoading] = useState(false)
   const [company, setCompany] = useState<Company | null>(null)
   const pdfContainerRef = useRef<HTMLDivElement>(null)
@@ -443,6 +444,163 @@ export default function LocacaoDetailPage({
       toast.error('Erro ao exportar PDF.')
     } finally {
       setPdfLoading(false)
+      if (pdfContainerRef.current) {
+        pdfContainerRef.current.innerHTML = ''
+      }
+    }
+  }
+
+  async function handleEmitirRecibo() {
+    if (!rental) return
+
+    if (payments.length === 0) {
+      toast.error('Nenhum pagamento registrado para emitir recibo.')
+      return
+    }
+
+    setReciboLoading(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const { jsPDF } = await import('jspdf')
+
+      const container = pdfContainerRef.current
+      if (!container) return
+
+      const methodLabel = (m: string | null) =>
+        m === 'pix' ? 'PIX'
+          : m === 'cartao' ? 'Cartão'
+          : m === 'dinheiro' ? 'Dinheiro'
+          : m === 'transferencia' ? 'Transferência'
+          : (m || '-')
+
+      const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+
+      const logoHtml = company?.logo_url
+        ? `<img src="${company.logo_url}" style="max-height: 70px; display: block; margin: 0 auto 8px;" />`
+        : ''
+
+      const paymentRows = payments
+        .map(
+          (p) => `
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #eee;">${formatDate(p.paid_at)}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eee;">${methodLabel(p.method)}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrency(p.amount)}</td>
+            </tr>`
+        )
+        .join('')
+
+      const reciboHtml = `
+        <div style="text-align: center; margin-bottom: 24px;">
+          ${logoHtml}
+          <h1 style="font-size: 22px; margin: 0;">${company?.name || 'Empresa'}</h1>
+          ${company?.document ? `<p style="font-size: 13px; color: #666; margin: 4px 0 0;">CNPJ/CPF: ${company.document}</p>` : ''}
+          ${company?.phone ? `<p style="font-size: 13px; color: #666; margin: 2px 0 0;">Tel: ${company.phone}</p>` : ''}
+        </div>
+
+        <h2 style="text-align: center; font-size: 18px; border-top: 2px solid #333; border-bottom: 2px solid #333; padding: 8px 0; margin-bottom: 24px;">RECIBO DE PAGAMENTO</h2>
+
+        <p style="line-height: 1.8; margin-bottom: 20px;">
+          Recebemos de <strong>${rental.customer_name}</strong> a importância de <strong>${formatCurrency(totalPaid)}</strong>,
+          referente à locação para o evento realizado em <strong>${formatDate(rental.event_date)}</strong>.
+        </p>
+
+        <h3 style="font-size: 15px; margin-bottom: 8px;">Pagamentos</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+          <thead>
+            <tr style="background: #f4f4f5;">
+              <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Data</th>
+              <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Forma de Pagamento</th>
+              <th style="padding: 8px; text-align: right; border-bottom: 2px solid #ddd;">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paymentRows}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2" style="padding: 10px 8px; text-align: right; font-weight: bold; border-top: 2px solid #333;">Total Pago</td>
+              <td style="padding: 10px 8px; text-align: right; font-weight: bold; border-top: 2px solid #333;">${formatCurrency(totalPaid)}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <p style="margin-top: 40px;">Data: ${formatDate(new Date())}</p>
+
+        <div style="margin-top: 60px; text-align: center; width: 60%; margin-left: auto; margin-right: auto;">
+          <div style="border-top: 1px solid #333; padding-top: 10px;">
+            <strong>${company?.name || 'Empresa'}</strong>
+          </div>
+        </div>
+      `
+
+      container.innerHTML = ''
+      container.style.width = '794px'
+      container.style.padding = '40px'
+      container.style.background = 'white'
+      container.style.color = 'black'
+      container.style.fontFamily = 'Arial, sans-serif'
+      container.style.fontSize = '14px'
+      container.style.lineHeight = '1.6'
+      container.style.position = 'absolute'
+      container.style.left = '-9999px'
+      container.style.top = '0'
+      container.innerHTML = reciboHtml
+
+      const images = container.querySelectorAll('img')
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve()
+              } else {
+                img.onload = () => resolve()
+                img.onerror = () => resolve()
+              }
+            })
+        )
+      )
+
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      })
+
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pdfWidth
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width
+
+      let heightLeft = imgHeight
+      let position = 0
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pdfHeight
+
+      while (heightLeft > 0) {
+        position = position - pdfHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pdfHeight
+      }
+
+      const clientName = rental.customer_name
+        .normalize('NFD')
+        .replace(/[0300-036f]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, '_')
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      pdf.save(`recibo_${clientName}_${dateStr}.pdf`)
+
+      toast.success('Recibo gerado com sucesso!')
+    } catch (err) {
+      console.error('Erro ao emitir recibo:', err)
+      toast.error('Erro ao emitir recibo.')
+    } finally {
+      setReciboLoading(false)
       if (pdfContainerRef.current) {
         pdfContainerRef.current.innerHTML = ''
       }
@@ -947,7 +1105,22 @@ export default function LocacaoDetailPage({
           {/* Histórico de pagamentos */}
           {payments.length > 0 && (
             <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-              <h4 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">Histórico de Pagamentos</h4>
+              <div className="mb-3 flex items-center justify-between">
+                <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Histórico de Pagamentos</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEmitirRecibo}
+                  disabled={reciboLoading}
+                >
+                  {reciboLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Emitir Recibo
+                </Button>
+              </div>
               <div className="space-y-2">
                 {payments.map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/50">

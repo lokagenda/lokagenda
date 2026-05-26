@@ -13,6 +13,8 @@ import {
   DollarSign,
   CircleDollarSign,
   Plus,
+  Bell,
+  Cake,
 } from 'lucide-react'
 import Link from 'next/link'
 import { BannerCarousel } from '@/components/banner-carousel'
@@ -36,6 +38,11 @@ export default async function DashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
+  // Reminder window (rentals + birthdays X days ahead)
+  const toDateOnly = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const todayStr = toDateOnly(now)
+
   // Previous month range for comparison
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]
   const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]
@@ -48,6 +55,7 @@ export default async function DashboardPage() {
     monthRentals,
     prevMonthRentals,
     pendingQuotes,
+    companyReminderConfig,
   ] = await Promise.all([
     // Row 1 stats
     supabase.from('products').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
@@ -60,7 +68,78 @@ export default async function DashboardPage() {
     supabase.from('rentals').select('total').eq('company_id', companyId).gte('event_date', prevMonthStart).lte('event_date', prevMonthEnd),
     // Row 3 - pending quotes
     supabase.from('quotes').select('id, customer_name, created_at, total').eq('company_id', companyId).eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
+    // Reminder config
+    supabase.from('companies').select('reminder_days_before').eq('id', companyId).single(),
   ])
+
+  // Upcoming reminders (rentals event_date + customer birthdays within window)
+  const reminderDaysBefore = companyReminderConfig.data?.reminder_days_before ?? 30
+  const reminderEnd = new Date(now)
+  reminderEnd.setDate(reminderEnd.getDate() + reminderDaysBefore)
+  const reminderEndStr = toDateOnly(reminderEnd)
+
+  const daysBetween = (fromStr: string, toStr: string) =>
+    Math.round((new Date(toStr + 'T00:00:00').getTime() - new Date(fromStr + 'T00:00:00').getTime()) / 86400000)
+
+  const [upcomingRentalsRes, birthdayCustomersRes] = await Promise.all([
+    supabase
+      .from('rentals')
+      .select('id, customer_name, event_type, event_date')
+      .eq('company_id', companyId)
+      .neq('status', 'cancelled')
+      .gte('event_date', todayStr)
+      .lte('event_date', reminderEndStr),
+    supabase
+      .from('customers')
+      .select('id, name, event_type, birthday')
+      .eq('company_id', companyId)
+      .not('birthday', 'is', null),
+  ])
+
+  type ReminderRow = {
+    id: string
+    customerName: string
+    eventType: string | null
+    date: string
+    type: 'locacao' | 'aniversario'
+    daysRemaining: number
+  }
+
+  const reminders: ReminderRow[] = []
+
+  for (const r of upcomingRentalsRes.data ?? []) {
+    if (!r.event_date) continue
+    reminders.push({
+      id: `rental-${r.id}`,
+      customerName: r.customer_name,
+      eventType: r.event_type ?? null,
+      date: r.event_date,
+      type: 'locacao',
+      daysRemaining: daysBetween(todayStr, r.event_date),
+    })
+  }
+
+  for (const c of birthdayCustomersRes.data ?? []) {
+    if (!c.birthday) continue
+    const [, month, day] = c.birthday.split('-')
+    const year = now.getFullYear()
+    let occurrence = `${year}-${month}-${day}`
+    if (daysBetween(todayStr, occurrence) < 0) occurrence = `${year + 1}-${month}-${day}`
+    const remaining = daysBetween(todayStr, occurrence)
+    if (remaining >= 0 && remaining <= reminderDaysBefore) {
+      reminders.push({
+        id: `birthday-${c.id}`,
+        customerName: c.name,
+        eventType: c.event_type ?? 'Aniversário',
+        date: occurrence,
+        type: 'aniversario',
+        daysRemaining: remaining,
+      })
+    }
+  }
+
+  reminders.sort((a, b) => a.date.localeCompare(b.date))
+  const upcomingReminders = reminders.slice(0, 5)
 
   // Row 1 stats data
   const stats = [
@@ -377,6 +456,73 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Próximos Lembretes */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <CardTitle className="text-base">Próximos Lembretes</CardTitle>
+            </div>
+            <Link
+              href="/dashboard/lembretes"
+              className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Ver todos
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {upcomingReminders.length === 0 ? (
+            <EmptyState
+              icon={<Bell className="h-6 w-6" />}
+              title="Nenhum lembrete próximo"
+              description="Eventos e aniversários nos próximos dias aparecerão aqui."
+            />
+          ) : (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {upcomingReminders.map((reminder) => {
+                const isBirthday = reminder.type === 'aniversario'
+                return (
+                  <div
+                    key={reminder.id}
+                    className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                          isBirthday
+                            ? 'bg-pink-50 text-pink-600 dark:bg-pink-500/10 dark:text-pink-400'
+                            : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'
+                        }`}
+                      >
+                        {isBirthday ? <Cake className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                          {reminder.customerName}
+                        </p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {reminder.eventType || (isBirthday ? 'Aniversário' : 'Evento')} • {formatDate(reminder.date)}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                      {reminder.daysRemaining === 0
+                        ? 'Hoje'
+                        : reminder.daysRemaining === 1
+                          ? 'Amanhã'
+                          : `${reminder.daysRemaining} dias`}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

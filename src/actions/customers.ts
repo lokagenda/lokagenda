@@ -33,6 +33,8 @@ export async function createCustomer(formData: FormData) {
   const email = formData.get('email') as string | null
   const document = formData.get('document') as string | null
   const address = formData.get('address') as string | null
+  const eventType = formData.get('event_type') as string | null
+  const birthday = formData.get('birthday') as string | null
 
   if (!name || name.trim() === '') {
     throw new Error('Nome é obrigatório')
@@ -45,6 +47,8 @@ export async function createCustomer(formData: FormData) {
     email: email?.trim() || null,
     document: document?.trim() || null,
     address: address?.trim() || null,
+    event_type: eventType?.trim() || null,
+    birthday: birthday?.trim() || null,
   })
 
   if (error) {
@@ -63,6 +67,8 @@ export async function updateCustomer(id: string, formData: FormData) {
   const email = formData.get('email') as string | null
   const document = formData.get('document') as string | null
   const address = formData.get('address') as string | null
+  const eventType = formData.get('event_type') as string | null
+  const birthday = formData.get('birthday') as string | null
 
   if (!name || name.trim() === '') {
     throw new Error('Nome é obrigatório')
@@ -76,6 +82,8 @@ export async function updateCustomer(id: string, formData: FormData) {
       email: email?.trim() || null,
       document: document?.trim() || null,
       address: address?.trim() || null,
+      event_type: eventType?.trim() || null,
+      birthday: birthday?.trim() || null,
     })
     .eq('id', id)
     .eq('company_id', companyId)

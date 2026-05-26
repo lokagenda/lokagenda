@@ -200,6 +200,8 @@ export async function generateContract(rentalId: string) {
     data_retirada: (rental as any).event_end_date ? formatDate((rental as any).event_end_date) : (rental.event_date ? formatDate(rental.event_date) : '-'),
     horario_entrega: rental.delivery_time || '-',
     horario_retirada: rental.pickup_time || '-',
+    data_pagamento_sinal: (rental as any).payment_date_signal ? formatDate((rental as any).payment_date_signal) : '-',
+    data_pagamento_total: (rental as any).payment_date_total ? formatDate((rental as any).payment_date_total) : '-',
     itens_locacao: itemsHtml,
     valor_total: formatCurrency(rental.total),
     valor_desconto: formatCurrency(rental.discount),

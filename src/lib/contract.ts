@@ -113,6 +113,8 @@ export function getSampleData(): Record<string, string> {
     valor_pago: 'R$ 200,00',
     valor_restante: 'R$ 330,00',
     status_pagamento: 'Parcial',
+    data_pagamento_sinal: '20/03/2026',
+    data_pagamento_total: '25/03/2026',
     logo_empresa: '',
     nome_empresa: 'Festas Divertidas LTDA',
     telefone_empresa: '(11) 3333-4444',

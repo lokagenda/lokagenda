@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendTemplateMessage } from '@/lib/whatsapp-api/sender'
 
 export async function GET(request: NextRequest) {
   // Verify authorization
+  const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = createAdminClient()
 
-  // Get all companies
-  const { data: companies } = await admin.from('companies').select('id')
+  // Get all companies (with reminder config)
+  const { data: companies } = await admin
+    .from('companies')
+    .select('id, reminder_days_before, reminder_auto_send')
   if (!companies || companies.length === 0) {
     return NextResponse.json({ success: true, message: 'No companies found' })
   }
@@ -92,6 +96,65 @@ export async function GET(request: NextRequest) {
             read: false,
           })
           created++
+        }
+      }
+    }
+
+    // 3. Event reminders: rentals with event_date = today + reminder_days_before, confirmed
+    const daysBefore = company.reminder_days_before ?? 30
+    const reminderDate = new Date(today)
+    reminderDate.setDate(reminderDate.getDate() + daysBefore)
+    const reminderDateStr = reminderDate.toISOString().split('T')[0]
+
+    const { data: reminderRentals } = await admin
+      .from('rentals')
+      .select('id, customer_name, customer_phone, event_type, event_date')
+      .eq('company_id', company.id)
+      .eq('event_date', reminderDateStr)
+      .eq('status', 'confirmed')
+
+    if (reminderRentals && reminderRentals.length > 0) {
+      for (const rental of reminderRentals) {
+        // Check for existing notification to avoid duplicates (only today)
+        const { data: existing } = await admin
+          .from('notifications')
+          .select('id')
+          .eq('company_id', company.id)
+          .eq('rental_id', rental.id)
+          .eq('type', 'event_reminder')
+          .gte('created_at', todayStr)
+          .limit(1)
+
+        if (!existing || existing.length === 0) {
+          const eventTypeLabel = rental.event_type ? ` (${rental.event_type})` : ''
+          const eventDateBr = (() => {
+            const [y, m, d] = (rental.event_date || '').split('-')
+            return y ? `${d}/${m}/${y}` : rental.event_date
+          })()
+
+          await admin.from('notifications').insert({
+            company_id: company.id,
+            type: 'event_reminder',
+            title: `Evento em ${daysBefore} dias`,
+            message: `${rental.customer_name}${eventTypeLabel} - evento em ${eventDateBr}.`,
+            rental_id: rental.id,
+            read: false,
+          })
+          created++
+
+          // Auto-send WhatsApp if enabled and the customer has a phone
+          if (company.reminder_auto_send && rental.customer_phone) {
+            await sendTemplateMessage(
+              'event_reminder',
+              rental.customer_phone,
+              {
+                nome_cliente: rental.customer_name,
+                tipo_evento: rental.event_type || 'evento',
+                data_evento: eventDateBr || '',
+              },
+              company.id
+            )
+          }
         }
       }
     }

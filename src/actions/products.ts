@@ -32,6 +32,9 @@ export async function createProduct(formData: FormData) {
   const description = formData.get('description') as string | null
   const price = parseFloat(formData.get('price') as string) || 0
   const stock = parseInt(formData.get('stock') as string, 10) || 0
+  const trackStock = formData.get('track_stock') === 'on'
+  const costPriceRaw = formData.get('cost_price') as string | null
+  const costPrice = costPriceRaw && costPriceRaw.trim() !== '' ? parseFloat(costPriceRaw) : null
   const rawStatus = (formData.get('status') as string) || 'active'
   const statusMap: Record<string, 'active' | 'inactive' | 'maintenance'> = {
     ativo: 'active', inativo: 'inactive', manutencao: 'maintenance',
@@ -74,6 +77,8 @@ export async function createProduct(formData: FormData) {
     description: description?.trim() || null,
     price,
     stock,
+    track_stock: trackStock,
+    cost_price: costPrice,
     status,
     image_url: imageUrl,
   })
@@ -105,6 +110,9 @@ export async function updateProduct(id: string, formData: FormData) {
   const description = formData.get('description') as string | null
   const price = parseFloat(formData.get('price') as string) || 0
   const stock = parseInt(formData.get('stock') as string, 10) || 0
+  const trackStock = formData.get('track_stock') === 'on'
+  const costPriceRaw = formData.get('cost_price') as string | null
+  const costPrice = costPriceRaw && costPriceRaw.trim() !== '' ? parseFloat(costPriceRaw) : null
   const rawStatus = (formData.get('status') as string) || 'active'
   const statusMap: Record<string, 'active' | 'inactive' | 'maintenance'> = {
     ativo: 'active', inativo: 'inactive', manutencao: 'maintenance',
@@ -148,6 +156,8 @@ export async function updateProduct(id: string, formData: FormData) {
       description: description?.trim() || null,
       price,
       stock,
+      track_stock: trackStock,
+      cost_price: costPrice,
       status,
       image_url: imageUrl,
     })

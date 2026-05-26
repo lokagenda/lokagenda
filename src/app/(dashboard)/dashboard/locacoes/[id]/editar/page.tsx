@@ -41,6 +41,8 @@ export default function EditarLocacaoPage({
     event_end_date: '',
     delivery_time: '',
     pickup_time: '',
+    payment_date_signal: '',
+    payment_date_total: '',
     event_address: '',
     event_city: '',
     event_state: '',
@@ -81,6 +83,8 @@ export default function EditarLocacaoPage({
         event_end_date: (r as any).event_end_date || '',
         delivery_time: r.delivery_time || '',
         pickup_time: r.pickup_time || '',
+        payment_date_signal: (r as any).payment_date_signal || '',
+        payment_date_total: (r as any).payment_date_total || '',
         event_address: r.event_address || '',
         event_city: r.event_city || '',
         event_state: r.event_state || '',
@@ -193,6 +197,8 @@ export default function EditarLocacaoPage({
         event_end_date: form.event_end_date || null,
         delivery_time: form.delivery_time || null,
         pickup_time: form.pickup_time || null,
+        payment_date_signal: form.payment_date_signal || null,
+        payment_date_total: form.payment_date_total || null,
         event_address: form.event_address || null,
         event_city: form.event_city || null,
         event_state: form.event_state || null,
@@ -369,6 +375,32 @@ export default function EditarLocacaoPage({
                   name="pickup_time"
                   type="time"
                   value={form.pickup_time}
+                  onChange={handleChange}
+                  className={inputClasses}
+                />
+              </div>
+              <div>
+                <label htmlFor="payment_date_signal" className={labelClasses}>
+                  Data pagamento sinal
+                </label>
+                <input
+                  id="payment_date_signal"
+                  name="payment_date_signal"
+                  type="date"
+                  value={form.payment_date_signal}
+                  onChange={handleChange}
+                  className={inputClasses}
+                />
+              </div>
+              <div>
+                <label htmlFor="payment_date_total" className={labelClasses}>
+                  Data pagamento total
+                </label>
+                <input
+                  id="payment_date_total"
+                  name="payment_date_total"
+                  type="date"
+                  value={form.payment_date_total}
                   onChange={handleChange}
                   className={inputClasses}
                 />

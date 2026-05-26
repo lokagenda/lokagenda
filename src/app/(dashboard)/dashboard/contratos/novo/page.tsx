@@ -26,6 +26,8 @@ const AVAILABLE_VARIABLES = [
   { var: '{{valor_pago}}', desc: 'Valor pago (sinal)' },
   { var: '{{valor_restante}}', desc: 'Valor restante a pagar' },
   { var: '{{status_pagamento}}', desc: 'Status do pagamento' },
+  { var: '{{data_pagamento_sinal}}', desc: 'Data de pagamento do sinal' },
+  { var: '{{data_pagamento_total}}', desc: 'Data de pagamento total' },
   { var: '{{nome_empresa}}', desc: 'Nome da empresa' },
   { var: '{{telefone_empresa}}', desc: 'Telefone da empresa' },
   { var: '{{cnpj_empresa}}', desc: 'CNPJ/CPF da empresa' },

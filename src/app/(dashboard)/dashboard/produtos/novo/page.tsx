@@ -10,6 +10,7 @@ import { compressImage, replaceInputFile } from '@/lib/compress-image'
 export default function NovoProdutoPage() {
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [trackStock, setTrackStock] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -128,21 +129,56 @@ export default function NovoProdutoPage() {
             />
           </div>
 
-          {/* Quantidade */}
+          {/* Preço de custo */}
           <div>
-            <label htmlFor="stock" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              Quantidade em estoque
+            <label htmlFor="cost_price" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Preço de custo (R$)
             </label>
             <input
               type="number"
-              id="stock"
-              name="stock"
+              id="cost_price"
+              name="cost_price"
               min="0"
-              step="1"
-              defaultValue={1}
+              step="0.01"
+              placeholder="0,00"
               className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
+
+          {/* Controlar estoque */}
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                name="track_stock"
+                checked={trackStock}
+                onChange={(e) => setTrackStock(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+              />
+              Controlar estoque
+            </label>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+              Desmarque para produtos sem limite de quantidade (ex: pipoca, algodão doce).
+            </p>
+          </div>
+
+          {/* Quantidade */}
+          {trackStock && (
+            <div>
+              <label htmlFor="stock" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Quantidade em estoque
+              </label>
+              <input
+                type="number"
+                id="stock"
+                name="stock"
+                min="0"
+                step="1"
+                defaultValue={1}
+                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          )}
 
           {/* Status */}
           <div>

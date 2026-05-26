@@ -66,11 +66,14 @@ export async function getAvailableStock(
   // Get total stock
   const { data: product } = await supabase
     .from('products')
-    .select('stock')
+    .select('stock, track_stock')
     .eq('id', productId)
     .single()
 
   if (!product) return 0
+
+  // Products without stock control (e.g. pipoca, algodão doce) are unlimited
+  if (product.track_stock === false) return 999999
 
   // Get rentals for this date that are active (not cancelled/returned)
   let rentalQuery = supabase
@@ -126,11 +129,14 @@ export async function getAvailableStockClient(
 
   const { data: product } = await supabase
     .from('products')
-    .select('stock')
+    .select('stock, track_stock')
     .eq('id', productId)
     .single()
 
   if (!product) return 0
+
+  // Products without stock control are unlimited
+  if (product.track_stock === false) return 999999
 
   const { data: rentals } = await supabase
     .from('rentals')

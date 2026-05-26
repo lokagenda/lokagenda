@@ -23,6 +23,8 @@ export interface Database {
           zip_code: string | null;
           logo_url: string | null;
           signature_url: string | null;
+          reminder_days_before: number;
+          reminder_auto_send: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +41,8 @@ export interface Database {
           zip_code?: string | null;
           logo_url?: string | null;
           signature_url?: string | null;
+          reminder_days_before?: number;
+          reminder_auto_send?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -55,6 +59,8 @@ export interface Database {
           zip_code?: string | null;
           logo_url?: string | null;
           signature_url?: string | null;
+          reminder_days_before?: number;
+          reminder_auto_send?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -115,6 +121,8 @@ export interface Database {
           price: number;
           stock: number;
           status: "active" | "inactive" | "maintenance";
+          track_stock: boolean;
+          cost_price: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -127,6 +135,8 @@ export interface Database {
           price: number;
           stock?: number;
           status?: "active" | "inactive" | "maintenance";
+          track_stock?: boolean;
+          cost_price?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -139,6 +149,8 @@ export interface Database {
           price?: number;
           stock?: number;
           status?: "active" | "inactive" | "maintenance";
+          track_stock?: boolean;
+          cost_price?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -165,6 +177,8 @@ export interface Database {
           state: string | null;
           zip_code: string | null;
           notes: string | null;
+          event_type: string | null;
+          birthday: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -180,6 +194,8 @@ export interface Database {
           state?: string | null;
           zip_code?: string | null;
           notes?: string | null;
+          event_type?: string | null;
+          birthday?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -195,6 +211,8 @@ export interface Database {
           state?: string | null;
           zip_code?: string | null;
           notes?: string | null;
+          event_type?: string | null;
+          birthday?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -394,6 +412,9 @@ export interface Database {
           signature_company: string | null;
           payment_status: "pending" | "partial" | "paid";
           amount_paid: number;
+          event_type: string | null;
+          payment_date_signal: string | null;
+          payment_date_total: string | null;
           created_by: string;
           created_at: string;
           updated_at: string;
@@ -426,6 +447,9 @@ export interface Database {
           signature_company?: string | null;
           payment_status?: "pending" | "partial" | "paid";
           amount_paid?: number;
+          event_type?: string | null;
+          payment_date_signal?: string | null;
+          payment_date_total?: string | null;
           created_by: string;
           created_at?: string;
           updated_at?: string;
@@ -458,6 +482,9 @@ export interface Database {
           signature_company?: string | null;
           payment_status?: "pending" | "partial" | "paid";
           amount_paid?: number;
+          event_type?: string | null;
+          payment_date_signal?: string | null;
+          payment_date_total?: string | null;
           created_by?: string;
           created_at?: string;
           updated_at?: string;
@@ -1168,6 +1195,85 @@ export interface Database {
           },
         ];
       };
+      financial_entries: {
+        Row: {
+          id: string;
+          company_id: string;
+          type: "income" | "expense";
+          category: string | null;
+          description: string;
+          amount: number;
+          date: string;
+          rental_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          type: "income" | "expense";
+          category?: string | null;
+          description: string;
+          amount?: number;
+          date?: string;
+          rental_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          type?: "income" | "expense";
+          category?: string | null;
+          description?: string;
+          amount?: number;
+          date?: string;
+          rental_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "financial_entries_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      event_types: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_types_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       employees: {
         Row: {
           id: string;
@@ -1350,3 +1456,5 @@ export type WhatsAppTemplate = Tables<"whatsapp_templates">;
 export type WhatsAppMessageLog = Tables<"whatsapp_message_log">;
 export type Employee = Tables<"employees">;
 export type Coupon = Tables<"coupons">;
+export type FinancialEntry = Tables<"financial_entries">;
+export type EventType = Tables<"event_types">;
