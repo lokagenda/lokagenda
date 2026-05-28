@@ -39,7 +39,7 @@ const navigation = [
   { name: 'Clientes', href: '/dashboard/clientes', icon: Users },
   { name: 'Orçamentos', href: '/dashboard/orcamentos', icon: FileText },
   { name: 'Locações', href: '/dashboard/locacoes', icon: Calendar },
-  { name: 'Agenda', href: '/dashboard/agenda', icon: CalendarOff },
+  { name: 'Férias', href: '/dashboard/agenda', icon: CalendarOff },
   { name: 'Financeiro', href: '/dashboard/financeiro', icon: DollarSign },
   { name: 'Lembretes', href: '/dashboard/lembretes', icon: Bell },
   { name: 'Montagem', href: '/dashboard/montagem', icon: Truck },

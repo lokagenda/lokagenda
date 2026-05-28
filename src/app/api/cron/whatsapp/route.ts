@@ -37,7 +37,17 @@ export async function GET(request: NextRequest) {
   const plus3 = addDays(today, 3)
   const plus1 = addDays(today, 1)
   const minus1 = addDays(today, -1)
-  const minus2 = addDays(today, -2)
+  const minus3 = addDays(today, -3)
+
+  // Auto-expira trials vencidos: sem isto o status fica 'trial' pra sempre e as
+  // mensagens de pós-trial ("não renovou") e os filtros de reativação nunca casam.
+  // Só toca trials (planos pagos são gerenciados pelo webhook do MercadoPago).
+  await admin
+    .from('subscriptions')
+    .update({ status: 'expired', updated_at: new Date().toISOString() })
+    .eq('status', 'trial')
+    .not('trial_ends_at', 'is', null)
+    .lt('trial_ends_at', `${todayStr}T00:00:00Z`)
 
   // Define queries: [templateSlug, query builder]
   type SubRow = {
@@ -88,6 +98,8 @@ export async function GET(request: NextRequest) {
       },
     },
     {
+      // 3 dias após o fim do trial (status já 'expired'/'cancelled'). Janela
+      // separada do trial_expired (minus1) para não disparar duas msgs no mesmo dia.
       slug: 'trial_not_renewed',
       fetch: async () => {
         const { data } = await admin
@@ -95,8 +107,8 @@ export async function GET(request: NextRequest) {
           .select('company_id, trial_ends_at, current_period_end, companies(name, phone)')
           .in('status', ['expired', 'cancelled'])
           .not('trial_ends_at', 'is', null)
-          .gte('trial_ends_at', `${minus2}T00:00:00Z`)
-          .lte('trial_ends_at', `${minus1}T23:59:59Z`)
+          .gte('trial_ends_at', `${minus3}T00:00:00Z`)
+          .lte('trial_ends_at', `${minus3}T23:59:59Z`)
         return (data || []) as unknown as SubRow[]
       },
     },

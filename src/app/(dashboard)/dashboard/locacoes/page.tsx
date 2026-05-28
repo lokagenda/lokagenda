@@ -54,14 +54,21 @@ export default async function LocacoesPage({
 
   if (!profile) return null
 
+  // Ao entrar no menu (sem filtro explícito) mostramos as CONFIRMADAS de hoje em
+  // diante. "Todas" passa status=all explicitamente; filtros de data sobrescrevem
+  // o piso de hoje para permitir ver locações passadas.
+  const todayStr = new Date().toISOString().split('T')[0]
+  const effectiveStatus = filterStatus || 'confirmed'
+  const applyTodayFloor = !dateFrom && !dateTo
+
   let query = supabase
     .from('rentals')
     .select('*')
     .eq('company_id', profile.company_id)
     .order('event_date', { ascending: true })
 
-  if (filterStatus && filterStatus !== 'all') {
-    query = query.eq('status', filterStatus as 'confirmed' | 'delivered' | 'returned' | 'cancelled')
+  if (effectiveStatus !== 'all') {
+    query = query.eq('status', effectiveStatus as 'confirmed' | 'delivered' | 'returned' | 'cancelled')
   }
 
   if (paymentStatusFilter && paymentStatusFilter !== 'all') {
@@ -70,6 +77,8 @@ export default async function LocacoesPage({
 
   if (dateFrom) {
     query = query.gte('event_date', dateFrom)
+  } else if (applyTodayFloor) {
+    query = query.gte('event_date', todayStr)
   }
 
   if (dateTo) {
@@ -86,8 +95,8 @@ export default async function LocacoesPage({
     .select('*', { count: 'exact', head: true })
     .eq('company_id', profile.company_id)
 
-  if (filterStatus && filterStatus !== 'all') {
-    countQuery = countQuery.eq('status', filterStatus as 'confirmed' | 'delivered' | 'returned' | 'cancelled')
+  if (effectiveStatus !== 'all') {
+    countQuery = countQuery.eq('status', effectiveStatus as 'confirmed' | 'delivered' | 'returned' | 'cancelled')
   }
 
   if (paymentStatusFilter && paymentStatusFilter !== 'all') {
@@ -96,6 +105,8 @@ export default async function LocacoesPage({
 
   if (dateFrom) {
     countQuery = countQuery.gte('event_date', dateFrom)
+  } else if (applyTodayFloor) {
+    countQuery = countQuery.gte('event_date', todayStr)
   }
 
   if (dateTo) {
@@ -168,11 +179,11 @@ export default async function LocacoesPage({
           ].map((filter) => (
             <Link
               key={filter.value}
-              href={`/dashboard/locacoes?view=${view}${filter.value !== 'all' ? `&status=${filter.value}` : ''}`}
+              href={`/dashboard/locacoes?view=${view}&status=${filter.value}`}
             >
               <button
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  (filterStatus === filter.value || (!filterStatus && filter.value === 'all'))
+                  (filterStatus === filter.value || (!filterStatus && filter.value === 'confirmed'))
                     ? 'bg-blue-700 text-white'
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
                 }`}

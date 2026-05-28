@@ -253,6 +253,32 @@ export async function deleteQuote(id: string) {
   return { success: true }
 }
 
+export async function deleteQuotes(ids: string[]) {
+  if (!ids.length) return { success: true, deleted: 0 }
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  // Garante que só apaga orçamentos da própria empresa.
+  const { data: owned } = await supabase
+    .from('quotes')
+    .select('id')
+    .eq('company_id', companyId)
+    .in('id', ids)
+
+  const ownedIds = (owned || []).map((q) => q.id)
+  if (!ownedIds.length) return { success: true, deleted: 0 }
+
+  await supabase.from('quote_items').delete().in('quote_id', ownedIds)
+  const { error } = await supabase.from('quotes').delete().in('id', ownedIds)
+
+  if (error) {
+    return { error: `Erro ao excluir orçamentos: ${error.message}` }
+  }
+
+  revalidatePath('/dashboard/orcamentos')
+  return { success: true, deleted: ownedIds.length }
+}
+
 export async function convertQuoteToRental(quoteId: string) {
   const supabase = await createClient()
   const { userId, companyId } = await getCompanyId(supabase)

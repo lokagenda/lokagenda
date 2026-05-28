@@ -92,7 +92,7 @@ export default function AgendaPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Agenda</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Férias</h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             Bloqueie períodos de férias ou folga para impedir novas locações e orçamentos nessas datas.
           </p>

@@ -7,6 +7,13 @@ import { Pagination } from '@/components/pagination'
 
 const ITEMS_PER_PAGE = 12
 
+/** Monta o link wa.me a partir de um telefone BR (só dígitos, com DDI 55). */
+function waLink(phone: string): string {
+  let digits = phone.replace(/\D/g, '')
+  if (digits.length <= 11 && !digits.startsWith('55')) digits = `55${digits}`
+  return `https://wa.me/${digits}`
+}
+
 export default async function ClientesPage({
   searchParams,
 }: {
@@ -166,10 +173,15 @@ export default async function ClientesPage({
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">
                       {customer.phone ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Phone className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
+                        <a
+                          href={waLink(customer.phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-green-600 hover:text-green-700 hover:underline dark:text-green-400"
+                        >
+                          <Phone className="h-3.5 w-3.5" />
                           {customer.phone}
-                        </span>
+                        </a>
                       ) : (
                         <span className="text-zinc-400 dark:text-zinc-500">—</span>
                       )}

@@ -197,23 +197,25 @@ export async function listReactivationTargets(filter: ReactivationFilter) {
     .map((company) => ({ company, sub: latestSubscription(company) }))
     .filter(({ sub }) => matchesFilter(sub, filter))
 
-  const targets: ReactivationTarget[] = []
-
-  for (const { company, sub } of matched) {
-    const owner = company.profiles?.find((p) => p.role === 'owner')
-    let ownerEmail: string | null = null
-    if (owner?.id) {
-      try {
-        const { data: userData } = await admin.auth.admin.getUserById(owner.id)
-        ownerEmail = userData?.user?.email ?? null
-      } catch {
-        // Ignora falha ao buscar email do owner
-      }
+  // Busca os emails dos proprietários de uma vez só (auth.users) e monta um mapa.
+  // Evita N chamadas sequenciais a getUserById (lento e propenso a timeout no
+  // serverless) — mesmo padrão usado em listUsers() de admin.ts. Tolerante a falha.
+  const emailMap = new Map<string, string>()
+  try {
+    const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 1000 })
+    for (const u of authUsers?.users ?? []) {
+      if (u.email) emailMap.set(u.id, u.email)
     }
+  } catch {
+    // Sem emails: segue sem quebrar a página.
+  }
 
+  const targets: ReactivationTarget[] = matched.map(({ company, sub }) => {
+    const owner = company.profiles?.find((p) => p.role === 'owner')
+    const ownerEmail = owner?.id ? emailMap.get(owner.id) ?? null : null
     const phone = company.phone?.trim() || null
 
-    targets.push({
+    return {
       companyId: company.id,
       name: company.name,
       phone,
@@ -223,8 +225,8 @@ export async function listReactivationTargets(filter: ReactivationFilter) {
       trialEndsAt: sub?.trial_ends_at ?? null,
       createdAt: company.created_at,
       daysSinceSignup: daysSince(company.created_at),
-    })
-  }
+    }
+  })
 
   const sendableCount = targets.filter((t) => t.hasPhone).length
 
