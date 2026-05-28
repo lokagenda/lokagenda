@@ -59,8 +59,11 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  // Marketing, Grupos e Banners sao ferramentas do dono da plataforma (super_admin):
+  // usam o Z-API global. Nao aparecem para clientes comuns.
+  const adminOnly = ['Banners', 'Marketing', 'Grupos']
   const filteredNavigation = navigation.filter((item) => {
-    if (item.name === 'Banners' && role !== 'super_admin') return false
+    if (adminOnly.includes(item.name) && role !== 'super_admin') return false
     return true
   })
 

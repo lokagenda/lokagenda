@@ -13,11 +13,14 @@ async function getCompanyId(supabase: Awaited<ReturnType<typeof createClient>>) 
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('company_id')
+    .select('company_id, role')
     .eq('id', user.id)
     .single()
 
   if (!profile?.company_id) throw new Error('Perfil não encontrado')
+  // Marketing/disparo em massa usa o Z-API global (numero do dono da plataforma):
+  // somente super_admin pode usar.
+  if (profile.role !== 'super_admin') throw new Error('Acesso restrito ao administrador')
   return { userId: user.id, companyId: profile.company_id }
 }
 

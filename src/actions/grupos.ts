@@ -13,12 +13,17 @@ async function getCompanyId(): Promise<string> {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('company_id')
+    .select('company_id, role')
     .eq('id', user.id)
     .single()
 
   if (profileError || !profile?.company_id) {
     throw new Error('Perfil ou empresa não encontrados')
+  }
+
+  // Grupos usam o Z-API global (numero do dono): somente super_admin.
+  if (profile.role !== 'super_admin') {
+    throw new Error('Acesso restrito ao administrador')
   }
 
   return profile.company_id
