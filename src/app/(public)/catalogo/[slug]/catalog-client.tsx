@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   ShoppingCart,
   Plus,
@@ -11,8 +11,9 @@ import {
   Package,
   Loader2,
   MessageCircle,
+  CalendarDays,
 } from 'lucide-react'
-import { submitCatalogQuote } from '@/actions/catalogo'
+import { submitCatalogQuote, getCatalogAvailability } from '@/actions/catalogo'
 import type {
   PublicCatalogCompany,
   PublicCatalogProduct,
@@ -59,8 +60,51 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
     customer_email: '',
     event_date: '',
     event_time: '',
+    event_address: '',
     notes: '',
   })
+
+  // Disponibilidade por data (escolhida no topo).
+  const [availability, setAvailability] = useState<Record<string, number> | null>(null)
+  const [dateBlocked, setDateBlocked] = useState(false)
+  const [availLoading, setAvailLoading] = useState(false)
+  const dateChosen = !!form.event_date
+
+  useEffect(() => {
+    if (!form.event_date) {
+      setAvailability(null)
+      setDateBlocked(false)
+      return
+    }
+    let active = true
+    setAvailLoading(true)
+    getCatalogAvailability(slug, form.event_date)
+      .then((res) => {
+        if (!active) return
+        setDateBlocked(res.blocked)
+        setAvailability(res.availability)
+      })
+      .catch(() => {
+        if (active) {
+          setDateBlocked(false)
+          setAvailability(null)
+        }
+      })
+      .finally(() => {
+        if (active) setAvailLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [slug, form.event_date])
+
+  // Quantidade disponível de um produto: null = ainda não escolheu data.
+  function availableFor(productId: string): number | null {
+    if (!dateChosen) return null
+    if (dateBlocked) return 0
+    if (!availability) return null
+    return availability[productId] ?? 0
+  }
 
   const cartItems = useMemo(() => Object.values(cart), [cart])
   const totalItems = useMemo(
@@ -132,6 +176,7 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
       customer_email: form.customer_email || undefined,
       event_date: form.event_date,
       event_time: form.event_time,
+      event_address: form.event_address || undefined,
       notes: form.notes || undefined,
       items: cartItems.map((item) => ({
         product_id: item.product.id,
@@ -232,6 +277,40 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
             </button>
           </div>
         </div>
+
+        {/* Barra de data/hora — escolha antes de montar o pedido */}
+        <div className="border-t border-zinc-100 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 px-4 py-2.5 sm:px-6">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+              <CalendarDays className="h-4 w-4" />
+              Data e horário do evento:
+            </span>
+            <input
+              type="date"
+              value={form.event_date}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setForm((p) => ({ ...p, event_date: e.target.value }))}
+              className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+            <input
+              type="time"
+              value={form.event_time}
+              onChange={(e) => setForm((p) => ({ ...p, event_time: e.target.value }))}
+              className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+            {availLoading && <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />}
+            {dateChosen && dateBlocked && (
+              <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                Data indisponível (período fechado). Escolha outra.
+              </span>
+            )}
+            {!dateChosen && (
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                Escolha a data para ver a disponibilidade.
+              </span>
+            )}
+          </div>
+        </div>
       </header>
 
       {/* Grade de produtos */}
@@ -247,10 +326,13 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
             {products.map((product) => {
               const inCart = cart[product.id]
+              const avail = availableFor(product.id)
+              const unavailable = dateChosen && avail !== null && avail <= 0
+              const canAdd = dateChosen && !unavailable
               return (
                 <div
                   key={product.id}
-                  className="flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                  className={`flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${unavailable ? 'opacity-60' : ''}`}
                 >
                   <div className="aspect-square w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                     {product.image_url ? (
@@ -283,7 +365,11 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                     )}
 
                     <div className="mt-3">
-                      {inCart ? (
+                      {unavailable ? (
+                        <span className="block rounded-lg bg-zinc-100 px-3 py-2 text-center text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          Indisponível nesta data
+                        </span>
+                      ) : inCart ? (
                         <div className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-700">
                           <button
                             onClick={() => setQuantity(product.id, inCart.quantity - 1)}
@@ -297,7 +383,8 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                           </span>
                           <button
                             onClick={() => setQuantity(product.id, inCart.quantity + 1)}
-                            className="flex h-9 w-9 items-center justify-center rounded-r-lg text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            disabled={avail !== null && avail < 999999 && inCart.quantity >= avail}
+                            className="flex h-9 w-9 items-center justify-center rounded-r-lg text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
                             aria-label="Aumentar"
                           >
                             <Plus className="h-4 w-4" />
@@ -305,11 +392,13 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                         </div>
                       ) : (
                         <button
-                          onClick={() => addToCart(product)}
-                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-800 dark:bg-blue-500 dark:hover:bg-blue-700"
+                          onClick={() => canAdd && addToCart(product)}
+                          disabled={!canAdd}
+                          title={!dateChosen ? 'Escolha a data do evento primeiro' : undefined}
+                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:bg-blue-500 dark:hover:bg-blue-700 dark:disabled:bg-zinc-700"
                         >
                           <Plus className="h-4 w-4" />
-                          Adicionar
+                          {dateChosen ? 'Adicionar' : 'Escolha a data'}
                         </button>
                       )}
                     </div>
@@ -503,13 +592,25 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Endereço do evento
+                    </label>
+                    <input
+                      type="text"
+                      value={form.event_address}
+                      onChange={handleField('event_address')}
+                      placeholder="Rua, número, bairro, cidade"
+                      className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                       Observações
                     </label>
                     <textarea
                       value={form.notes}
                       onChange={handleField('notes')}
                       rows={3}
-                      placeholder="Local do evento, horários, detalhes..."
+                      placeholder="Detalhes adicionais..."
                       className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                     />
                   </div>

@@ -42,8 +42,86 @@ interface SubmitCatalogQuoteInput {
   customer_email?: string
   event_date: string
   event_time?: string
+  event_address?: string
   notes?: string
   items: SubmitItemInput[]
+}
+
+export interface CatalogAvailability {
+  blocked: boolean
+  availability: Record<string, number>
+}
+
+/**
+ * Disponibilidade dos produtos do catálogo para uma data (granularidade por dia,
+ * igual ao resto do sistema). Usa admin client (catálogo é público).
+ * - Data em período bloqueado (férias/folga) → blocked=true, tudo indisponível.
+ * - track_stock=false → ilimitado.
+ * - Caso contrário, available = stock − soma das quantidades reservadas no dia
+ *   (locações não canceladas/devolvidas).
+ */
+export async function getCatalogAvailability(slug: string, date: string): Promise<CatalogAvailability> {
+  const empty: CatalogAvailability = { blocked: false, availability: {} }
+  if (!slug || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return empty
+
+  const admin = createAdminClient()
+
+  const { data: company } = await admin
+    .from('companies')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (!company) return empty
+
+  // Período bloqueado?
+  const { data: blocked } = await admin
+    .from('blocked_periods')
+    .select('id')
+    .eq('company_id', company.id)
+    .lte('start_date', date)
+    .gte('end_date', date)
+    .limit(1)
+  if (blocked && blocked.length > 0) return { blocked: true, availability: {} }
+
+  const { data: products } = await admin
+    .from('products')
+    .select('id, stock, track_stock')
+    .eq('company_id', company.id)
+    .eq('status', 'active')
+
+  if (!products || products.length === 0) return empty
+
+  // Locações ativas na data → soma reservada por produto.
+  const { data: rentals } = await admin
+    .from('rentals')
+    .select('id')
+    .eq('company_id', company.id)
+    .eq('event_date', date)
+    .not('status', 'in', '("cancelled","returned")')
+
+  const reserved = new Map<string, number>()
+  const rentalIds = (rentals ?? []).map((r) => r.id)
+  if (rentalIds.length > 0) {
+    const { data: items } = await admin
+      .from('rental_items')
+      .select('product_id, quantity')
+      .in('rental_id', rentalIds)
+    for (const it of items ?? []) {
+      if (!it.product_id) continue
+      reserved.set(it.product_id, (reserved.get(it.product_id) || 0) + (it.quantity || 0))
+    }
+  }
+
+  const availability: Record<string, number> = {}
+  for (const p of products) {
+    if (p.track_stock === false) {
+      availability[p.id] = 999999
+    } else {
+      availability[p.id] = Math.max(0, (p.stock || 0) - (reserved.get(p.id) || 0))
+    }
+  }
+
+  return { blocked: false, availability }
 }
 
 // ── getPublicCatalog ──────────────────────────────────────
@@ -102,6 +180,7 @@ export async function submitCatalogQuote(
   const customerPhone = data?.customer_phone?.trim()
   const eventDate = data?.event_date?.trim()
   const eventTime = data?.event_time?.trim() || null
+  const eventAddress = data?.event_address?.trim() || null
   const customerEmail = data?.customer_email?.trim() || null
   const notes = data?.notes?.trim() || null
 
@@ -218,6 +297,7 @@ export async function submitCatalogQuote(
       customer_phone: customerPhone,
       customer_email: customerEmail,
       event_date: eventDate,
+      event_address: eventAddress,
       delivery_time: eventTime,
       notes,
       total,
@@ -270,7 +350,7 @@ export async function submitCatalogQuote(
     try {
       await sendWhatsAppMessage(
         company.phone,
-        `🛒 *Novo orçamento pelo catálogo*\n\nCliente: ${customerName}\nTelefone: ${customerPhone}\nData do evento: ${eventDate}${eventTime ? ` às ${eventTime}` : ''}\nTotal estimado: R$ ${total.toFixed(2)}\n\nAcesse o painel para confirmar.`,
+        `🛒 *Novo orçamento pelo catálogo*\n\nCliente: ${customerName}\nTelefone: ${customerPhone}\nData do evento: ${eventDate}${eventTime ? ` às ${eventTime}` : ''}${eventAddress ? `\nEndereço: ${eventAddress}` : ''}\nTotal estimado: R$ ${total.toFixed(2)}\n\nAcesse o painel para confirmar.`,
         { companyId: company.id }
       )
     } catch {
