@@ -209,6 +209,42 @@ export async function GET(request: NextRequest) {
         )
       }
     }
+
+    // 5. Contas a pagar: avisa no sininho no dia do vencimento, se não paga no mês.
+    const currentMonthStr = todayStr.slice(0, 7)
+    const domToday = parseInt(todayStr.slice(8, 10), 10)
+
+    const { data: bills } = await admin
+      .from('recurring_bills')
+      .select('id, name, amount, due_day, last_paid_month')
+      .eq('company_id', company.id)
+      .eq('active', true)
+      .eq('due_day', domToday)
+
+    for (const bill of bills ?? []) {
+      if (bill.last_paid_month === currentMonthStr) continue
+
+      const { data: existing } = await admin
+        .from('notifications')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('type', 'bill_due')
+        .ilike('message', `%${bill.name}%`)
+        .gte('created_at', `${todayStr}T00:00:00Z`)
+        .limit(1)
+
+      if (existing && existing.length > 0) continue
+
+      const valor = (Number(bill.amount) || 0).toFixed(2).replace('.', ',')
+      await admin.from('notifications').insert({
+        company_id: company.id,
+        type: 'bill_due',
+        title: 'Conta a pagar vence hoje',
+        message: `${bill.name} — R$ ${valor} vence hoje (dia ${bill.due_day}).`,
+        read: false,
+      })
+      created++
+    }
   }
 
   return NextResponse.json({ success: true, notifications_created: created })

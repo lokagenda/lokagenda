@@ -266,3 +266,311 @@ export async function getFinancialSummary(month: string): Promise<FinancialSumma
     cashflow,
   }
 }
+
+// ── Overview por período (filtros do painel financeiro) ───────────────────
+
+export interface CategorySlice {
+  category: string
+  amount: number
+}
+
+export interface FinancialOverview {
+  faturamento: number
+  despesas: number
+  lucro: number
+  ticketMedio: number
+  eventos: number
+  aReceber: number
+  pendingRentals: number
+  growthPct: number | null
+  cashflow: CashflowDay[]
+  categoryBreakdown: CategorySlice[]
+}
+
+function addDaysStr(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function diffDaysInclusive(start: string, end: string): number {
+  const a = new Date(start + 'T00:00:00Z').getTime()
+  const b = new Date(end + 'T00:00:00Z').getTime()
+  return Math.round((b - a) / (1000 * 60 * 60 * 24)) + 1
+}
+
+/**
+ * Resumo financeiro para um intervalo de datas [start, end] inclusivo.
+ * Faturamento = entradas manuais + pagamentos de locação no período.
+ * Despesas = saídas manuais. Lucro = faturamento - despesas.
+ * Eventos = locações (não canceladas) com event_date no período.
+ * A receber = saldo pendente de todas as locações em aberto (independe do período).
+ * growthPct compara o faturamento com o período anterior espelhado.
+ */
+export async function getFinancialOverview(start: string, end: string): Promise<FinancialOverview> {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const endExclusive = addDaysStr(end, 1)
+
+  // Helper: soma entradas/saídas manuais + pagamentos para um intervalo [s, e] inclusivo
+  async function sumRange(s: string, e: string) {
+    const eExclusive = addDaysStr(e, 1)
+    const [{ data: entries }, { data: payments }] = await Promise.all([
+      supabase
+        .from('financial_entries')
+        .select('type, amount, date, category')
+        .eq('company_id', companyId)
+        .gte('date', s)
+        .lt('date', eExclusive),
+      supabase
+        .from('payments')
+        .select('amount, paid_at')
+        .eq('company_id', companyId)
+        .gte('paid_at', `${s}T00:00:00-03:00`)
+        .lt('paid_at', `${eExclusive}T00:00:00-03:00`),
+    ])
+
+    let income = 0
+    let expense = 0
+    const dayMap = new Map<string, CashflowDay>()
+    const catMap = new Map<string, number>()
+    const ensureDay = (date: string): CashflowDay => {
+      let d = dayMap.get(date)
+      if (!d) {
+        d = { date, income: 0, expense: 0 }
+        dayMap.set(date, d)
+      }
+      return d
+    }
+
+    for (const en of entries ?? []) {
+      const amount = Number(en.amount) || 0
+      const day = ensureDay(en.date)
+      if (en.type === 'income') {
+        income += amount
+        day.income += amount
+      } else {
+        expense += amount
+        day.expense += amount
+        const cat = en.category?.trim() || 'Outros'
+        catMap.set(cat, (catMap.get(cat) || 0) + amount)
+      }
+    }
+
+    for (const p of payments ?? []) {
+      const amount = Number(p.amount) || 0
+      const dateKey = new Date(new Date(p.paid_at).getTime() - 3 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10)
+      income += amount
+      ensureDay(dateKey).income += amount
+    }
+
+    return { income, expense, dayMap, catMap }
+  }
+
+  const current = await sumRange(start, end)
+
+  // Período anterior espelhado
+  const len = diffDaysInclusive(start, end)
+  const prevEnd = addDaysStr(start, -1)
+  const prevStart = addDaysStr(prevEnd, -(len - 1))
+  const previous = await sumRange(prevStart, prevEnd)
+
+  // Eventos (locações não canceladas com event_date no período)
+  const { count: eventos } = await supabase
+    .from('rentals')
+    .select('*', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .neq('status', 'cancelled')
+    .gte('event_date', start)
+    .lt('event_date', endExclusive)
+
+  // A receber (todas as locações em aberto)
+  const { data: openRentals } = await supabase
+    .from('rentals')
+    .select('total, amount_paid')
+    .eq('company_id', companyId)
+    .neq('status', 'cancelled')
+    .neq('payment_status', 'paid')
+
+  let aReceber = 0
+  for (const r of openRentals ?? []) {
+    aReceber += Math.max(0, (Number(r.total) || 0) - (Number(r.amount_paid) || 0))
+  }
+
+  const faturamento = current.income
+  const despesas = current.expense
+  const lucro = faturamento - despesas
+  const eventCount = eventos || 0
+  const ticketMedio = eventCount > 0 ? faturamento / eventCount : 0
+
+  const prevFaturamento = previous.income
+  const growthPct =
+    prevFaturamento > 0 ? ((faturamento - prevFaturamento) / prevFaturamento) * 100 : null
+
+  const cashflow = Array.from(current.dayMap.values()).sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+  )
+
+  const categoryBreakdown = Array.from(current.catMap.entries())
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount)
+
+  return {
+    faturamento,
+    despesas,
+    lucro,
+    ticketMedio,
+    eventos: eventCount,
+    aReceber,
+    pendingRentals: (openRentals ?? []).length,
+    growthPct,
+    cashflow,
+    categoryBreakdown,
+  }
+}
+
+// ── Contas a Pagar (recurring_bills) ──────────────────────────────────────
+
+export interface RecurringBill {
+  id: string
+  name: string
+  amount: number
+  due_day: number
+  active: boolean
+  last_paid_month: string | null
+}
+
+export async function listRecurringBills(): Promise<RecurringBill[]> {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { data, error } = await supabase
+    .from('recurring_bills')
+    .select('id, name, amount, due_day, active, last_paid_month')
+    .eq('company_id', companyId)
+    .order('due_day', { ascending: true })
+
+  if (error) throw new Error(`Erro ao listar contas a pagar: ${error.message}`)
+  return (data ?? []) as RecurringBill[]
+}
+
+export async function createRecurringBill(data: { name: string; amount: number; due_day: number }) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  if (!data.name?.trim()) return { error: 'Informe o nome da conta' }
+  if (!data.amount || data.amount <= 0) return { error: 'Informe um valor válido' }
+  const dueDay = Math.min(31, Math.max(1, Math.round(data.due_day) || 1))
+
+  const { error } = await supabase.from('recurring_bills').insert({
+    company_id: companyId,
+    name: data.name.trim(),
+    amount: data.amount,
+    due_day: dueDay,
+  })
+
+  if (error) return { error: `Erro ao criar conta: ${error.message}` }
+  revalidatePath('/dashboard/financeiro')
+  return { success: true }
+}
+
+export async function updateRecurringBill(
+  id: string,
+  data: { name: string; amount: number; due_day: number; active?: boolean }
+) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const dueDay = Math.min(31, Math.max(1, Math.round(data.due_day) || 1))
+  const { error } = await supabase
+    .from('recurring_bills')
+    .update({
+      name: data.name.trim(),
+      amount: data.amount,
+      due_day: dueDay,
+      active: data.active ?? true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('company_id', companyId)
+
+  if (error) return { error: `Erro ao atualizar conta: ${error.message}` }
+  revalidatePath('/dashboard/financeiro')
+  return { success: true }
+}
+
+export async function deleteRecurringBill(id: string) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { error } = await supabase
+    .from('recurring_bills')
+    .delete()
+    .eq('id', id)
+    .eq('company_id', companyId)
+
+  if (error) return { error: `Erro ao excluir conta: ${error.message}` }
+  revalidatePath('/dashboard/financeiro')
+  return { success: true }
+}
+
+/** Marca/desmarca a conta como paga no mês atual (YYYY-MM). */
+export async function toggleBillPaid(id: string, paid: boolean) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const now = new Date()
+  const month = paid
+    ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    : null
+
+  const { error } = await supabase
+    .from('recurring_bills')
+    .update({ last_paid_month: month, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('company_id', companyId)
+
+  if (error) return { error: `Erro ao atualizar conta: ${error.message}` }
+  revalidatePath('/dashboard/financeiro')
+  return { success: true }
+}
+
+// ── Contas a Receber (locações em aberto) ─────────────────────────────────
+
+export interface Receivable {
+  rentalId: string
+  customerName: string
+  eventDate: string
+  total: number
+  amountPaid: number
+  pending: number
+}
+
+export async function getReceivables(): Promise<Receivable[]> {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { data, error } = await supabase
+    .from('rentals')
+    .select('id, customer_name, event_date, total, amount_paid')
+    .eq('company_id', companyId)
+    .neq('status', 'cancelled')
+    .neq('payment_status', 'paid')
+    .order('event_date', { ascending: true })
+
+  if (error) throw new Error(`Erro ao listar contas a receber: ${error.message}`)
+
+  return (data ?? [])
+    .map((r) => ({
+      rentalId: r.id,
+      customerName: r.customer_name,
+      eventDate: r.event_date,
+      total: Number(r.total) || 0,
+      amountPaid: Number(r.amount_paid) || 0,
+      pending: Math.max(0, (Number(r.total) || 0) - (Number(r.amount_paid) || 0)),
+    }))
+    .filter((r) => r.pending > 0)
+}

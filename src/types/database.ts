@@ -1263,6 +1263,53 @@ export interface Database {
           },
         ];
       };
+      recurring_bills: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          amount: number;
+          due_day: number;
+          frequency: string;
+          active: boolean;
+          last_paid_month: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          amount?: number;
+          due_day?: number;
+          frequency?: string;
+          active?: boolean;
+          last_paid_month?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          amount?: number;
+          due_day?: number;
+          frequency?: string;
+          active?: boolean;
+          last_paid_month?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recurring_bills_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_contacts: {
         Row: {
           id: string;
