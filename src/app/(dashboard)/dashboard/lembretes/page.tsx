@@ -185,6 +185,17 @@ export default function LembretesPage() {
         </Button>
       </div>
 
+      {/* Como funciona o disparo */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+        <p className="font-medium">Como funciona o lembrete</p>
+        <ul className="mt-1.5 list-disc space-y-1 pl-5 text-blue-700 dark:text-blue-300">
+          <li>A mensagem é enviada para o <strong>WhatsApp do cliente</strong> (não o seu), pelo número conectado do sistema.</li>
+          <li>Quando um cliente tem <strong>aniversário</strong> cadastrado, todo ano ele aparece aqui na janela de antecedência para você reativar a venda.</li>
+          <li>Com <strong>&ldquo;Enviar WhatsApp automático&rdquo;</strong> ligado, o sistema dispara sozinho na antecedência configurada. Desligado, você clica em <strong>&ldquo;Enviar WhatsApp&rdquo;</strong> manualmente.</li>
+          <li>O texto enviado é o modelo <strong>&ldquo;Lembrete de Evento&rdquo;</strong>, editável em Admin → WhatsApp (variáveis: nome do cliente, tipo e data).</li>
+        </ul>
+      </div>
+
       {/* Settings */}
       <Card>
         <CardHeader className="pb-4">

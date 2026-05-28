@@ -158,6 +158,57 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+
+    // 4. Aniversário do cliente: lembrete para reativar a venda. Compara mês-dia do
+    //    aniversário com a data (hoje + dias de antecedência). Recorre todo ano.
+    const rMonth = String(reminderDate.getMonth() + 1).padStart(2, '0')
+    const rDay = String(reminderDate.getDate()).padStart(2, '0')
+    const reminderMmDd = `${rMonth}-${rDay}`
+
+    const { data: bdayCustomers } = await admin
+      .from('customers')
+      .select('id, name, phone, event_type, birthday')
+      .eq('company_id', company.id)
+      .not('birthday', 'is', null)
+
+    for (const c of bdayCustomers ?? []) {
+      if (!c.birthday) continue
+      if (c.birthday.slice(5, 10) !== reminderMmDd) continue
+
+      const { data: existing } = await admin
+        .from('notifications')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('customer_id', c.id)
+        .eq('type', 'birthday_reminder')
+        .gte('created_at', todayStr)
+        .limit(1)
+
+      if (existing && existing.length > 0) continue
+
+      await admin.from('notifications').insert({
+        company_id: company.id,
+        type: 'birthday_reminder',
+        title: `Aniversário em ${daysBefore} dias`,
+        message: `${c.name} faz aniversário em breve — uma boa hora para oferecer brinquedos novamente.`,
+        customer_id: c.id,
+        read: false,
+      })
+      created++
+
+      if (company.reminder_auto_send && c.phone) {
+        await sendTemplateMessage(
+          'event_reminder',
+          c.phone,
+          {
+            nome_cliente: c.name,
+            tipo_evento: c.event_type || 'aniversário',
+            data_evento: `${rDay}/${rMonth}`,
+          },
+          company.id
+        )
+      }
+    }
   }
 
   return NextResponse.json({ success: true, notifications_created: created })

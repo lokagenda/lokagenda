@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender'
-import { buildFullAddress } from '@/lib/maps'
+import { buildFullAddress, getGoogleMapsUrl } from '@/lib/maps'
 import type { Rental, RentalItem } from '@/types/database'
 
 async function getCompanyId(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -180,7 +180,12 @@ export async function sendMontagemToWhatsApp(rentalIds: string[], employeePhone:
 
     message += `*${index + 1}. ${rental.customer_name}*\n`
     if (rental.customer_phone) message += `Telefone: ${rental.customer_phone}\n`
-    if (fullAddress) message += `Endereço: ${fullAddress}\n`
+    if (fullAddress) {
+      message += `Endereço: ${fullAddress}\n`
+      // Link do Google Maps numa linha própria — o WhatsApp transforma em link
+      // clicável que abre o GPS direto no endereço.
+      message += `Abrir no GPS: ${getGoogleMapsUrl(fullAddress)}\n`
+    }
     if (rental.delivery_time) message += `Entrega: ${rental.delivery_time}\n`
     if (rental.pickup_time) message += `Retirada: ${rental.pickup_time}\n`
 
