@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
     // 1. Tentar resolver a empresa via campaign_contact existente para esse telefone
     //    (telefone já normalizado; comparamos apenas pelo valor normalizado).
     let companyId: string | null = null
+    let contactId: string | null = null
 
     const { data: contact } = await admin
       .from('campaign_contacts')
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     if (contact) {
       companyId = contact.company_id
+      contactId = contact.id
 
       // Atualizar status do lead para "contacted" e marcar última mensagem.
       await admin
@@ -129,8 +131,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
+    // 2b. Se o contato veio de uma campanha, usar o script dela (modo venda do sistema).
+    let campaignPrompt: string | null = null
+    if (contactId) {
+      const { data: queueItem } = await admin
+        .from('campaign_queue')
+        .select('campaign_id')
+        .eq('contact_id', contactId)
+        .order('sent_at', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (queueItem?.campaign_id) {
+        const { data: campaign } = await admin
+          .from('campaigns')
+          .select('ai_enabled, ai_prompt')
+          .eq('id', queueItem.campaign_id)
+          .maybeSingle()
+
+        // Só responde automaticamente se a campanha tiver IA habilitada.
+        if (campaign && !campaign.ai_enabled) {
+          return NextResponse.json({ received: true })
+        }
+        campaignPrompt = campaign?.ai_prompt ?? null
+      }
+    }
+
     // 3. Gerar resposta da IA e enviar de volta (se houver).
-    const reply = await generateAiReply(companyId, phone, incomingText)
+    const reply = await generateAiReply(companyId, phone, incomingText, { campaignPrompt })
 
     if (reply) {
       await sendWhatsAppMessage(phone, reply, { companyId })

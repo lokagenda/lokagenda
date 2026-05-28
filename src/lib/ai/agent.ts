@@ -22,7 +22,8 @@ interface AnthropicMessage {
 export async function generateAiReply(
   companyId: string,
   contactPhone: string,
-  incomingMessage: string
+  incomingMessage: string,
+  options?: { campaignPrompt?: string | null }
 ): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -33,8 +34,14 @@ export async function generateAiReply(
 
   const admin = createAdminClient()
 
+  // Modo CAMPANHA (venda do sistema LokAgenda para outros locadores): usa o
+  // script da campanha como cérebro. Modo PADRÃO (atendimento ao cliente final):
+  // qualifica locação e usa o catálogo de produtos.
+  const isCampaignMode = !!options?.campaignPrompt?.trim()
+
   try {
-    // 1. Carregar a empresa e verificar se o agente está habilitado.
+    // 1. Carregar a empresa. No modo padrão exige ai_agent_enabled;
+    //    no modo campanha a própria campanha já habilitou a IA.
     const { data: company, error: companyError } = await admin
       .from('companies')
       .select('name, ai_agent_enabled, ai_agent_prompt')
@@ -46,20 +53,11 @@ export async function generateAiReply(
       return null
     }
 
-    if (!company.ai_agent_enabled) {
+    if (!isCampaignMode && !company.ai_agent_enabled) {
       return null
     }
 
-    // 2. Carregar produtos ativos da empresa para dar contexto à IA.
-    const { data: products } = await admin
-      .from('products')
-      .select('name, price, description')
-      .eq('company_id', companyId)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(MAX_PRODUCTS)
-
-    // 3. Carregar histórico recente da conversa (memória).
+    // 2. Histórico recente da conversa (memória) — vale para os dois modos.
     const { data: history } = await admin
       .from('ai_conversations')
       .select('role, content')
@@ -68,24 +66,51 @@ export async function generateAiReply(
       .order('created_at', { ascending: false })
       .limit(MAX_HISTORY_MESSAGES)
 
-    // O histórico vem em ordem decrescente; invertemos para ordem cronológica.
     const conversationHistory: AnthropicMessage[] = (history || [])
       .reverse()
       .map((m) => ({ role: m.role, content: m.content }))
 
-    // 4. Montar o system prompt.
-    const productLines =
-      products && products.length > 0
-        ? products
-            .map((p) => {
-              const price = `R$ ${Number(p.price).toFixed(2).replace('.', ',')}`
-              const desc = p.description ? ` — ${p.description}` : ''
-              return `- ${p.name}: ${price}${desc}`
-            })
-            .join('\n')
-        : 'Nenhum produto cadastrado no momento.'
+    // 3. Montar o system prompt conforme o modo.
+    let systemPrompt: string
 
-    const baseInstructions = `Você é um assistente de vendas e qualificação de leads da empresa "${company.name}", que aluga equipamentos e brinquedos para festas e eventos.
+    if (isCampaignMode) {
+      // Venda do SISTEMA LokAgenda para donos de locadoras (B2B).
+      const baseSales = `Você é um assistente de vendas da LokAgenda — um aplicativo/sistema de gestão para empresas que alugam brinquedos e equipamentos para festas. Você conversa pelo WhatsApp com o DONO de uma locadora, para apresentar o sistema e despertar interesse.
+
+Diretrizes:
+- Português do Brasil, tom amigável e consultivo. Mensagens CURTAS (WhatsApp), uma ideia por vez.
+- Vá apresentando aos poucos, de forma natural — nunca despeje tudo numa mensagem só. Faça perguntas pra manter o papo.
+- Primeiro entenda a realidade dele: pergunte se já usa algum app/sistema pra controlar agenda, locações, contratos e financeiro.
+- Mesmo que ele já use algo, apresente os diferenciais do LokAgenda com leveza (agenda visual, contratos automáticos, controle de disponibilidade por data, financeiro, orçamento e disparo pelo WhatsApp).
+- No máximo 1 emoji por mensagem. Nada de robótico ou texto de vendas agressivo.
+- Quando o lead demonstrar interesse, ofereça um teste gratuito e siga as instruções da campanha (incluindo enviar o link do vídeo, se houver).
+- Se ele não tiver interesse, agradeça com educação e encerre.
+- Quando o lead estiver quente (quer testar/assinar/saber preço), diga que vai chamar um atendente humano pra dar sequência.`
+
+      const script = `\n\nScript e instruções desta campanha (siga à risca):\n${options!.campaignPrompt!.trim()}`
+      systemPrompt = `${baseSales}${script}`
+    } else {
+      // Atendimento ao cliente final da locadora (modo original).
+      const { data: products } = await admin
+        .from('products')
+        .select('name, price, description')
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(MAX_PRODUCTS)
+
+      const productLines =
+        products && products.length > 0
+          ? products
+              .map((p) => {
+                const price = `R$ ${Number(p.price).toFixed(2).replace('.', ',')}`
+                const desc = p.description ? ` — ${p.description}` : ''
+                return `- ${p.name}: ${price}${desc}`
+              })
+              .join('\n')
+          : 'Nenhum produto cadastrado no momento.'
+
+      const baseInstructions = `Você é um assistente de vendas e qualificação de leads da empresa "${company.name}", que aluga equipamentos e brinquedos para festas e eventos.
 
 Diretrizes:
 - Responda sempre em português do Brasil (pt-BR), de forma amigável, calorosa e concisa (mensagens curtas, adequadas ao WhatsApp).
@@ -95,13 +120,14 @@ Diretrizes:
 - Não invente produtos ou preços que não estejam na lista. Se não souber algo, diga que um atendente vai verificar.
 - Não use emojis em excesso (no máximo um ou dois por mensagem).`
 
-    const customPrompt = company.ai_agent_prompt?.trim()
-      ? `\n\nInstruções personalizadas da empresa:\n${company.ai_agent_prompt.trim()}`
-      : ''
+      const customPrompt = company.ai_agent_prompt?.trim()
+        ? `\n\nInstruções personalizadas da empresa:\n${company.ai_agent_prompt.trim()}`
+        : ''
 
-    const productsSection = `\n\nCatálogo de produtos disponíveis:\n${productLines}`
+      const productsSection = `\n\nCatálogo de produtos disponíveis:\n${productLines}`
 
-    const systemPrompt = `${baseInstructions}${customPrompt}${productsSection}`
+      systemPrompt = `${baseInstructions}${customPrompt}${productsSection}`
+    }
 
     // 5. Montar as mensagens (histórico + mensagem nova).
     const messages: AnthropicMessage[] = [
