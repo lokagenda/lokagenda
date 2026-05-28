@@ -19,8 +19,6 @@ import {
   Building2,
   CreditCard,
   Megaphone,
-  Rocket,
-  UsersRound,
   HelpCircle,
   LogOut,
   X,
@@ -50,8 +48,6 @@ const navigation = [
   { name: 'Empresa', href: '/dashboard/empresa', icon: Building2 },
   { name: 'Assinatura', href: '/dashboard/assinatura', icon: CreditCard },
   { name: 'Banners', href: '/dashboard/banners', icon: Megaphone },
-  { name: 'Marketing', href: '/dashboard/marketing', icon: Rocket },
-  { name: 'Grupos', href: '/dashboard/grupos', icon: UsersRound },
   { name: 'Ajuda', href: '/dashboard/ajuda', icon: HelpCircle },
 ]
 
@@ -59,11 +55,9 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Marketing, Grupos e Banners sao ferramentas do dono da plataforma (super_admin):
-  // usam o Z-API global. Nao aparecem para clientes comuns.
-  const adminOnly = ['Banners', 'Marketing', 'Grupos']
+  // Banners é ferramenta do dono da plataforma (super_admin); não aparece p/ clientes.
   const filteredNavigation = navigation.filter((item) => {
-    if (adminOnly.includes(item.name) && role !== 'super_admin') return false
+    if (item.name === 'Banners' && role !== 'super_admin') return false
     return true
   })
 
