@@ -492,14 +492,34 @@ export async function getAdminStats() {
   await requireSuperAdmin()
   const admin = createAdminClient()
 
-  const [companies, activeSubscriptions, allActiveSubscriptions, profiles, recentCompanies] =
-    await Promise.all([
-      admin.from('companies').select('*', { count: 'exact', head: true }),
-      admin.from('subscriptions').select('*', { count: 'exact', head: true }).in('status', ['trial', 'active']),
-      admin.from('subscriptions').select('current_price').eq('status', 'active'),
-      admin.from('profiles').select('*', { count: 'exact', head: true }),
-      admin.from('companies').select('id, name, created_at').order('created_at', { ascending: false }).limit(10),
-    ])
+  const subCount = (build: (q: any) => any) =>
+    build(admin.from('subscriptions').select('*', { count: 'exact', head: true }))
+
+  const [
+    companies,
+    activeSubscriptions,
+    allActiveSubscriptions,
+    profiles,
+    recentCompanies,
+    trialSubs,
+    monthlySubs,
+    semiannualSubs,
+    annualSubs,
+    expiredSubs,
+    notRenewedSubs,
+  ] = await Promise.all([
+    admin.from('companies').select('*', { count: 'exact', head: true }),
+    admin.from('subscriptions').select('*', { count: 'exact', head: true }).in('status', ['trial', 'active']),
+    admin.from('subscriptions').select('current_price').eq('status', 'active'),
+    admin.from('profiles').select('*', { count: 'exact', head: true }),
+    admin.from('companies').select('id, name, created_at').order('created_at', { ascending: false }).limit(10),
+    subCount((q) => q.eq('status', 'trial')),
+    subCount((q) => q.eq('status', 'active').eq('billing_cycle', 'monthly')),
+    subCount((q) => q.eq('status', 'active').eq('billing_cycle', 'semiannual')),
+    subCount((q) => q.eq('status', 'active').eq('billing_cycle', 'annual')),
+    subCount((q) => q.eq('status', 'expired')),
+    subCount((q) => q.eq('status', 'cancelled')),
+  ])
 
   const monthlyRevenue = (allActiveSubscriptions.data || []).reduce(
     (sum, s) => sum + (s.current_price || 0),
@@ -512,5 +532,11 @@ export async function getAdminStats() {
     monthlyRevenue,
     totalUsers: profiles.count || 0,
     recentCompanies: recentCompanies.data || [],
+    trialCount: trialSubs.count || 0,
+    monthlyCount: monthlySubs.count || 0,
+    semiannualCount: semiannualSubs.count || 0,
+    annualCount: annualSubs.count || 0,
+    expiredCount: expiredSubs.count || 0,
+    notRenewedCount: notRenewedSubs.count || 0,
   }
 }
