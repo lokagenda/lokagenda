@@ -2,10 +2,12 @@
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateCustomer, deleteCustomer } from '@/actions/customers'
+import { updateCustomer, deleteCustomer, getCustomerHistory, type CustomerHistory } from '@/actions/customers'
 import { listEventTypes } from '@/actions/lembretes'
+import { DocumentField } from '@/components/document-field'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { createBrowserClient } from '@supabase/ssr'
-import { ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, Trash2, Loader2, FileText, CalendarDays } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 
@@ -16,15 +18,6 @@ function formatPhone(value: string): string {
   if (digits.length <= 10)
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
-}
-
-function formatCPF(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 11)
-  if (digits.length <= 3) return digits
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`
-  if (digits.length <= 9)
-    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`
 }
 
 type Customer = {
@@ -51,8 +44,8 @@ export default function EditarClientePage({
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [loadingData, setLoadingData] = useState(true)
   const [phone, setPhone] = useState('')
-  const [cpf, setCpf] = useState('')
   const [eventTypes, setEventTypes] = useState<string[]>([])
+  const [history, setHistory] = useState<CustomerHistory | null>(null)
 
   useEffect(() => {
     listEventTypes()
@@ -81,12 +74,17 @@ export default function EditarClientePage({
 
       setCustomer(data)
       setPhone(data.phone || '')
-      setCpf(data.document || '')
       setLoadingData(false)
     }
 
     fetchCustomer()
   }, [id, router])
+
+  useEffect(() => {
+    getCustomerHistory(id)
+      .then(setHistory)
+      .catch(() => setHistory(null))
+  }, [id])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -246,21 +244,8 @@ export default function EditarClientePage({
             />
           </div>
 
-          {/* CPF */}
-          <div>
-            <label htmlFor="document" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              CPF
-            </label>
-            <input
-              type="text"
-              id="document"
-              name="document"
-              value={cpf}
-              onChange={(e) => setCpf(formatCPF(e.target.value))}
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="000.000.000-00"
-            />
-          </div>
+          {/* CPF / CNPJ */}
+          <DocumentField defaultValue={customer.document} />
 
           {/* Tipo de evento */}
           <div>
@@ -335,6 +320,72 @@ export default function EditarClientePage({
           </button>
         </div>
       </form>
+
+      {/* Histórico do cliente */}
+      <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Histórico do cliente</h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Orçamentos e locações já registrados para este cliente.
+        </p>
+
+        {!history ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+          </div>
+        ) : history.rentals.length === 0 && history.quotes.length === 0 ? (
+          <p className="py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            Nenhum orçamento ou locação encontrado.
+          </p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Locações */}
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <CalendarDays className="h-4 w-4" />
+                Locações ({history.rentals.length})
+              </div>
+              <div className="space-y-2">
+                {history.rentals.length === 0 && (
+                  <p className="text-sm text-zinc-400">Nenhuma locação.</p>
+                )}
+                {history.rentals.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/dashboard/locacoes/${r.id}`}
+                    className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    <span className="text-zinc-700 dark:text-zinc-300">{formatDate(r.event_date)}</span>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatCurrency(r.total)}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Orçamentos */}
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <FileText className="h-4 w-4" />
+                Orçamentos ({history.quotes.length})
+              </div>
+              <div className="space-y-2">
+                {history.quotes.length === 0 && (
+                  <p className="text-sm text-zinc-400">Nenhum orçamento.</p>
+                )}
+                {history.quotes.map((q) => (
+                  <Link
+                    key={q.id}
+                    href={`/dashboard/orcamentos/${q.id}`}
+                    className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    <span className="text-zinc-700 dark:text-zinc-300">{formatDate(q.event_date)}</span>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatCurrency(q.total)}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

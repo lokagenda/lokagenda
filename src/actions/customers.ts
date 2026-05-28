@@ -96,6 +96,66 @@ export async function updateCustomer(id: string, formData: FormData) {
   redirect('/dashboard/clientes')
 }
 
+export interface CustomerHistoryItem {
+  id: string
+  event_date: string
+  total: number
+  status: string
+}
+
+export interface CustomerHistory {
+  rentals: CustomerHistoryItem[]
+  quotes: CustomerHistoryItem[]
+}
+
+/**
+ * Histórico de orçamentos e locações de um cliente. Casa por customer_id e, como
+ * fallback (registros antigos sem vínculo), pelo telefone exato — usando .eq()
+ * parametrizado para não quebrar com telefones formatados.
+ */
+export async function getCustomerHistory(customerId: string): Promise<CustomerHistory> {
+  const { supabase, companyId } = await getAuthenticatedProfile()
+
+  const { data: customer } = await supabase
+    .from('customers')
+    .select('phone')
+    .eq('id', customerId)
+    .eq('company_id', companyId)
+    .single()
+
+  async function fetchFrom(table: 'rentals' | 'quotes'): Promise<CustomerHistoryItem[]> {
+    const byId = await supabase
+      .from(table)
+      .select('id, event_date, total, status')
+      .eq('company_id', companyId)
+      .eq('customer_id', customerId)
+
+    const rows: CustomerHistoryItem[] = (byId.data as CustomerHistoryItem[]) || []
+    const seen = new Set(rows.map((r) => r.id))
+
+    if (customer?.phone) {
+      const byPhone = await supabase
+        .from(table)
+        .select('id, event_date, total, status')
+        .eq('company_id', companyId)
+        .eq('customer_phone', customer.phone)
+
+      for (const r of (byPhone.data as CustomerHistoryItem[]) || []) {
+        if (!seen.has(r.id)) {
+          rows.push(r)
+          seen.add(r.id)
+        }
+      }
+    }
+
+    rows.sort((a, b) => (b.event_date || '').localeCompare(a.event_date || ''))
+    return rows
+  }
+
+  const [rentals, quotes] = await Promise.all([fetchFrom('rentals'), fetchFrom('quotes')])
+  return { rentals, quotes }
+}
+
 export async function deleteCustomer(id: string) {
   const { supabase, companyId } = await getAuthenticatedProfile()
 

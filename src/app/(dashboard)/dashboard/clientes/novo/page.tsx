@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createCustomer } from '@/actions/customers'
 import { listEventTypes } from '@/actions/lembretes'
+import { DocumentField } from '@/components/document-field'
 import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -17,20 +18,10 @@ function formatPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
 }
 
-function formatCPF(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 11)
-  if (digits.length <= 3) return digits
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`
-  if (digits.length <= 9)
-    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`
-}
-
 export default function NovoClientePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [phone, setPhone] = useState('')
-  const [cpf, setCpf] = useState('')
   const [eventTypes, setEventTypes] = useState<string[]>([])
 
   useEffect(() => {
@@ -125,21 +116,8 @@ export default function NovoClientePage() {
             />
           </div>
 
-          {/* CPF */}
-          <div>
-            <label htmlFor="document" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              CPF
-            </label>
-            <input
-              type="text"
-              id="document"
-              name="document"
-              value={cpf}
-              onChange={(e) => setCpf(formatCPF(e.target.value))}
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="000.000.000-00"
-            />
-          </div>
+          {/* CPF / CNPJ */}
+          <DocumentField />
 
           {/* Tipo de evento */}
           <div>

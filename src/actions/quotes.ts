@@ -17,6 +17,7 @@ interface CreateQuoteInput {
   customer_name: string
   customer_phone?: string | null
   customer_email?: string | null
+  customer_document?: string | null
   event_date: string
   event_end_date?: string | null
   event_address?: string | null
@@ -95,6 +96,7 @@ export async function createQuote(input: CreateQuoteInput) {
           name: input.customer_name.trim(),
           phone: input.customer_phone?.trim() || null,
           email: input.customer_email?.trim() || null,
+          document: input.customer_document?.trim() || null,
         })
         .select('id')
         .single()
@@ -113,6 +115,7 @@ export async function createQuote(input: CreateQuoteInput) {
       customer_name: input.customer_name,
       customer_phone: input.customer_phone || null,
       customer_email: input.customer_email || null,
+      customer_document: input.customer_document || null,
       event_date: input.event_date,
       event_end_date: input.event_end_date || null,
       event_address: input.event_address || null,
@@ -172,6 +175,7 @@ export async function updateQuote(id: string, input: CreateQuoteInput) {
       customer_name: input.customer_name,
       customer_phone: input.customer_phone || null,
       customer_email: input.customer_email || null,
+      customer_document: input.customer_document || null,
       event_date: input.event_date,
       event_end_date: input.event_end_date || null,
       event_address: input.event_address || null,

@@ -6,6 +6,7 @@ import { createQuote, updateQuote, convertQuoteToRental, getQuoteFormData, getQu
 import { createRental } from '@/actions/rentals'
 import { generateQuoteMessage, generateRentalConfirmationMessage, getWhatsAppUrl } from '@/lib/whatsapp'
 import { formatCurrency } from '@/lib/utils'
+import { formatCPF, formatCNPJ } from '@/components/document-field'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,6 +52,7 @@ export default function NovoOrcamentoPage() {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
+  const [customerDocument, setCustomerDocument] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [eventEndDate, setEventEndDate] = useState('')
   const [eventAddress, setEventAddress] = useState('')
@@ -97,6 +99,7 @@ export default function NovoOrcamentoPage() {
         setCustomerName(q.customer_name || '')
         setCustomerPhone(q.customer_phone || '')
         setCustomerEmail(q.customer_email || '')
+        setCustomerDocument((q as any).customer_document || '')
         setCustomerSearch(q.customer_name || '')
         setEventDate(q.event_date || '')
         setEventEndDate((q as any).event_end_date || '')
@@ -190,6 +193,7 @@ export default function NovoOrcamentoPage() {
     setCustomerName(customer.name)
     setCustomerPhone(customer.phone || '')
     setCustomerEmail(customer.email || '')
+    setCustomerDocument(customer.document || '')
     setCustomerSearch(customer.name)
     setShowCustomerDropdown(false)
   }
@@ -199,6 +203,7 @@ export default function NovoOrcamentoPage() {
     setCustomerName('')
     setCustomerPhone('')
     setCustomerEmail('')
+    setCustomerDocument('')
     setCustomerSearch('')
   }
 
@@ -300,6 +305,7 @@ export default function NovoOrcamentoPage() {
       customer_name: customerName,
       customer_phone: customerPhone || undefined,
       customer_email: customerEmail || undefined,
+      customer_document: customerDocument || undefined,
       event_date: eventDate,
       event_end_date: eventEndDate || null,
       event_address: eventAddress || undefined,
@@ -345,6 +351,7 @@ export default function NovoOrcamentoPage() {
       customer_name: customerName,
       customer_phone: customerPhone || undefined,
       customer_email: customerEmail || undefined,
+      customer_document: customerDocument || undefined,
       event_date: eventDate,
       event_end_date: eventEndDate || null,
       event_address: eventAddress || undefined,
@@ -501,6 +508,15 @@ export default function NovoOrcamentoPage() {
               type="email"
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
+            />
+            <Input
+              label="CPF / CNPJ"
+              placeholder="CPF ou CNPJ"
+              value={customerDocument}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '')
+                setCustomerDocument(digits.length > 11 ? formatCNPJ(e.target.value) : formatCPF(e.target.value))
+              }}
             />
           </div>
         </CardContent>
