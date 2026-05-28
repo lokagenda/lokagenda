@@ -179,7 +179,7 @@ export default function OrcamentoDetailPage({
       }).join('')
 
       const logoHtml = company?.logo_url
-        ? `<div style="text-align: center; margin-bottom: 24px;"><img src="${company.logo_url}" style="max-height: 80px;" crossorigin="anonymous" /></div>`
+        ? `<div style="text-align: center; margin-bottom: 24px;"><img src="${company.logo_url}" style="max-height: 80px; max-width: 240px; object-fit: contain; display: inline-block;" crossorigin="anonymous" /></div>`
         : ''
 
       const notesHtml = quote.notes
@@ -190,18 +190,21 @@ export default function OrcamentoDetailPage({
         <div style="padding: 40px; font-family: Arial, sans-serif; max-width: 794px; background: white; color: #1a1a1a;">
           ${logoHtml}
           <h1 style="text-align: center; font-size: 24px; margin-bottom: 24px; color: #1a1a1a;">ORÇAMENTO</h1>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 24px;">
-            <div>
-              <strong>${company?.name || ''}</strong><br/>
-              ${company?.phone || ''}<br/>
-              ${(company as any)?.document || ''}
-            </div>
-            <div style="text-align: right;">
-              <strong>Cliente:</strong> ${quote.customer_name}<br/>
-              ${quote.customer_phone ? `<strong>Telefone:</strong> ${quote.customer_phone}<br/>` : ''}
-              ${quote.customer_email ? `<strong>Email:</strong> ${quote.customer_email}` : ''}
-            </div>
-          </div>
+          <table style="width: 100%; margin-bottom: 24px; border-collapse: collapse;">
+            <tr>
+              <td style="vertical-align: top; text-align: left; width: 50%;">
+                <strong>${company?.name || ''}</strong><br/>
+                ${company?.phone || ''}<br/>
+                ${(company as any)?.document || ''}
+              </td>
+              <td style="vertical-align: top; text-align: right; width: 50%;">
+                <strong>Cliente:</strong> ${quote.customer_name}<br/>
+                ${quote.customer_phone ? `<strong>Telefone:</strong> ${quote.customer_phone}<br/>` : ''}
+                ${(quote as any).customer_document ? `<strong>CPF/CNPJ:</strong> ${(quote as any).customer_document}<br/>` : ''}
+                ${quote.customer_email ? `<strong>Email:</strong> ${quote.customer_email}` : ''}
+              </td>
+            </tr>
+          </table>
           <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 24px;">
             <strong>Data do Evento:</strong> ${fmtDate(quote.event_date)}<br/>
             ${addressParts ? `<strong>Local:</strong> ${addressParts}<br/>` : ''}

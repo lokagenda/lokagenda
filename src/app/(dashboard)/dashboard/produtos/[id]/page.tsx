@@ -28,6 +28,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { compressImage, replaceInputFile } from '@/lib/compress-image'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ProductCalendar } from '@/components/product-calendar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 const STATUS_LABELS: Record<ProductHistoryRental['status'], string> = {
@@ -549,6 +550,25 @@ export default function EditarProdutoPage({
                 </CardContent>
               </Card>
             </div>
+
+            {/* Calendário de ocupação */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  Calendário de ocupação
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ProductCalendar
+                  bookings={[...history.futureRentals, ...history.pastRentals].map((r) => ({
+                    eventDate: r.eventDate,
+                    customerName: r.customerName,
+                    quantity: r.quantity,
+                  }))}
+                />
+              </CardContent>
+            </Card>
 
             {/* Próximas locações */}
             <Card>
