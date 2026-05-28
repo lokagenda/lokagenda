@@ -1321,6 +1321,7 @@ export interface Database {
           media_type: string | null;
           scheduled_at: string;
           status: string;
+          recurrence: string;
           sent_at: string | null;
           error: string | null;
           created_at: string;
@@ -1335,6 +1336,7 @@ export interface Database {
           media_type?: string | null;
           scheduled_at: string;
           status?: string;
+          recurrence?: string;
           sent_at?: string | null;
           error?: string | null;
           created_at?: string;
@@ -1349,6 +1351,7 @@ export interface Database {
           media_type?: string | null;
           scheduled_at?: string;
           status?: string;
+          recurrence?: string;
           sent_at?: string | null;
           error?: string | null;
           created_at?: string;

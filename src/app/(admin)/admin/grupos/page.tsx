@@ -29,6 +29,7 @@ export default function GruposPage() {
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [message, setMessage] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
+  const [recurrence, setRecurrence] = useState<'once' | 'daily' | 'weekly'>('once')
   const [media, setMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [capturingId, setCapturingId] = useState<string | null>(null)
@@ -118,12 +119,14 @@ export default function GruposPage() {
         media_url: media?.url,
         media_type: media?.type,
         scheduled_at: scheduledAt,
+        recurrence,
       })
       if (result.error) return showToast('error', result.error)
       showToast('success', 'Mensagem agendada!')
       setMessage('')
       setMedia(null)
       setScheduledAt('')
+      setRecurrence('once')
       await loadScheduled()
     })
   }
@@ -263,6 +266,18 @@ export default function GruposPage() {
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
               />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Repetição</label>
+              <select
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value as 'once' | 'daily' | 'weekly')}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              >
+                <option value="once">Uma vez</option>
+                <option value="daily">Todo dia</option>
+                <option value="weekly">Toda semana</option>
+              </select>
+            </div>
             <div className="ml-auto flex gap-2">
               <Button type="button" variant="outline" onClick={handleSchedule} disabled={isSending || !selectedGroupId || !scheduledAt}>
                 <Clock className="h-4 w-4" />
@@ -293,7 +308,11 @@ export default function GruposPage() {
                       {m.group_name || m.group_id}
                     </p>
                     <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                      {formatDateTime(m.scheduled_at)} · {m.content ? m.content.slice(0, 40) : `[${m.media_type || 'mídia'}]`}
+                      {formatDateTime(m.scheduled_at)}
+                      {m.recurrence === 'daily' && ' · todo dia'}
+                      {m.recurrence === 'weekly' && ' · toda semana'}
+                      {' · '}
+                      {m.content ? m.content.slice(0, 40) : `[${m.media_type || 'mídia'}]`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

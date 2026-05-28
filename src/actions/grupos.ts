@@ -338,6 +338,7 @@ export interface ScheduledGroupMessage {
   media_type: string | null
   scheduled_at: string
   status: string
+  recurrence: string
   sent_at: string | null
   error: string | null
 }
@@ -349,6 +350,7 @@ export async function scheduleGroupMessage(data: {
   media_url?: string
   media_type?: string
   scheduled_at: string
+  recurrence?: 'once' | 'daily' | 'weekly'
 }): Promise<{ success?: boolean; error?: string }> {
   const companyId = await getCompanyId()
   const supabase = await createClient()
@@ -366,6 +368,7 @@ export async function scheduleGroupMessage(data: {
     media_type: data.media_type || null,
     scheduled_at: new Date(data.scheduled_at).toISOString(),
     status: 'pending',
+    recurrence: data.recurrence || 'once',
   })
 
   if (error) return { error: `Erro ao agendar: ${error.message}` }
@@ -377,7 +380,7 @@ export async function listScheduledGroupMessages(): Promise<ScheduledGroupMessag
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('group_scheduled_messages')
-    .select('id, group_id, group_name, content, media_url, media_type, scheduled_at, status, sent_at, error')
+    .select('id, group_id, group_name, content, media_url, media_type, scheduled_at, status, recurrence, sent_at, error')
     .order('scheduled_at', { ascending: false })
 
   if (error) throw new Error(`Erro ao listar agendamentos: ${error.message}`)

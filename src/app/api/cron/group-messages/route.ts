@@ -92,14 +92,30 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      await admin
-        .from('group_scheduled_messages')
-        .update({
-          status: ok ? 'sent' : 'failed',
-          sent_at: ok ? new Date().toISOString() : null,
-          error: errText,
-        })
-        .eq('id', msg.id)
+      const recurrence = (msg.recurrence as string) || 'once'
+      if (ok && (recurrence === 'daily' || recurrence === 'weekly')) {
+        // Recorrente: reprograma a próxima ocorrência e mantém pendente.
+        const next = new Date(msg.scheduled_at)
+        next.setUTCDate(next.getUTCDate() + (recurrence === 'weekly' ? 7 : 1))
+        await admin
+          .from('group_scheduled_messages')
+          .update({
+            status: 'pending',
+            scheduled_at: next.toISOString(),
+            sent_at: new Date().toISOString(),
+            error: null,
+          })
+          .eq('id', msg.id)
+      } else {
+        await admin
+          .from('group_scheduled_messages')
+          .update({
+            status: ok ? 'sent' : 'failed',
+            sent_at: ok ? new Date().toISOString() : null,
+            error: errText,
+          })
+          .eq('id', msg.id)
+      }
 
       if (ok) {
         sent++
