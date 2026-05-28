@@ -12,6 +12,10 @@ import {
   Plus,
   Trash2,
   Loader2,
+  Download,
+  CheckSquare,
+  Square,
+  MinusSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +27,7 @@ import {
   listContacts,
   createContact,
   deleteContact,
+  deleteContacts,
   importContactsCSV,
   listCampaigns,
   createCampaign,
@@ -148,6 +153,9 @@ function ContatosTab() {
   const [csvRows, setCsvRows] = useState<{ name?: string; phone: string; tags?: string }[]>([])
   const [csvFileName, setCsvFileName] = useState('')
 
+  // Seleção em lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
   const load = useCallback(async () => {
     const res = await listContacts({
       status: statusFilter || undefined,
@@ -206,8 +214,70 @@ function ContatosTab() {
       else {
         toast.success('Contato excluído')
         setContacts((prev) => prev.filter((c) => c.id !== id))
+        setSelectedIds((prev) => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
       }
     })
+  }
+
+  const allSelected = contacts.length > 0 && selectedIds.size === contacts.length
+  const someSelected = selectedIds.size > 0 && selectedIds.size < contacts.length
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleSelectAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(contacts.map((c) => c.id)))
+
+  const handleDeleteSelected = () => {
+    const ids = Array.from(selectedIds)
+    if (!ids.length) return
+    if (!confirm(`Excluir ${ids.length} contato(s) selecionado(s)?`)) return
+    startTransition(async () => {
+      const res = await deleteContacts(ids)
+      if (res.error) toast.error(res.error)
+      else {
+        toast.success(`${res.deleted ?? ids.length} contato(s) excluído(s)`)
+        setContacts((prev) => prev.filter((c) => !selectedIds.has(c.id)))
+        setSelectedIds(new Set())
+      }
+    })
+  }
+
+  const handleExportCSV = () => {
+    if (contacts.length === 0) {
+      toast.error('Nenhum contato para exportar')
+      return
+    }
+    const escape = (v: string) => `"${(v || '').replace(/"/g, '""')}"`
+    const header = ['Nome', 'Telefone', 'Origem', 'Status', 'Tags', 'Cadastrado em']
+    const lines = contacts.map((c) =>
+      [
+        escape(c.name || ''),
+        escape(c.phone || ''),
+        escape(c.source || ''),
+        escape(CONTACT_STATUS_LABELS[c.status] || c.status),
+        escape(c.tags || ''),
+        escape(c.created_at ? new Date(c.created_at).toLocaleString('pt-BR') : ''),
+      ].join(',')
+    )
+    // BOM para o Excel reconhecer acentos.
+    const csv = '﻿' + [header.join(','), ...lines].join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `contatos-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -270,6 +340,10 @@ function ContatosTab() {
           </select>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportCSV} disabled={contacts.length === 0}>
+            <Download className="h-4 w-4" />
+            Exportar CSV
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4" />
             Importar CSV
@@ -281,9 +355,22 @@ function ContatosTab() {
         </div>
       </div>
 
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        {loading ? 'Carregando...' : `${contacts.length} contato(s)`}
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          {loading ? 'Carregando...' : `${contacts.length} contato(s)`}
+        </p>
+        {selectedIds.size > 0 && (
+          <Button
+            variant="outline"
+            onClick={handleDeleteSelected}
+            disabled={isPending}
+            className="text-red-700 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="h-4 w-4" />
+            Excluir selecionados ({selectedIds.size})
+          </Button>
+        )}
+      </div>
 
       {/* List */}
       {loading ? (
@@ -300,6 +387,17 @@ function ContatosTab() {
             <table className="w-full text-sm">
               <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
                 <tr>
+                  <th className="px-4 py-3">
+                    <button onClick={toggleSelectAll} className="text-zinc-400 hover:text-blue-600 dark:text-zinc-500 dark:hover:text-blue-400" aria-label="Selecionar todos">
+                      {allSelected ? (
+                        <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      ) : someSelected ? (
+                        <MinusSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
                   <th className="px-4 py-3 font-medium">Nome</th>
                   <th className="px-4 py-3 font-medium">Telefone</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -309,7 +407,16 @@ function ContatosTab() {
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {contacts.map((c) => (
-                  <tr key={c.id} className="text-zinc-700 dark:text-zinc-300">
+                  <tr key={c.id} className={`text-zinc-700 dark:text-zinc-300 ${selectedIds.has(c.id) ? 'bg-blue-50 dark:bg-blue-900/10' : ''}`}>
+                    <td className="px-4 py-3">
+                      <button onClick={() => toggleSelect(c.id)} className="text-zinc-400 hover:text-blue-600 dark:text-zinc-500 dark:hover:text-blue-400" aria-label="Selecionar contato">
+                        {selectedIds.has(c.id) ? (
+                          <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
                       {c.name || '—'}
                     </td>

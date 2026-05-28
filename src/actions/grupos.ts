@@ -428,6 +428,31 @@ export async function captureGroupContacts(
   const total = phones.length
   if (total === 0) return { imported: 0, total: 0 }
 
+  // Best-effort: busca a agenda de contatos do número (Z-API /contacts) para
+  // mapear telefone -> nome. Só vem nome de quem está salvo na agenda; os demais
+  // ficam sem nome (limitação da Z-API). Não bloqueia a captação se falhar.
+  const nameMap = new Map<string, string>()
+  try {
+    for (let page = 1; page <= 30; page++) {
+      const res = await fetch(
+        `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/contacts?page=${page}&pageSize=200`,
+        { method: 'GET', headers, signal: AbortSignal.timeout(15000) }
+      )
+      if (!res.ok) break
+      const list = await res.json().catch(() => null)
+      const arr: Record<string, unknown>[] = Array.isArray(list) ? list : []
+      if (arr.length === 0) break
+      for (const c of arr) {
+        const ph = String(c?.phone || '').replace(/\D/g, '')
+        const nm = (c?.name || c?.short || c?.vname || c?.notify || '') as string
+        if (ph && nm) nameMap.set(ph, String(nm))
+      }
+      if (arr.length < 200) break
+    }
+  } catch {
+    // segue sem nomes
+  }
+
   const admin = createAdminClient()
 
   // Quais já existem (evita duplicar).
@@ -440,7 +465,13 @@ export async function captureGroupContacts(
   const existingSet = new Set((existing ?? []).map((c) => c.phone))
   const toInsert = Array.from(new Set(phones))
     .filter((p) => !existingSet.has(p))
-    .map((phone) => ({ company_id: companyId, phone, source: 'grupo', status: 'lead' as const }))
+    .map((phone) => ({
+      company_id: companyId,
+      phone,
+      name: nameMap.get(phone) || null,
+      source: 'grupo',
+      status: 'lead' as const,
+    }))
 
   if (toInsert.length === 0) return { imported: 0, total }
 

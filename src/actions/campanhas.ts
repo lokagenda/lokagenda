@@ -148,6 +148,22 @@ export async function deleteContact(id: string) {
   return { success: true }
 }
 
+export async function deleteContacts(ids: string[]) {
+  if (!ids?.length) return { success: true, deleted: 0 }
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { error } = await supabase
+    .from('campaign_contacts')
+    .delete()
+    .eq('company_id', companyId)
+    .in('id', ids)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/marketing')
+  return { success: true, deleted: ids.length }
+}
+
 export async function updateContactStatus(id: string, status: ContactStatus) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
