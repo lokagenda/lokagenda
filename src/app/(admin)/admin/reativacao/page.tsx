@@ -72,6 +72,9 @@ export default function AdminReativacaoPage() {
     setSelected(new Set())
     try {
       const result = await listReactivationTargets(filter)
+      if ('error' in result && result.error) {
+        toast.error(result.error)
+      }
       setTargets(result.targets)
       setSendableCount(result.sendableCount)
     } catch (err: any) {
@@ -106,9 +109,13 @@ export default function AdminReativacaoPage() {
   async function handleSeed() {
     setSeeding(true)
     try {
-      await seedReactivationTemplates()
-      toast.success('Templates de reativação criados/atualizados!')
-      await loadTemplates()
+      const result = await seedReactivationTemplates()
+      if (result && 'error' in result && result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('Templates de reativação criados/atualizados!')
+        await loadTemplates()
+      }
     } catch (err: any) {
       toast.error(err.message || 'Erro ao criar templates')
     }
@@ -129,10 +136,14 @@ export default function AdminReativacaoPage() {
     setSending(true)
     try {
       const result = await sendReactivationBatch(Array.from(selected), templateSlug)
-      toast.success(
-        `Enviadas: ${result.sent} | Falhas: ${result.failed} | Puladas: ${result.skipped}`
-      )
-      setSelected(new Set())
+      if ('error' in result) {
+        toast.error(result.error)
+      } else {
+        toast.success(
+          `Enviadas: ${result.sent} | Falhas: ${result.failed} | Puladas: ${result.skipped}`
+        )
+        setSelected(new Set())
+      }
     } catch (err: any) {
       toast.error(err.message || 'Erro ao enviar mensagens')
     }

@@ -49,25 +49,31 @@ export const REACTIVATION_TEMPLATE_SLUGS = REACTIVATION_TEMPLATES.map((t) => t.s
  * Cria/atualiza (idempotente, por slug) os 3 templates padrão de reativação.
  */
 export async function seedReactivationTemplates() {
-  await requireSuperAdmin()
-  const admin = createAdminClient()
+  try {
+    await requireSuperAdmin()
+    const admin = createAdminClient()
 
-  const now = new Date().toISOString()
-  const { error } = await admin
-    .from('whatsapp_templates')
-    .upsert(
-      REACTIVATION_TEMPLATES.map((t) => ({
-        slug: t.slug,
-        name: t.name,
-        content: t.content,
-        active: true,
-        updated_at: now,
-      })),
-      { onConflict: 'slug' }
-    )
+    const now = new Date().toISOString()
+    const { error } = await admin
+      .from('whatsapp_templates')
+      .upsert(
+        REACTIVATION_TEMPLATES.map((t) => ({
+          slug: t.slug,
+          name: t.name,
+          content: t.content,
+          active: true,
+          updated_at: now,
+        })),
+        { onConflict: 'slug' }
+      )
 
-  if (error) throw new Error(error.message)
-  return { created: REACTIVATION_TEMPLATES.length }
+    if (error) throw new Error(error.message)
+    return { created: REACTIVATION_TEMPLATES.length }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Erro ao criar templates'
+    console.error('[reativacao] seedReactivationTemplates:', err)
+    return { error: msg }
+  }
 }
 
 /**
@@ -174,6 +180,18 @@ function daysSince(dateStr: string): number {
  * proprietário (via auth admin), status, trial e dias desde o cadastro.
  */
 export async function listReactivationTargets(filter: ReactivationFilter) {
+  try {
+    return await listReactivationTargetsInner(filter)
+  } catch (err) {
+    // Nunca propaga o erro genérico de Server Components: loga (aparece nos logs
+    // do Vercel) e devolve o motivo real para a UI exibir.
+    const msg = err instanceof Error ? err.message : 'Erro ao carregar empresas'
+    console.error('[reativacao] listReactivationTargets:', err)
+    return { targets: [] as ReactivationTarget[], total: 0, sendableCount: 0, error: msg }
+  }
+}
+
+async function listReactivationTargetsInner(filter: ReactivationFilter) {
   await requireSuperAdmin()
   const admin = createAdminClient()
 
@@ -242,16 +260,22 @@ export async function listReactivationTargets(filter: ReactivationFilter) {
 export async function sendReactivationBatch(
   companyIds: string[],
   templateSlug: string
-) {
-  await requireSuperAdmin()
-  const admin = createAdminClient()
+): Promise<{ sent: number; failed: number; skipped: number } | { error: string }> {
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    await requireSuperAdmin()
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('[reativacao] sendReactivationBatch auth:', err)
+    return { error: err instanceof Error ? err.message : 'Não autorizado' }
+  }
 
   if (!companyIds.length) {
     return { sent: 0, failed: 0, skipped: 0 }
   }
 
   if (!REACTIVATION_TEMPLATE_SLUGS.includes(templateSlug as never)) {
-    throw new Error('Template de reativação inválido')
+    return { error: 'Template de reativação inválido' }
   }
 
   const { data, error } = await admin
@@ -259,7 +283,7 @@ export async function sendReactivationBatch(
     .select('id, name, phone')
     .in('id', companyIds)
 
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
 
   const companies = data || []
   let sent = 0
