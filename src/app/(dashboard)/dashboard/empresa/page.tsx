@@ -31,6 +31,7 @@ export default function EmpresaPage() {
     logo_url: '',
     slug: '',
     catalog_enabled: false,
+    catalog_show_prices: true,
     ai_agent_enabled: false,
     ai_agent_prompt: '',
   })
@@ -75,6 +76,7 @@ export default function EmpresaPage() {
           logo_url: company.logo_url || '',
           slug: company.slug || '',
           catalog_enabled: company.catalog_enabled ?? false,
+          catalog_show_prices: company.catalog_show_prices ?? true,
           ai_agent_enabled: company.ai_agent_enabled ?? false,
           ai_agent_prompt: company.ai_agent_prompt || '',
         })
@@ -147,6 +149,7 @@ export default function EmpresaPage() {
     formData.set('state', form.state)
     formData.set('zip_code', form.zip_code)
     formData.set('catalog_enabled', form.catalog_enabled ? 'true' : 'false')
+    formData.set('catalog_show_prices', form.catalog_show_prices ? 'true' : 'false')
     formData.set('ai_agent_enabled', form.ai_agent_enabled ? 'true' : 'false')
     formData.set('ai_agent_prompt', form.ai_agent_prompt)
     if (logoFile) {
@@ -344,6 +347,39 @@ export default function EmpresaPage() {
               />
             </button>
           </div>
+
+          {/* Toggle mostrar preços */}
+          {form.catalog_enabled && (
+            <div className="mt-3 flex items-center justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  Mostrar preços no catálogo
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {form.catalog_show_prices
+                    ? 'Os clientes veem os valores dos produtos.'
+                    : 'Os valores ficam ocultos; o cliente só monta o pedido.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.catalog_show_prices}
+                onClick={() =>
+                  setForm((prev) => ({ ...prev, catalog_show_prices: !prev.catalog_show_prices }))
+                }
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
+                  form.catalog_show_prices ? 'bg-blue-700 dark:bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    form.catalog_show_prices ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
 
           {/* Shareable link */}
           {form.catalog_enabled && catalogUrl && (

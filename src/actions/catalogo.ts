@@ -19,6 +19,7 @@ export interface PublicCatalogCompany {
   logo_url: string | null
   phone: string | null
   catalog_enabled: boolean
+  catalog_show_prices: boolean
 }
 
 export interface PublicCatalogResult {
@@ -40,6 +41,7 @@ interface SubmitCatalogQuoteInput {
   customer_phone: string
   customer_email?: string
   event_date: string
+  event_time?: string
   notes?: string
   items: SubmitItemInput[]
 }
@@ -55,7 +57,7 @@ export async function getPublicCatalog(slug: string): Promise<PublicCatalogResul
 
   const { data: company, error: companyError } = await admin
     .from('companies')
-    .select('id, name, logo_url, phone, catalog_enabled')
+    .select('id, name, logo_url, phone, catalog_enabled, catalog_show_prices')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -99,6 +101,7 @@ export async function submitCatalogQuote(
   const customerName = data?.customer_name?.trim()
   const customerPhone = data?.customer_phone?.trim()
   const eventDate = data?.event_date?.trim()
+  const eventTime = data?.event_time?.trim() || null
   const customerEmail = data?.customer_email?.trim() || null
   const notes = data?.notes?.trim() || null
 
@@ -110,6 +113,9 @@ export async function submitCatalogQuote(
   }
   if (!eventDate) {
     return { error: 'Informe a data do evento.' }
+  }
+  if (!eventTime || !/^\d{2}:\d{2}/.test(eventTime)) {
+    return { error: 'Informe o horário do evento.' }
   }
   // Validar formato e que a data não está no passado
   if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate < new Date().toISOString().slice(0, 10)) {
@@ -212,6 +218,7 @@ export async function submitCatalogQuote(
       customer_phone: customerPhone,
       customer_email: customerEmail,
       event_date: eventDate,
+      delivery_time: eventTime,
       notes,
       total,
       discount: 0,
@@ -263,7 +270,7 @@ export async function submitCatalogQuote(
     try {
       await sendWhatsAppMessage(
         company.phone,
-        `🛒 *Novo orçamento pelo catálogo*\n\nCliente: ${customerName}\nTelefone: ${customerPhone}\nData do evento: ${eventDate}\nTotal estimado: R$ ${total.toFixed(2)}\n\nAcesse o painel para confirmar.`,
+        `🛒 *Novo orçamento pelo catálogo*\n\nCliente: ${customerName}\nTelefone: ${customerPhone}\nData do evento: ${eventDate}${eventTime ? ` às ${eventTime}` : ''}\nTotal estimado: R$ ${total.toFixed(2)}\n\nAcesse o painel para confirmar.`,
         { companyId: company.id }
       )
     } catch {

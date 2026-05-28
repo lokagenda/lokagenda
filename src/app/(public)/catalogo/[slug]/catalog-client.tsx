@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Package,
   Loader2,
+  MessageCircle,
 } from 'lucide-react'
 import { submitCatalogQuote } from '@/actions/catalogo'
 import type {
@@ -43,11 +44,21 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  const showPrices = company.catalog_show_prices !== false
+  const whatsappUrl = company.phone
+    ? `https://wa.me/${(() => {
+        let d = company.phone.replace(/\D/g, '')
+        if (d.length <= 11 && !d.startsWith('55')) d = `55${d}`
+        return d
+      })()}`
+    : null
+
   const [form, setForm] = useState({
     customer_name: '',
     customer_phone: '',
     customer_email: '',
     event_date: '',
+    event_time: '',
     notes: '',
   })
 
@@ -110,11 +121,17 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
       return
     }
 
+    if (!form.event_date || !form.event_time) {
+      setError('Selecione a data e o horário do evento.')
+      return
+    }
+
     const payload = {
       customer_name: form.customer_name,
       customer_phone: form.customer_phone,
       customer_email: form.customer_email || undefined,
       event_date: form.event_date,
+      event_time: form.event_time,
       notes: form.notes || undefined,
       items: cartItems.map((item) => ({
         product_id: item.product.id,
@@ -189,18 +206,31 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
             </div>
           </div>
 
-          <button
-            onClick={() => setCartOpen(true)}
-            className="relative inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-800 dark:bg-blue-500 dark:hover:bg-blue-700"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            <span className="hidden sm:inline">Carrinho</span>
-            {totalItems > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold text-white">
-                {totalItems}
-              </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">WhatsApp</span>
+              </a>
             )}
-          </button>
+            <button
+              onClick={() => setCartOpen(true)}
+              className="relative inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-800 dark:bg-blue-500 dark:hover:bg-blue-700"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Carrinho</span>
+              {totalItems > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold text-white">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -242,13 +272,15 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                       {product.name}
                     </h3>
                     {product.description && (
-                      <p className="mt-1 line-clamp-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="mt-1 whitespace-pre-line text-xs text-zinc-500 dark:text-zinc-400">
                         {product.description}
                       </p>
                     )}
-                    <p className="mt-2 text-base font-bold text-blue-700 dark:text-blue-400">
-                      {formatCurrency(product.price)}
-                    </p>
+                    {showPrices && (
+                      <p className="mt-2 text-base font-bold text-blue-700 dark:text-blue-400">
+                        {formatCurrency(product.price)}
+                      </p>
+                    )}
 
                     <div className="mt-3">
                       {inCart ? (
@@ -299,7 +331,7 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
             <ShoppingCart className="h-4 w-4" />
             {totalItems} {totalItems === 1 ? 'item' : 'itens'}
           </span>
-          <span className="text-sm font-bold">{formatCurrency(totalPrice)}</span>
+          {showPrices && <span className="text-sm font-bold">{formatCurrency(totalPrice)}</span>}
         </button>
       )}
 
@@ -358,9 +390,11 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                         <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                           {item.product.name}
                         </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {formatCurrency(item.product.price)} cada
-                        </p>
+                        {showPrices && (
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {formatCurrency(item.product.price)} cada
+                          </p>
+                        )}
                         <div className="mt-2 flex items-center justify-between">
                           <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-700">
                             <button
@@ -390,11 +424,13 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                           </button>
                         </div>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
-                          {formatCurrency(item.product.price * item.quantity)}
-                        </p>
-                      </div>
+                      {showPrices && (
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                            {formatCurrency(item.product.price * item.quantity)}
+                          </p>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -438,17 +474,32 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
                       className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Data do evento *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={form.event_date}
-                      onChange={handleField('event_date')}
-                      className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Data do evento *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        min={new Date().toISOString().slice(0, 10)}
+                        value={form.event_date}
+                        onChange={handleField('event_date')}
+                        className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Horário *
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={form.event_time}
+                        onChange={handleField('event_time')}
+                        className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -474,12 +525,14 @@ export function CatalogClient({ slug, company, products }: CatalogClientProps) {
             {/* Rodapé do drawer */}
             {cartItems.length > 0 && (
               <div className="border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm text-zinc-500 dark:text-zinc-400">Total estimado</span>
-                  <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                    {formatCurrency(totalPrice)}
-                  </span>
-                </div>
+                {showPrices && (
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-sm text-zinc-500 dark:text-zinc-400">Total estimado</span>
+                    <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                      {formatCurrency(totalPrice)}
+                    </span>
+                  </div>
+                )}
                 {!checkout ? (
                   <button
                     onClick={() => {

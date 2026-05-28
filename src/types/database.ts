@@ -26,6 +26,7 @@ export interface Database {
           reminder_days_before: number;
           reminder_auto_send: boolean;
           catalog_enabled: boolean;
+          catalog_show_prices: boolean;
           ai_agent_enabled: boolean;
           ai_agent_prompt: string | null;
           zapi_client_token: string | null;
@@ -48,6 +49,7 @@ export interface Database {
           reminder_days_before?: number;
           reminder_auto_send?: boolean;
           catalog_enabled?: boolean;
+          catalog_show_prices?: boolean;
           ai_agent_enabled?: boolean;
           ai_agent_prompt?: string | null;
           zapi_client_token?: string | null;
@@ -70,6 +72,7 @@ export interface Database {
           reminder_days_before?: number;
           reminder_auto_send?: boolean;
           catalog_enabled?: boolean;
+          catalog_show_prices?: boolean;
           ai_agent_enabled?: boolean;
           ai_agent_prompt?: string | null;
           zapi_client_token?: string | null;
