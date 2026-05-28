@@ -1310,6 +1310,59 @@ export interface Database {
           },
         ];
       };
+      group_scheduled_messages: {
+        Row: {
+          id: string;
+          company_id: string;
+          group_id: string;
+          group_name: string | null;
+          content: string | null;
+          media_url: string | null;
+          media_type: string | null;
+          scheduled_at: string;
+          status: string;
+          sent_at: string | null;
+          error: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          group_id: string;
+          group_name?: string | null;
+          content?: string | null;
+          media_url?: string | null;
+          media_type?: string | null;
+          scheduled_at: string;
+          status?: string;
+          sent_at?: string | null;
+          error?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          group_id?: string;
+          group_name?: string | null;
+          content?: string | null;
+          media_url?: string | null;
+          media_type?: string | null;
+          scheduled_at?: string;
+          status?: string;
+          sent_at?: string | null;
+          error?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "group_scheduled_messages_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_contacts: {
         Row: {
           id: string;

@@ -17,7 +17,12 @@ export async function GET(request: NextRequest) {
   const host = request.headers.get('host')
   const base = `${proto}://${host}`
 
-  const endpoints = ['/api/cron/notifications', '/api/cron/whatsapp', '/api/cron/campaigns']
+  const endpoints = [
+    '/api/cron/notifications',
+    '/api/cron/whatsapp',
+    '/api/cron/campaigns',
+    '/api/cron/group-messages',
+  ]
   const results: Record<string, unknown> = {}
 
   for (const path of endpoints) {
