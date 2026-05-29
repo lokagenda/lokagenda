@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender'
 
+// Plano Pro: este cron roda com frequência (a cada poucos minutos). Damos uma
+// janela maior à função pra acomodar os delays anti-ban entre os envios.
+export const maxDuration = 300
+
 // Anti-ban tuning -----------------------------------------------------------
 // Cap how many messages a single cron run will send across all campaigns.
 // Vercel cron functions have a limited execution window, and we add a random

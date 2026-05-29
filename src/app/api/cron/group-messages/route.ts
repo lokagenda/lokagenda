@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+// Roda com frequência no Pro; janela maior pra processar a fila com folga.
+export const maxDuration = 300
+
 /**
  * Processa as mensagens agendadas para grupos de WhatsApp cujo horário já chegou.
  * Usa a Z-API global. No plano Hobby da Vercel o cron roda 1x/dia, então o envio

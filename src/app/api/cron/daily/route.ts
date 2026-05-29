@@ -17,12 +17,9 @@ export async function GET(request: NextRequest) {
   const host = request.headers.get('host')
   const base = `${proto}://${host}`
 
-  const endpoints = [
-    '/api/cron/notifications',
-    '/api/cron/whatsapp',
-    '/api/cron/campaigns',
-    '/api/cron/group-messages',
-  ]
+  // Campanhas e mensagens de grupo têm crons próprios e frequentes (plano Pro);
+  // aqui ficam só os jobs diários de notificação e ciclo de vida do WhatsApp.
+  const endpoints = ['/api/cron/notifications', '/api/cron/whatsapp']
   const results: Record<string, unknown> = {}
 
   for (const path of endpoints) {
