@@ -564,6 +564,8 @@ function CampanhasTab() {
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
   const [dailyLimit, setDailyLimit] = useState('50')
+  const [windowStart, setWindowStart] = useState('8')
+  const [windowEnd, setWindowEnd] = useState('20')
   const [aiEnabled, setAiEnabled] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
 
@@ -618,6 +620,8 @@ function CampanhasTab() {
         name,
         message_template: message,
         daily_limit: parseInt(dailyLimit, 10) || 50,
+        send_window_start: parseInt(windowStart, 10),
+        send_window_end: parseInt(windowEnd, 10),
         ai_enabled: aiEnabled,
         ai_prompt: aiEnabled ? aiPrompt : null,
       })
@@ -628,6 +632,8 @@ function CampanhasTab() {
         setName('')
         setMessage('')
         setDailyLimit('50')
+        setWindowStart('8')
+        setWindowEnd('20')
         setAiEnabled(false)
         setAiPrompt('')
         setCreateOpen(false)
@@ -801,6 +807,34 @@ function CampanhasTab() {
             onChange={(e) => setDailyLimit(e.target.value)}
             hint="Quantidade máxima de mensagens por dia (anti-bloqueio)."
           />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Horário de envio (distribuído na janela)
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={23}
+                value={windowStart}
+                onChange={(e) => setWindowStart(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">até</span>
+              <Input
+                type="number"
+                min={1}
+                max={23}
+                value={windowEnd}
+                onChange={(e) => setWindowEnd(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">horas</span>
+            </div>
+            <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+              O robô divide o limite diário nessa faixa (horário de Brasília). Ex.: 50 entre 8h e 20h ≈ 1 a cada ~14 min.
+            </p>
+          </div>
           <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
             <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
               <input

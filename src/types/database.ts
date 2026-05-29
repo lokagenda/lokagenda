@@ -1426,6 +1426,8 @@ export interface Database {
           ai_prompt: string | null;
           status: "draft" | "running" | "paused" | "completed";
           daily_limit: number;
+          send_window_start: number;
+          send_window_end: number;
           sent_count: number;
           total_targets: number;
           last_sent_at: string | null;
@@ -1441,6 +1443,8 @@ export interface Database {
           ai_prompt?: string | null;
           status?: "draft" | "running" | "paused" | "completed";
           daily_limit?: number;
+          send_window_start?: number;
+          send_window_end?: number;
           sent_count?: number;
           total_targets?: number;
           last_sent_at?: string | null;
@@ -1456,6 +1460,8 @@ export interface Database {
           ai_prompt?: string | null;
           status?: "draft" | "running" | "paused" | "completed";
           daily_limit?: number;
+          send_window_start?: number;
+          send_window_end?: number;
           sent_count?: number;
           total_targets?: number;
           last_sent_at?: string | null;

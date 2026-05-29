@@ -7,12 +7,14 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender'
 export const maxDuration = 300
 
 // Anti-ban tuning -----------------------------------------------------------
-// Cap how many messages a single cron run will send across all campaigns.
-// Vercel cron functions have a limited execution window, and we add a random
-// delay between sends, so keep this small and rely on frequent runs.
-const MAX_PER_RUN = 6
+// Os disparos são DISTRIBUÍDOS ao longo da janela diária da campanha (ex.: 8h-20h),
+// não em rajada. A cada execução o robô calcula quantos "deveriam" já ter saído
+// até agora e manda só a diferença, respeitando o limite diário.
+const MAX_PER_RUN = 12 // teto global por execução (todas as campanhas)
+const MAX_PER_CAMPAIGN_PER_RUN = 4 // teto por campanha por execução (catch-up suave)
 const MIN_DELAY_MS = 8000
 const MAX_DELAY_MS = 20000
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000 // Brasília = UTC-3
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -23,7 +25,6 @@ function randomDelay() {
 }
 
 export async function GET(request: NextRequest) {
-  // Verify authorization (same safe pattern as the other crons)
   const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get('authorization')
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -32,19 +33,22 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient()
 
-  // Day boundaries (UTC) used for the per-day limit accounting.
-  const startOfDay = new Date()
-  startOfDay.setUTCHours(0, 0, 0, 0)
-  const startOfDayStr = startOfDay.toISOString()
+  // "Agora" no fuso de Brasília + início do dia BRT (em instante UTC) para
+  // contar o que já foi enviado hoje e calcular a posição dentro da janela.
+  const nowMs = Date.now()
+  const brt = new Date(nowMs - BRT_OFFSET_MS)
+  const brtMinutes = brt.getUTCHours() * 60 + brt.getUTCMinutes()
+  const startOfDayStr = new Date(
+    Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate(), 0, 0, 0) + BRT_OFFSET_MS
+  ).toISOString()
 
   let processed = 0
   let sent = 0
   let failed = 0
 
-  // Fetch all running campaigns
   const { data: campaigns } = await admin
     .from('campaigns')
-    .select('id, company_id, message_template, daily_limit, sent_count')
+    .select('id, company_id, message_template, daily_limit, sent_count, send_window_start, send_window_end')
     .eq('status', 'running')
 
   if (!campaigns || campaigns.length === 0) {
@@ -54,39 +58,42 @@ export async function GET(request: NextRequest) {
   for (const campaign of campaigns) {
     if (processed >= MAX_PER_RUN) break
 
-    // How many were already sent today for this campaign?
-    const { count: sentToday } = await admin
+    const dailyLimit = campaign.daily_limit || 50
+    const winStart = campaign.send_window_start ?? 8
+    const winEnd = campaign.send_window_end ?? 20
+
+    // Fora da janela de horário (BRT) → não envia agora.
+    const startMin = winStart * 60
+    const endMin = winEnd * 60
+    if (brtMinutes < startMin || brtMinutes >= endMin) continue
+
+    // Quantos já saíram hoje (dia BRT)?
+    const { count: sentTodayCount } = await admin
       .from('campaign_queue')
       .select('*', { count: 'exact', head: true })
       .eq('campaign_id', campaign.id)
       .eq('status', 'sent')
       .gte('sent_at', startOfDayStr)
 
-    const remainingDailyBudget = campaign.daily_limit - (sentToday || 0)
-    if (remainingDailyBudget <= 0) {
-      continue
-    }
+    const sentToday = sentTodayCount || 0
+    const remainingDailyBudget = dailyLimit - sentToday
+    if (remainingDailyBudget <= 0) continue
 
-    // How many pending items remain at all?
-    const { count: pendingCount } = await admin
-      .from('campaign_queue')
-      .select('*', { count: 'exact', head: true })
-      .eq('campaign_id', campaign.id)
-      .eq('status', 'pending')
+    // Quantos "deveriam" já ter saído até este minuto da janela.
+    const windowMinutes = Math.max(1, endMin - startMin)
+    const minutesIntoWindow = Math.min(windowMinutes, brtMinutes - startMin)
+    const targetByNow = Math.min(
+      dailyLimit,
+      Math.floor((minutesIntoWindow / windowMinutes) * dailyLimit) + 1
+    )
 
-    if ((pendingCount || 0) === 0) {
-      // Nothing left to send -> mark completed
-      await admin
-        .from('campaigns')
-        .update({ status: 'completed' })
-        .eq('id', campaign.id)
-      continue
-    }
-
-    // Batch size for this campaign = min(daily budget, remaining run budget)
-    const runBudget = MAX_PER_RUN - processed
-    const batchSize = Math.min(remainingDailyBudget, runBudget)
-    if (batchSize <= 0) break
+    let toSend = Math.min(
+      targetByNow - sentToday,
+      remainingDailyBudget,
+      MAX_PER_CAMPAIGN_PER_RUN,
+      MAX_PER_RUN - processed
+    )
+    if (toSend <= 0) continue // ainda não está na hora do próximo
 
     const { data: queueItems } = await admin
       .from('campaign_queue')
@@ -94,20 +101,16 @@ export async function GET(request: NextRequest) {
       .eq('campaign_id', campaign.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
-      .limit(batchSize)
+      .limit(toSend)
 
     if (!queueItems || queueItems.length === 0) {
-      await admin
-        .from('campaigns')
-        .update({ status: 'completed' })
-        .eq('id', campaign.id)
+      await admin.from('campaigns').update({ status: 'completed' }).eq('id', campaign.id)
       continue
     }
 
     for (const item of queueItems) {
       if (processed >= MAX_PER_RUN) break
 
-      // Resolve contact name for the {{nome}} placeholder
       let contactName = ''
       if (item.contact_id) {
         const { data: contact } = await admin
@@ -123,9 +126,7 @@ export async function GET(request: NextRequest) {
       let ok = false
       let errorMessage: string | null = null
       try {
-        ok = await sendWhatsAppMessage(item.phone, message, {
-          companyId: campaign.company_id,
-        })
+        ok = await sendWhatsAppMessage(item.phone, message, { companyId: campaign.company_id })
         if (!ok) errorMessage = 'Falha no envio pelo provedor WhatsApp'
       } catch (err: unknown) {
         ok = false
@@ -140,7 +141,6 @@ export async function GET(request: NextRequest) {
           .update({ status: 'sent', sent_at: nowIso, error_message: null })
           .eq('id', item.id)
 
-        // Update contact status to "contacted" + last_message_at
         if (item.contact_id) {
           await admin
             .from('campaign_contacts')
@@ -148,13 +148,9 @@ export async function GET(request: NextRequest) {
             .eq('id', item.contact_id)
         }
 
-        // Increment sent_count + last_sent_at on the campaign
         await admin
           .from('campaigns')
-          .update({
-            sent_count: (campaign.sent_count || 0) + 1,
-            last_sent_at: nowIso,
-          })
+          .update({ sent_count: (campaign.sent_count || 0) + 1, last_sent_at: nowIso })
           .eq('id', campaign.id)
         campaign.sent_count = (campaign.sent_count || 0) + 1
 
@@ -169,13 +165,11 @@ export async function GET(request: NextRequest) {
 
       processed++
 
-      // Anti-ban: randomized delay between sends (skip after the last one)
-      if (processed < MAX_PER_RUN) {
-        await sleep(randomDelay())
-      }
+      // Anti-ban: pequeno intervalo aleatório entre os envios desta execução.
+      if (processed < MAX_PER_RUN) await sleep(randomDelay())
     }
 
-    // After processing this campaign's batch, if no pending remain, complete it
+    // Sem pendentes → conclui a campanha.
     const { count: stillPending } = await admin
       .from('campaign_queue')
       .select('*', { count: 'exact', head: true })
@@ -183,10 +177,7 @@ export async function GET(request: NextRequest) {
       .eq('status', 'pending')
 
     if ((stillPending || 0) === 0) {
-      await admin
-        .from('campaigns')
-        .update({ status: 'completed' })
-        .eq('id', campaign.id)
+      await admin.from('campaigns').update({ status: 'completed' }).eq('id', campaign.id)
     }
   }
 

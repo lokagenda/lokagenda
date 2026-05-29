@@ -265,12 +265,25 @@ export async function listCampaigns() {
   return { campaigns: (data || []) as Campaign[] }
 }
 
+// Garante janela de horário coerente (0-23, início < fim). Default 8h-20h.
+function sanitizeWindow(start?: number, end?: number): { start: number; end: number } {
+  let s = Number.isFinite(start) ? Math.min(23, Math.max(0, Math.round(start as number))) : 8
+  let e = Number.isFinite(end) ? Math.min(23, Math.max(1, Math.round(end as number))) : 20
+  if (e <= s) {
+    s = 8
+    e = 20
+  }
+  return { start: s, end: e }
+}
+
 export async function createCampaign(data: {
   name: string
   message_template: string
   ai_enabled?: boolean
   ai_prompt?: string | null
   daily_limit?: number
+  send_window_start?: number
+  send_window_end?: number
 }) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
@@ -280,6 +293,7 @@ export async function createCampaign(data: {
 
   const dailyLimit =
     data.daily_limit && data.daily_limit > 0 ? Math.min(data.daily_limit, 1000) : 50
+  const win = sanitizeWindow(data.send_window_start, data.send_window_end)
 
   const { data: campaign, error } = await supabase
     .from('campaigns')
@@ -290,6 +304,8 @@ export async function createCampaign(data: {
       ai_enabled: data.ai_enabled ?? false,
       ai_prompt: data.ai_prompt?.trim() || null,
       daily_limit: dailyLimit,
+      send_window_start: win.start,
+      send_window_end: win.end,
       status: 'draft',
     })
     .select('*')
@@ -308,6 +324,8 @@ export async function updateCampaign(
     ai_enabled?: boolean
     ai_prompt?: string | null
     daily_limit?: number
+    send_window_start?: number
+    send_window_end?: number
   }
 ) {
   const supabase = await createClient()
@@ -326,6 +344,11 @@ export async function updateCampaign(
   if (data.ai_prompt !== undefined) update.ai_prompt = data.ai_prompt?.trim() || null
   if (data.daily_limit !== undefined) {
     update.daily_limit = data.daily_limit > 0 ? Math.min(data.daily_limit, 1000) : 50
+  }
+  if (data.send_window_start !== undefined || data.send_window_end !== undefined) {
+    const win = sanitizeWindow(data.send_window_start, data.send_window_end)
+    update.send_window_start = win.start
+    update.send_window_end = win.end
   }
 
   const { error } = await supabase
