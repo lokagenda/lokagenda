@@ -153,15 +153,24 @@ export async function deleteContacts(ids: string[]) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
 
-  const { error } = await supabase
-    .from('campaign_contacts')
-    .delete()
-    .eq('company_id', companyId)
-    .in('id', ids)
+  // Apaga em lotes: muitos IDs num único .in() estouram o limite de tamanho da
+  // URL do PostgREST (gera 400 Bad Request). 150 por vez mantém a URL curta.
+  const CHUNK = 150
+  let deleted = 0
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK)
+    const { error } = await supabase
+      .from('campaign_contacts')
+      .delete()
+      .eq('company_id', companyId)
+      .in('id', slice)
 
-  if (error) return { error: error.message }
+    if (error) return { error: error.message, deleted }
+    deleted += slice.length
+  }
+
   revalidatePath('/dashboard/marketing')
-  return { success: true, deleted: ids.length }
+  return { success: true, deleted }
 }
 
 export async function updateContactStatus(id: string, status: ContactStatus) {

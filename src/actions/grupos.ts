@@ -458,14 +458,20 @@ export async function captureGroupContacts(
 
   const admin = createAdminClient()
 
-  // Quais já existem (evita duplicar).
-  const { data: existing } = await admin
-    .from('campaign_contacts')
-    .select('phone')
-    .eq('company_id', companyId)
-    .in('phone', phones)
-
-  const existingSet = new Set((existing ?? []).map((c) => c.phone))
+  // Quais já existem (evita duplicar). Em lotes: grupos grandes têm centenas de
+  // membros, e um .in() gigante estoura o tamanho da URL do PostgREST (400).
+  const existingSet = new Set<string>()
+  const CHUNK = 150
+  const uniquePhones = Array.from(new Set(phones))
+  for (let i = 0; i < uniquePhones.length; i += CHUNK) {
+    const slice = uniquePhones.slice(i, i + CHUNK)
+    const { data: existing } = await admin
+      .from('campaign_contacts')
+      .select('phone')
+      .eq('company_id', companyId)
+      .in('phone', slice)
+    for (const c of existing ?? []) existingSet.add(c.phone)
+  }
   const toInsert = Array.from(new Set(phones))
     .filter((p) => !existingSet.has(p))
     .map((phone) => ({

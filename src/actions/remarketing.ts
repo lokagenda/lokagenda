@@ -195,21 +195,44 @@ async function listReactivationTargetsInner(filter: ReactivationFilter) {
   await requireSuperAdmin()
   const admin = createAdminClient()
 
-  const { data, error } = await admin
+  // Sem EMBEDS do PostgREST: buscamos companies, subscriptions e profiles em
+  // queries simples e cruzamos no JS. Embeds (companies->profiles->subscriptions)
+  // são frágeis após migrations (cache de relacionamento do PostgREST pode ficar
+  // stale e responder 400), então evitamos por robustez.
+  const { data: companiesData, error: companiesError } = await admin
     .from('companies')
-    .select(`
-      id,
-      name,
-      phone,
-      created_at,
-      profiles!profiles_company_id_fkey(id, role),
-      subscriptions(status, trial_ends_at, created_at)
-    `)
+    .select('id, name, phone, created_at')
     .order('created_at', { ascending: false })
 
-  if (error) throw new Error(error.message)
+  if (companiesError) throw new Error(companiesError.message)
 
-  const companies = (data || []) as unknown as CompanyWithSubs[]
+  const { data: subsData, error: subsError } = await admin
+    .from('subscriptions')
+    .select('company_id, status, trial_ends_at, created_at')
+
+  if (subsError) throw new Error(subsError.message)
+
+  const { data: ownersData } = await admin
+    .from('profiles')
+    .select('id, company_id')
+    .eq('role', 'owner')
+
+  // Agrupa subscriptions por empresa e mapeia owner por empresa.
+  const subsByCompany = new Map<string, { status: string; trial_ends_at: string | null; created_at: string }[]>()
+  for (const s of subsData ?? []) {
+    const arr = subsByCompany.get(s.company_id) ?? []
+    arr.push({ status: s.status, trial_ends_at: s.trial_ends_at, created_at: s.created_at })
+    subsByCompany.set(s.company_id, arr)
+  }
+  const ownerByCompany = new Map<string, string>()
+  for (const o of ownersData ?? []) {
+    if (o.company_id && !ownerByCompany.has(o.company_id)) ownerByCompany.set(o.company_id, o.id)
+  }
+
+  const companies = (companiesData ?? []).map((c) => ({
+    ...c,
+    subscriptions: subsByCompany.get(c.id) ?? [],
+  })) as unknown as CompanyWithSubs[]
 
   const matched = companies
     .map((company) => ({ company, sub: latestSubscription(company) }))
@@ -229,8 +252,8 @@ async function listReactivationTargetsInner(filter: ReactivationFilter) {
   }
 
   const targets: ReactivationTarget[] = matched.map(({ company, sub }) => {
-    const owner = company.profiles?.find((p) => p.role === 'owner')
-    const ownerEmail = owner?.id ? emailMap.get(owner.id) ?? null : null
+    const ownerId = ownerByCompany.get(company.id)
+    const ownerEmail = ownerId ? emailMap.get(ownerId) ?? null : null
     const phone = company.phone?.trim() || null
 
     return {
