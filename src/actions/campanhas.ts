@@ -362,6 +362,45 @@ export async function updateCampaign(
   return { success: true }
 }
 
+/**
+ * Duplica uma campanha como rascunho (copia mensagem, prompt da IA, limite e
+ * janela de horário). Não copia contatos/fila — assim o usuário reaproveita o
+ * prompt e só troca os contatos (ex.: novo lote com outra tag) a cada dia.
+ */
+export async function duplicateCampaign(id: string) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { data: orig, error: fetchErr } = await supabase
+    .from('campaigns')
+    .select('name, message_template, ai_enabled, ai_prompt, daily_limit, send_window_start, send_window_end')
+    .eq('id', id)
+    .eq('company_id', companyId)
+    .single()
+
+  if (fetchErr || !orig) return { error: 'Campanha não encontrada' }
+
+  const { data: campaign, error } = await supabase
+    .from('campaigns')
+    .insert({
+      company_id: companyId,
+      name: `${orig.name} (cópia)`,
+      message_template: orig.message_template,
+      ai_enabled: orig.ai_enabled,
+      ai_prompt: orig.ai_prompt,
+      daily_limit: orig.daily_limit,
+      send_window_start: orig.send_window_start,
+      send_window_end: orig.send_window_end,
+      status: 'draft',
+    })
+    .select('*')
+    .single()
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/marketing')
+  return { campaign: campaign as Campaign }
+}
+
 export async function deleteCampaign(id: string) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)

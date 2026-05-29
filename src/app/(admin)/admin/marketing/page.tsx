@@ -16,6 +16,7 @@ import {
   CheckSquare,
   Square,
   MinusSquare,
+  Copy,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +32,7 @@ import {
   importContactsCSV,
   listCampaigns,
   createCampaign,
+  duplicateCampaign,
   deleteCampaign,
   startCampaign,
   pauseCampaign,
@@ -687,6 +689,17 @@ function CampanhasTab() {
     })
   }
 
+  const handleDuplicate = (id: string) => {
+    startTransition(async () => {
+      const res = await duplicateCampaign(id)
+      if (res.error) toast.error(res.error)
+      else {
+        toast.success('Campanha duplicada (rascunho) — ajuste os contatos e inicie.')
+        await load()
+      }
+    })
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -764,6 +777,10 @@ function CampanhasTab() {
                         Retomar
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" onClick={() => handleDuplicate(c.id)} disabled={isPending} title="Duplicar (reaproveita o prompt e as configurações)">
+                      <Copy className="h-4 w-4" />
+                      Duplicar
+                    </Button>
                     <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)} disabled={isPending}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
