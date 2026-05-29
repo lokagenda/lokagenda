@@ -79,18 +79,26 @@ export async function seedReactivationTemplates() {
 /**
  * Lista apenas os templates de reativação (para popular o seletor da UI).
  */
-export async function listReactivationTemplates() {
-  await requireSuperAdmin()
-  const admin = createAdminClient()
+export async function listReactivationTemplates(): Promise<{
+  templates: { id: string; slug: string; name: string; content: string; active: boolean }[]
+  error?: string
+}> {
+  try {
+    await requireSuperAdmin()
+    const admin = createAdminClient()
 
-  const { data, error } = await admin
-    .from('whatsapp_templates')
-    .select('id, slug, name, content, active')
-    .in('slug', REACTIVATION_TEMPLATES.map((t) => t.slug))
-    .order('slug', { ascending: true })
+    const { data, error } = await admin
+      .from('whatsapp_templates')
+      .select('id, slug, name, content, active')
+      .in('slug', REACTIVATION_TEMPLATES.map((t) => t.slug))
+      .order('slug', { ascending: true })
 
-  if (error) throw new Error(error.message)
-  return data || []
+    if (error) throw new Error(error.message)
+    return { templates: data || [] }
+  } catch (err) {
+    console.error('[reativacao] listReactivationTemplates:', err)
+    return { templates: [], error: err instanceof Error ? err.message : 'Erro ao carregar templates' }
+  }
 }
 
 // ── Reactivation Targets ──────────────────────────────────

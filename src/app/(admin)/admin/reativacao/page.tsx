@@ -54,16 +54,30 @@ export default function AdminReativacaoPage() {
   const [templateSlug, setTemplateSlug] = useState('')
   const [sending, setSending] = useState(false)
   const [seeding, setSeeding] = useState(false)
+  // Diagnóstico: mostra o motivo REAL de qualquer falha direto na tela (não só toast).
+  const [pageError, setPageError] = useState<string | null>(null)
+
+  function describeError(err: unknown): string {
+    if (err && typeof err === 'object') {
+      const e = err as { name?: string; message?: string; digest?: string }
+      const parts = [e.name, e.message].filter(Boolean).join(': ')
+      return e.digest ? `${parts || 'Erro'} (digest ${e.digest})` : parts || String(err)
+    }
+    return String(err)
+  }
 
   const loadTemplates = useCallback(async () => {
     try {
-      const data = await listReactivationTemplates()
-      setTemplates(data as Template[])
-      if (data.length > 0) {
-        setTemplateSlug((prev) => prev || data[0].slug)
+      const result = await listReactivationTemplates()
+      if (result.error) {
+        setPageError((prev) => prev || `Templates: ${result.error}`)
       }
-    } catch {
-      // Silencioso: templates podem ainda não existir até clicar em "Criar templates padrão".
+      setTemplates(result.templates as Template[])
+      if (result.templates.length > 0) {
+        setTemplateSlug((prev) => prev || result.templates[0].slug)
+      }
+    } catch (err: unknown) {
+      setPageError((prev) => prev || `Templates: ${describeError(err)}`)
     }
   }, [])
 
@@ -73,12 +87,17 @@ export default function AdminReativacaoPage() {
     try {
       const result = await listReactivationTargets(filter)
       if ('error' in result && result.error) {
+        setPageError(result.error)
         toast.error(result.error)
+      } else {
+        setPageError(null)
       }
       setTargets(result.targets)
       setSendableCount(result.sendableCount)
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao carregar empresas')
+    } catch (err: unknown) {
+      const detail = describeError(err)
+      setPageError(detail)
+      toast.error(detail)
     }
     setLoading(false)
   }, [filter])
@@ -161,6 +180,13 @@ export default function AdminReativacaoPage() {
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
         Encontre empresas em trial, expiradas ou canceladas e envie mensagens de reativação por WhatsApp em lote.
       </p>
+
+      {pageError && (
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          <p className="font-semibold">Detalhe do erro (diagnóstico):</p>
+          <p className="mt-1 break-words font-mono text-xs">{pageError}</p>
+        </div>
+      )}
 
       {/* Ações globais */}
       <Card>
