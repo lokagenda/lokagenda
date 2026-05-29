@@ -6,6 +6,20 @@ const AI_MODEL = 'claude-haiku-4-5-20251001'
 const MAX_HISTORY_MESSAGES = 10
 const MAX_PRODUCTS = 30
 
+// Base do modo CAMPANHA (venda do LokAgenda para donos de locadoras). Compartilhada
+// entre a resposta normal e a mensagem de reativação de 24h.
+const CAMPAIGN_BASE_SALES = `Você é um assistente de vendas da LokAgenda — um aplicativo/sistema de gestão para empresas que alugam brinquedos e equipamentos para festas. Você conversa pelo WhatsApp com o DONO de uma locadora, para apresentar o sistema e despertar interesse.
+
+Diretrizes:
+- Português do Brasil, tom amigável e consultivo. Mensagens CURTAS (WhatsApp), uma ideia por vez.
+- Vá apresentando aos poucos, de forma natural — nunca despeje tudo numa mensagem só. Faça perguntas pra manter o papo.
+- Primeiro entenda a realidade dele: pergunte se já usa algum app/sistema pra controlar agenda, locações, contratos e financeiro.
+- Mesmo que ele já use algo, apresente os diferenciais do LokAgenda com leveza (agenda visual, contratos automáticos, controle de disponibilidade por data, financeiro, orçamento e disparo pelo WhatsApp).
+- No máximo 1 emoji por mensagem. Nada de robótico ou texto de vendas agressivo.
+- Quando o lead demonstrar interesse, ofereça um teste gratuito e siga as instruções da campanha (incluindo enviar o link do vídeo, se houver).
+- Se ele não tiver interesse, agradeça com educação e encerre.
+- Quando o lead estiver quente (quer testar/assinar/saber preço), diga que vai chamar um atendente humano pra dar sequência.`
+
 interface AnthropicMessage {
   role: 'user' | 'assistant'
   content: string
@@ -83,17 +97,7 @@ export async function generateAiReply(
 
     if (isCampaignMode) {
       // Venda do SISTEMA LokAgenda para donos de locadoras (B2B).
-      const baseSales = `Você é um assistente de vendas da LokAgenda — um aplicativo/sistema de gestão para empresas que alugam brinquedos e equipamentos para festas. Você conversa pelo WhatsApp com o DONO de uma locadora, para apresentar o sistema e despertar interesse.
-
-Diretrizes:
-- Português do Brasil, tom amigável e consultivo. Mensagens CURTAS (WhatsApp), uma ideia por vez.
-- Vá apresentando aos poucos, de forma natural — nunca despeje tudo numa mensagem só. Faça perguntas pra manter o papo.
-- Primeiro entenda a realidade dele: pergunte se já usa algum app/sistema pra controlar agenda, locações, contratos e financeiro.
-- Mesmo que ele já use algo, apresente os diferenciais do LokAgenda com leveza (agenda visual, contratos automáticos, controle de disponibilidade por data, financeiro, orçamento e disparo pelo WhatsApp).
-- No máximo 1 emoji por mensagem. Nada de robótico ou texto de vendas agressivo.
-- Quando o lead demonstrar interesse, ofereça um teste gratuito e siga as instruções da campanha (incluindo enviar o link do vídeo, se houver).
-- Se ele não tiver interesse, agradeça com educação e encerre.
-- Quando o lead estiver quente (quer testar/assinar/saber preço), diga que vai chamar um atendente humano pra dar sequência.`
+      const baseSales = CAMPAIGN_BASE_SALES
 
       const script = `\n\nScript e instruções desta campanha (siga à risca):\n${options!.campaignPrompt!.trim()}`
       const statusInstruction = `\n\n[CONTROLE INTERNO — NUNCA mostre isto ao lead] Ao FINAL de cada resposta, em uma linha separada e sozinha, inclua exatamente uma tag de status do lead, escolhida pela conversa até aqui:
@@ -211,6 +215,89 @@ Diretrizes:
     return { reply, status }
   } catch (err) {
     console.error('[AI Agent] Erro ao gerar resposta:', err)
+    return null
+  }
+}
+
+/**
+ * Gera UMA mensagem proativa de follow-up para um lead de campanha que ficou em
+ * silêncio (robô de reativação 24h). Não há mensagem de entrada do lead — a IA
+ * retoma a conversa com base no histórico e no script da campanha.
+ *
+ * Retorna o texto, ou `null` quando: sem API key, erro, ou a IA decidir que não
+ * vale insistir (responde "PULAR").
+ */
+export async function generateReengagementMessage(
+  companyId: string,
+  contactPhone: string,
+  campaignPrompt: string
+): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return null
+
+  const admin = createAdminClient()
+
+  try {
+    // Histórico recente (pode estar vazio se o lead nunca respondeu à campanha).
+    const { data: history } = await admin
+      .from('ai_conversations')
+      .select('role, content')
+      .eq('company_id', companyId)
+      .eq('contact_phone', contactPhone)
+      .order('created_at', { ascending: false })
+      .limit(MAX_HISTORY_MESSAGES)
+
+    const conversationHistory: AnthropicMessage[] = (history || [])
+      .reverse()
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
+    const systemPrompt = `${CAMPAIGN_BASE_SALES}\n\nScript e instruções desta campanha (siga à risca):\n${campaignPrompt.trim()}\n\n[CONTROLE INTERNO — NUNCA mostre isto ao lead] O lead não respondeu sua última mensagem há mais de 24 horas. Escreva UMA única mensagem curta, leve e educada para retomar a conversa de forma natural — sem cobrar, sem soar automático e sem repetir o que já foi dito. Se claramente não fizer sentido insistir (ex.: o lead já recusou ou pediu para parar), responda APENAS com a palavra PULAR.`
+
+    // Sem mensagem de entrada: um cue interno fecha o turno para a IA gerar o
+    // follow-up. Esse cue NÃO é salvo na memória.
+    const messages: AnthropicMessage[] = [
+      ...conversationHistory,
+      { role: 'user', content: '(sistema: o cliente ficou em silêncio — retome o contato)' },
+    ]
+
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 512, system: systemPrompt, messages }),
+      signal: AbortSignal.timeout(30000),
+    })
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '')
+      console.error('[AI Reengage] Erro da API Anthropic:', response.status, errBody)
+      return null
+    }
+
+    const data = await response.json().catch(() => null)
+    const raw: string | undefined = data?.content
+      ?.filter((block: { type: string }) => block.type === 'text')
+      ?.map((block: { text: string }) => block.text)
+      ?.join('\n')
+      ?.trim()
+
+    if (!raw) return null
+
+    // Remove qualquer tag de status que a IA possa emitir por hábito.
+    const reply = raw.replace(/<status>[\s\S]*?<\/status>/gi, '').trim()
+    if (!reply || /^pular$/i.test(reply)) return null
+
+    // Persiste só a mensagem do assistente (o cue interno não entra na memória).
+    await admin.from('ai_conversations').insert([
+      { company_id: companyId, contact_phone: contactPhone, role: 'assistant', content: reply },
+    ])
+
+    return reply
+  } catch (err) {
+    console.error('[AI Reengage] Erro ao gerar follow-up:', err)
     return null
   }
 }

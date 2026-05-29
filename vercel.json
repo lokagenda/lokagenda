@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/group-messages",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reactivate-leads",
+      "schedule": "0 * * * *"
     }
   ]
 }
