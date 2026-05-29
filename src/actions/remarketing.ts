@@ -42,8 +42,10 @@ const REACTIVATION_TEMPLATES = [
   },
 ] as const
 
-/** Lista de slugs usados pelo módulo de reativação (útil para a UI). */
-export const REACTIVATION_TEMPLATE_SLUGS = REACTIVATION_TEMPLATES.map((t) => t.slug)
+// Slugs usados internamente. NÃO exportar: este arquivo é 'use server' e só pode
+// exportar funções async — um export const (valor não-async) quebra o registro
+// de TODAS as actions do módulo (rejeição no boundary com erro genérico).
+const REACTIVATION_TEMPLATE_SLUGS = REACTIVATION_TEMPLATES.map((t) => t.slug)
 
 /**
  * Cria/atualiza (idempotente, por slug) os 3 templates padrão de reativação.
