@@ -220,21 +220,12 @@ async function listReactivationTargetsInner(filter: ReactivationFilter) {
 
   if (subsError) throw new Error(subsError.message)
 
-  const { data: ownersData } = await admin
-    .from('profiles')
-    .select('id, company_id')
-    .eq('role', 'owner')
-
-  // Agrupa subscriptions por empresa e mapeia owner por empresa.
+  // Agrupa subscriptions por empresa.
   const subsByCompany = new Map<string, { status: string; trial_ends_at: string | null; created_at: string }[]>()
   for (const s of subsData ?? []) {
     const arr = subsByCompany.get(s.company_id) ?? []
     arr.push({ status: s.status, trial_ends_at: s.trial_ends_at, created_at: s.created_at })
     subsByCompany.set(s.company_id, arr)
-  }
-  const ownerByCompany = new Map<string, string>()
-  for (const o of ownersData ?? []) {
-    if (o.company_id && !ownerByCompany.has(o.company_id)) ownerByCompany.set(o.company_id, o.id)
   }
 
   const companies = (companiesData ?? []).map((c) => ({
@@ -246,22 +237,11 @@ async function listReactivationTargetsInner(filter: ReactivationFilter) {
     .map((company) => ({ company, sub: latestSubscription(company) }))
     .filter(({ sub }) => matchesFilter(sub, filter))
 
-  // Busca os emails dos proprietários de uma vez só (auth.users) e monta um mapa.
-  // Evita N chamadas sequenciais a getUserById (lento e propenso a timeout no
-  // serverless) — mesmo padrão usado em listUsers() de admin.ts. Tolerante a falha.
-  const emailMap = new Map<string, string>()
-  try {
-    const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 1000 })
-    for (const u of authUsers?.users ?? []) {
-      if (u.email) emailMap.set(u.id, u.email)
-    }
-  } catch {
-    // Sem emails: segue sem quebrar a página.
-  }
-
+  // NOTA: não buscamos mais o email do proprietário aqui. A chamada
+  // admin.auth.admin.listUsers() era a única operação não-PostgREST e podia
+  // travar/estourar o tempo da function (matando a action -> erro genérico).
+  // O telefone é o que importa para o disparo; o email fica de fora por robustez.
   const targets: ReactivationTarget[] = matched.map(({ company, sub }) => {
-    const ownerId = ownerByCompany.get(company.id)
-    const ownerEmail = ownerId ? emailMap.get(ownerId) ?? null : null
     const phone = company.phone?.trim() || null
 
     return {
@@ -269,7 +249,7 @@ async function listReactivationTargetsInner(filter: ReactivationFilter) {
       name: company.name,
       phone,
       hasPhone: !!phone,
-      ownerEmail,
+      ownerEmail: null,
       status: sub?.status ?? null,
       trialEndsAt: sub?.trial_ends_at ?? null,
       createdAt: company.created_at,
