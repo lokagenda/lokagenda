@@ -107,7 +107,13 @@ export async function createContact(data: {
 
 export async function updateContact(
   id: string,
-  data: { name?: string | null; phone?: string; tags?: string | null; notes?: string | null }
+  data: {
+    name?: string | null
+    phone?: string
+    tags?: string | null
+    notes?: string | null
+    status?: ContactStatus
+  }
 ) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
@@ -116,6 +122,7 @@ export async function updateContact(
   if (data.name !== undefined) update.name = data.name?.trim() || null
   if (data.tags !== undefined) update.tags = data.tags?.trim() || null
   if (data.notes !== undefined) update.notes = data.notes?.trim() || null
+  if (data.status !== undefined) update.status = data.status
   if (data.phone !== undefined) {
     const phone = normalizePhoneDigits(data.phone)
     if (!phone) return { error: 'Telefone inválido' }

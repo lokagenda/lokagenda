@@ -17,6 +17,8 @@ import {
   Square,
   MinusSquare,
   Copy,
+  Pencil,
+  Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +29,7 @@ import type { CampaignContact, Campaign } from '@/types/database'
 import {
   listContacts,
   createContact,
+  updateContact,
   deleteContact,
   deleteContacts,
   importContactsCSV,
@@ -158,6 +161,15 @@ function ContatosTab() {
   // Seleção em lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  // Edição de contato
+  const [editing, setEditing] = useState<CampaignContact | null>(null)
+  const [editForm, setEditForm] = useState<{ name: string; phone: string; tags: string; status: ContactStatus }>({
+    name: '',
+    phone: '',
+    tags: '',
+    status: 'lead',
+  })
+
   const load = useCallback(async () => {
     const res = await listContacts({
       status: statusFilter || undefined,
@@ -221,6 +233,30 @@ function ContatosTab() {
           next.delete(id)
           return next
         })
+      }
+    })
+  }
+
+  const openEdit = (c: CampaignContact) => {
+    setEditing(c)
+    setEditForm({ name: c.name || '', phone: c.phone || '', tags: c.tags || '', status: c.status })
+  }
+
+  const handleSaveEdit = () => {
+    if (!editing) return
+    startTransition(async () => {
+      const res = await updateContact(editing.id, {
+        name: editForm.name,
+        phone: editForm.phone,
+        tags: editForm.tags,
+        status: editForm.status,
+      })
+      if (res.error) {
+        toast.error(res.error)
+      } else {
+        toast.success('Contato atualizado')
+        setEditing(null)
+        load()
       }
     })
   }
@@ -430,14 +466,24 @@ function ContatosTab() {
                     </td>
                     <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{c.tags || '—'}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleDelete(c.id)}
-                        disabled={isPending}
-                        className="text-zinc-400 hover:text-red-600 disabled:opacity-50"
-                        aria-label="Excluir contato"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => openEdit(c)}
+                          disabled={isPending}
+                          className="text-zinc-400 hover:text-blue-600 disabled:opacity-50"
+                          aria-label="Editar contato"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          disabled={isPending}
+                          className="text-zinc-400 hover:text-red-600 disabled:opacity-50"
+                          aria-label="Excluir contato"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -446,6 +492,34 @@ function ContatosTab() {
           </div>
         </Card>
       )}
+
+      {/* Edit modal */}
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title="Editar contato">
+        <div className="space-y-4">
+          <Input label="Nome" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} placeholder="Opcional" />
+          <Input label="Telefone" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="(00) 00000-0000" />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Status</label>
+            <select
+              value={editForm.status}
+              onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value as ContactStatus }))}
+              className="h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            >
+              {(Object.keys(CONTACT_STATUS_LABELS) as ContactStatus[]).map((s) => (
+                <option key={s} value={s}>{CONTACT_STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+          </div>
+          <Input label="Tags" value={editForm.tags} onChange={(e) => setEditForm((f) => ({ ...f, tags: e.target.value }))} placeholder="Ex: feira-2026, indicação" hint="Separe por vírgula. Opcional." />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={isPending}>Cancelar</Button>
+            <Button onClick={handleSaveEdit} disabled={isPending}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Salvar
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Add modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Novo contato">
