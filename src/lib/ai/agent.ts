@@ -11,10 +11,18 @@ interface AnthropicMessage {
   content: string
 }
 
+export type CampaignContactStatus = 'lead' | 'contacted' | 'qualified' | 'converted' | 'lost'
+
+export interface AiReplyResult {
+  reply: string
+  // No modo campanha, a IA reclassifica o lead. `undefined` = sem mudança de status.
+  status?: CampaignContactStatus
+}
+
 /**
  * Gera uma resposta da IA (Claude) para uma mensagem recebida de um lead no WhatsApp.
  *
- * Retorna o texto da resposta, ou `null` quando:
+ * Retorna `{ reply, status? }`, ou `null` quando:
  *  - O agente de IA não está habilitado para a empresa.
  *  - A ANTHROPIC_API_KEY não está configurada (degrada silenciosamente).
  *  - Ocorre qualquer erro (sempre tratado para não derrubar o webhook).
@@ -24,7 +32,7 @@ export async function generateAiReply(
   contactPhone: string,
   incomingMessage: string,
   options?: { campaignPrompt?: string | null }
-): Promise<string | null> {
+): Promise<AiReplyResult | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     // Sem chave configurada: não responde, mas não quebra.
@@ -88,7 +96,13 @@ Diretrizes:
 - Quando o lead estiver quente (quer testar/assinar/saber preço), diga que vai chamar um atendente humano pra dar sequência.`
 
       const script = `\n\nScript e instruções desta campanha (siga à risca):\n${options!.campaignPrompt!.trim()}`
-      systemPrompt = `${baseSales}${script}`
+      const statusInstruction = `\n\n[CONTROLE INTERNO — NUNCA mostre isto ao lead] Ao FINAL de cada resposta, em uma linha separada e sozinha, inclua exatamente uma tag de status do lead, escolhida pela conversa até aqui:
+- <status>qualified</status> — confirmou que tem/trabalha com locação de brinquedos ou equipamentos (é o público-alvo) e está aberto a conversar.
+- <status>converted</status> — quer testar, assinar, contratar ou pediu preço.
+- <status>lost</status> — sem interesse, pediu para não receber mais mensagens, ou disse que não é locador.
+- <status>contacted</status> — ainda em conversa, sem sinal claro (use este por padrão).
+Inclua a tag SEMPRE, sozinha na última linha. O sistema remove a tag antes de enviar — o lead NUNCA a vê.`
+      systemPrompt = `${baseSales}${script}${statusInstruction}`
     } else {
       // Atendimento ao cliente final da locadora (modo original).
       const { data: products } = await admin
@@ -159,15 +173,33 @@ Diretrizes:
     }
 
     const data = await response.json().catch(() => null)
-    const reply: string | undefined = data?.content
+    const rawReply: string | undefined = data?.content
       ?.filter((block: { type: string }) => block.type === 'text')
       ?.map((block: { text: string }) => block.text)
       ?.join('\n')
       ?.trim()
 
-    if (!reply) {
+    if (!rawReply) {
       console.error('[AI Agent] Resposta vazia da API Anthropic.')
       return null
+    }
+
+    // No modo campanha a IA emite uma tag <status>...</status> de controle interno.
+    // Extraímos o status e REMOVEMOS qualquer tag do texto antes de enviar (o lead nunca a vê).
+    let status: CampaignContactStatus | undefined
+    let reply = rawReply
+    if (isCampaignMode) {
+      const match = rawReply.match(/<status>\s*(lead|contacted|qualified|converted|lost)\s*<\/status>/i)
+      if (match) {
+        status = match[1].toLowerCase() as CampaignContactStatus
+      }
+      reply = rawReply.replace(/<status>[\s\S]*?<\/status>/gi, '').trim()
+    }
+
+    if (!reply) {
+      // Caso raro: resposta só com a tag. Não envia mensagem vazia, mas preserva o status.
+      console.warn('[AI Agent] Resposta vazia após remover a tag de status.')
+      return status ? { reply: '', status } : null
     }
 
     // 7. Persistir a mensagem do usuário e a resposta do assistente (memória).
@@ -176,7 +208,7 @@ Diretrizes:
       { company_id: companyId, contact_phone: contactPhone, role: 'assistant', content: reply },
     ])
 
-    return reply
+    return { reply, status }
   } catch (err) {
     console.error('[AI Agent] Erro ao gerar resposta:', err)
     return null

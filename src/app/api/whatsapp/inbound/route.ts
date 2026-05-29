@@ -158,10 +158,22 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Gerar resposta da IA e enviar de volta (se houver).
-    const reply = await generateAiReply(companyId, phone, incomingText, { campaignPrompt })
+    const aiResult = await generateAiReply(companyId, phone, incomingText, { campaignPrompt })
 
-    if (reply) {
-      await sendWhatsAppMessage(phone, reply, { companyId })
+    if (aiResult) {
+      // A IA pode ter reclassificado o lead (modo campanha: qualified/converted/lost).
+      // Grava direto pelo admin client — o webhook não tem sessão de usuário, então
+      // NÃO dá pra usar updateContactStatus (que exige auth/getCompanyId).
+      if (aiResult.status && contactId) {
+        await admin
+          .from('campaign_contacts')
+          .update({ status: aiResult.status, updated_at: new Date().toISOString() })
+          .eq('id', contactId)
+      }
+
+      if (aiResult.reply) {
+        await sendWhatsAppMessage(phone, aiResult.reply, { companyId })
+      }
     }
 
     return NextResponse.json({ received: true })
