@@ -517,23 +517,102 @@ export async function deleteRecurringBill(id: string) {
   return { success: true }
 }
 
-/** Marca/desmarca a conta como paga no mês atual (YYYY-MM). */
+/**
+ * Marca/desmarca a conta recorrente como paga no mês.
+ * - Ao marcar paga: cria UMA despesa em financial_entries (categoria fixa
+ *   "Contas Recorrentes", vinculada via recurring_bill_id, datada no dia do
+ *   vencimento do mês), de forma idempotente (não duplica se já existir no mês).
+ * - Ao desmarcar: remove a despesa auto-gerada daquele mês.
+ * Datas/mês calculados no fuso de Brasília (UTC-3) para casar com o financeiro.
+ */
 export async function toggleBillPaid(id: string, paid: boolean) {
   const supabase = await createClient()
-  const { companyId } = await getCompanyId(supabase)
+  const { userId, companyId } = await getCompanyId(supabase)
 
-  const now = new Date()
-  const month = paid
-    ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    : null
-
-  const { error } = await supabase
+  const { data: bill, error: billError } = await supabase
     .from('recurring_bills')
-    .update({ last_paid_month: month, updated_at: new Date().toISOString() })
+    .select('id, name, amount, due_day, last_paid_month')
     .eq('id', id)
     .eq('company_id', companyId)
+    .single()
 
-  if (error) return { error: `Erro ao atualizar conta: ${error.message}` }
+  if (billError || !bill) return { error: 'Conta não encontrada' }
+
+  // Mês corrente em horário de Brasília.
+  const brt = new Date(Date.now() - 3 * 60 * 60 * 1000)
+  const y = brt.getUTCFullYear()
+  const m = brt.getUTCMonth() + 1 // 1-12
+  const monthStr = `${y}-${String(m).padStart(2, '0')}`
+
+  const monthBounds = (year: number, month1: number) => {
+    const start = `${year}-${String(month1).padStart(2, '0')}-01`
+    const nextYear = month1 === 12 ? year + 1 : year
+    const nextMonth = month1 === 12 ? 1 : month1 + 1
+    const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+    return { start, end }
+  }
+
+  if (paid) {
+    // Data da despesa = dia do vencimento dentro do mês corrente (clampado).
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+    const day = Math.min(Math.max(1, bill.due_day || 1), lastDay)
+    const entryDate = `${monthStr}-${String(day).padStart(2, '0')}`
+
+    const { start, end } = monthBounds(y, m)
+
+    // Idempotência: já existe despesa dessa conta no mês? Então não duplica.
+    const { data: existing } = await supabase
+      .from('financial_entries')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('recurring_bill_id', id)
+      .gte('date', start)
+      .lt('date', end)
+      .limit(1)
+
+    if (!existing || existing.length === 0) {
+      const { error: insertError } = await supabase.from('financial_entries').insert({
+        company_id: companyId,
+        type: 'expense',
+        category: 'Contas Recorrentes',
+        description: `${bill.name} (${String(m).padStart(2, '0')}/${y})`,
+        amount: bill.amount,
+        date: entryDate,
+        recurring_bill_id: id,
+        created_by: userId,
+      })
+      if (insertError) return { error: `Erro ao lançar a despesa: ${insertError.message}` }
+    }
+
+    const { error } = await supabase
+      .from('recurring_bills')
+      .update({ last_paid_month: monthStr, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('company_id', companyId)
+    if (error) return { error: `Erro ao atualizar conta: ${error.message}` }
+  } else {
+    // Remove a despesa auto-gerada do mês em que estava marcada como paga.
+    const paidMonth = bill.last_paid_month || monthStr
+    const [py, pm] = paidMonth.split('-').map(Number)
+    if (py && pm) {
+      const { start, end } = monthBounds(py, pm)
+      await supabase
+        .from('financial_entries')
+        .delete()
+        .eq('company_id', companyId)
+        .eq('recurring_bill_id', id)
+        .gte('date', start)
+        .lt('date', end)
+    }
+
+    const { error } = await supabase
+      .from('recurring_bills')
+      .update({ last_paid_month: null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('company_id', companyId)
+    if (error) return { error: `Erro ao atualizar conta: ${error.message}` }
+  }
+
   revalidatePath('/dashboard/financeiro')
   return { success: true }
 }

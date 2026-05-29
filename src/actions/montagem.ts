@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender'
 import { buildFullAddress, getGoogleMapsUrl } from '@/lib/maps'
 import type { Rental, RentalItem } from '@/types/database'
 
@@ -132,15 +131,14 @@ export async function deleteEmployee(id: string) {
 }
 
 /**
- * Builds the "roteiro do dia" message and sends it to the employee's WhatsApp.
- * NOTE: never includes the rental total — only the pending amount to receive.
+ * Monta o texto do "roteiro do dia" e RETORNA (não envia).
+ * O envio é feito pelo navegador via link wa.me, a partir do WhatsApp do PRÓPRIO
+ * assinante — assim a mensagem sai do número dele para o montador, e não do
+ * número global da plataforma. NUNCA inclui o valor total — só o pendente.
  */
-export async function sendMontagemToWhatsApp(rentalIds: string[], employeePhone: string) {
+export async function buildMontagemMessage(rentalIds: string[]) {
   if (!rentalIds || rentalIds.length === 0) {
     return { error: 'Nenhuma locação selecionada.' }
-  }
-  if (!employeePhone) {
-    return { error: 'Funcionário sem telefone cadastrado.' }
   }
 
   const supabase = await createClient()
@@ -202,11 +200,13 @@ export async function sendMontagemToWhatsApp(rentalIds: string[], employeePhone:
     message += '\n'
   })
 
-  const sent = await sendWhatsAppMessage(employeePhone, message.trim(), { companyId })
-
-  if (!sent) {
-    return { error: 'Falha ao enviar a mensagem no WhatsApp. Verifique a configuração do provedor.' }
+  let text = message.trim()
+  // Roteiros muito longos estouram o limite de texto do link wa.me; nesse caso
+  // mandamos um resumo e orientamos a usar o PDF para o roteiro completo.
+  const MAX = 1300
+  if (text.length > MAX) {
+    text = text.slice(0, MAX).trimEnd() + '\n\n... (roteiro completo no PDF — toque em "Exportar PDF")'
   }
 
-  return { success: true }
+  return { success: true as const, message: text }
 }

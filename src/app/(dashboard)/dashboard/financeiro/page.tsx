@@ -289,12 +289,18 @@ export default function FinanceiroPage() {
     toast.success('Conta excluída')
     await loadBills()
   }
-  const currentMonthStr = todayISO().slice(0, 7)
+  // Mês corrente em horário de Brasília (UTC-3) — precisa bater com o cálculo do
+  // servidor em toggleBillPaid, senão cliente e servidor discordam do "mês atual".
+  const currentMonthStr = (() => {
+    const brt = new Date(Date.now() - 3 * 60 * 60 * 1000)
+    return `${brt.getUTCFullYear()}-${String(brt.getUTCMonth() + 1).padStart(2, '0')}`
+  })()
   const togglePaid = async (bill: RecurringBill) => {
     const paid = bill.last_paid_month !== currentMonthStr
     const result = await toggleBillPaid(bill.id, paid)
     if (result?.error) return toast.error(result.error)
-    await loadBills()
+    toast.success(paid ? 'Conta paga — lançada nas despesas' : 'Pagamento desfeito — despesa removida')
+    await Promise.all([loadBills(), loadOverview(), loadEntries()])
   }
 
   const cashflow = overview?.cashflow ?? []

@@ -8,7 +8,7 @@ import {
   createEmployee,
   updateEmployee,
   deleteEmployee,
-  sendMontagemToWhatsApp,
+  buildMontagemMessage,
   type RentalWithItems,
 } from '@/actions/montagem'
 import { buildFullAddress } from '@/lib/maps'
@@ -230,20 +230,29 @@ export default function MontagemPage() {
       toast.error('Funcionário não encontrado.')
       return
     }
+    const digits = (employee.phone || '').replace(/\D/g, '')
+    if (digits.length < 10) {
+      toast.error('Telefone do funcionário inválido.')
+      return
+    }
+    // Normaliza pro padrão internacional (DDI 55) usado pelo wa.me.
+    const waPhone = digits.length <= 11 && !digits.startsWith('55') ? `55${digits}` : digits
+
     setSendLoading(true)
     try {
-      const result = await sendMontagemToWhatsApp(
-        selectedRentals.map((r) => r.id),
-        employee.phone
-      )
-      if (result.error) {
+      // O texto é montado no servidor; o ENVIO é feito pelo WhatsApp do próprio
+      // assinante (link wa.me), então sai do número dele — não do número da plataforma.
+      const result = await buildMontagemMessage(selectedRentals.map((r) => r.id))
+      if ('error' in result && result.error) {
         toast.error(result.error)
-      } else {
-        toast.success(`Roteiro enviado para ${employee.name}!`)
+        return
       }
+      const message = (result as { message: string }).message
+      window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`, '_blank')
+      toast.success(`Abrindo o WhatsApp para enviar a ${employee.name}...`)
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao enviar o roteiro.')
+      toast.error('Erro ao montar o roteiro.')
     } finally {
       setSendLoading(false)
     }
