@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { sendTemplateMessage } from '@/lib/whatsapp-api/sender'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { EventType } from '@/types/database'
 
 async function getCompanyId(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -181,7 +181,6 @@ export async function getUpcomingReminders(): Promise<ReminderItem[]> {
 
 export interface ReminderSettings {
   days_before: number
-  auto_send: boolean
 }
 
 export async function getReminderSettings(): Promise<ReminderSettings> {
@@ -190,7 +189,7 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
 
   const { data, error } = await supabase
     .from('companies')
-    .select('reminder_days_before, reminder_auto_send')
+    .select('reminder_days_before')
     .eq('id', companyId)
     .single()
 
@@ -198,13 +197,11 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
 
   return {
     days_before: data?.reminder_days_before ?? 30,
-    auto_send: data?.reminder_auto_send ?? false,
   }
 }
 
 export async function updateReminderSettings({
   days_before,
-  auto_send,
 }: ReminderSettings): Promise<void> {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
@@ -215,7 +212,6 @@ export async function updateReminderSettings({
     .from('companies')
     .update({
       reminder_days_before: safeDays,
-      reminder_auto_send: !!auto_send,
     })
     .eq('id', companyId)
 
@@ -225,45 +221,49 @@ export async function updateReminderSettings({
 }
 
 // ---------------------------------------------------------------------------
-// Manual WhatsApp send
+// Build reminder text (envio pelo wa.me do PRÓPRIO assinante)
 // ---------------------------------------------------------------------------
 
-export async function sendEventReminderNow(
-  customerPhone: string,
+/**
+ * Monta o texto do lembrete e RETORNA (não envia). O envio é feito pelo navegador
+ * via link wa.me, a partir do WhatsApp do PRÓPRIO assinante — assim a mensagem sai
+ * do número dele para o cliente, e não do número global da plataforma.
+ * Usa o template "event_reminder" (editável em Admin → WhatsApp).
+ */
+export async function buildEventReminderMessage(
   customerName: string,
   eventType: string,
   eventDate: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true; message: string } | { error: string }> {
   const supabase = await createClient()
-  const { companyId } = await getCompanyId(supabase)
-
-  if (!customerPhone || !customerPhone.trim()) {
-    return { success: false, error: 'Cliente sem telefone cadastrado' }
-  }
+  await getCompanyId(supabase)
 
   const formattedDate = (() => {
-    try {
-      const [y, m, d] = eventDate.split('-')
-      return `${d}/${m}/${y}`
-    } catch {
-      return eventDate
-    }
+    const [y, m, d] = (eventDate || '').split('-')
+    return y ? `${d}/${m}/${y}` : eventDate
   })()
 
-  const ok = await sendTemplateMessage(
-    'event_reminder',
-    customerPhone,
-    {
-      nome_cliente: customerName,
-      tipo_evento: eventType || 'evento',
-      data_evento: formattedDate,
-    },
-    companyId
-  )
+  // Template é conteúdo global da plataforma (admin) — lemos via admin client.
+  const admin = createAdminClient()
+  const { data: template } = await admin
+    .from('whatsapp_templates')
+    .select('content')
+    .eq('slug', 'event_reminder')
+    .single()
 
-  if (!ok) {
-    return { success: false, error: 'Não foi possível enviar a mensagem. Verifique a configuração do WhatsApp.' }
+  if (!template?.content) {
+    return { error: 'Modelo "Lembrete de Evento" não encontrado. Configure em Admin → WhatsApp.' }
   }
 
-  return { success: true }
+  const vars: Record<string, string> = {
+    nome_cliente: customerName,
+    tipo_evento: eventType || 'evento',
+    data_evento: formattedDate || '',
+  }
+  let message = template.content
+  for (const [key, value] of Object.entries(vars)) {
+    message = message.replaceAll(`{{${key}}}`, value)
+  }
+
+  return { success: true, message }
 }

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendTemplateMessage } from '@/lib/whatsapp-api/sender'
 
 export async function GET(request: NextRequest) {
   // Verify authorization
@@ -15,7 +14,7 @@ export async function GET(request: NextRequest) {
   // Get all companies (with reminder config)
   const { data: companies } = await admin
     .from('companies')
-    .select('id, reminder_days_before, reminder_auto_send')
+    .select('id, reminder_days_before')
   if (!companies || companies.length === 0) {
     return NextResponse.json({ success: true, message: 'No companies found' })
   }
@@ -141,20 +140,6 @@ export async function GET(request: NextRequest) {
             read: false,
           })
           created++
-
-          // Auto-send WhatsApp if enabled and the customer has a phone
-          if (company.reminder_auto_send && rental.customer_phone) {
-            await sendTemplateMessage(
-              'event_reminder',
-              rental.customer_phone,
-              {
-                nome_cliente: rental.customer_name,
-                tipo_evento: rental.event_type || 'evento',
-                data_evento: eventDateBr || '',
-              },
-              company.id
-            )
-          }
         }
       }
     }
@@ -195,19 +180,6 @@ export async function GET(request: NextRequest) {
         read: false,
       })
       created++
-
-      if (company.reminder_auto_send && c.phone) {
-        await sendTemplateMessage(
-          'event_reminder',
-          c.phone,
-          {
-            nome_cliente: c.name,
-            tipo_evento: c.event_type || 'aniversário',
-            data_evento: `${rDay}/${rMonth}`,
-          },
-          company.id
-        )
-      }
     }
 
     // 5. Contas a pagar: avisa no sininho no dia do vencimento, se não paga no mês.

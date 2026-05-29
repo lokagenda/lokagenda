@@ -21,7 +21,7 @@ import {
   getUpcomingReminders,
   getReminderSettings,
   updateReminderSettings,
-  sendEventReminderNow,
+  buildEventReminderMessage,
   listEventTypes,
   createEventType,
   deleteEventType,
@@ -48,7 +48,6 @@ export default function LembretesPage() {
 
   // Settings
   const [daysBefore, setDaysBefore] = useState(30)
-  const [autoSend, setAutoSend] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
 
   // Event types modal
@@ -74,7 +73,6 @@ export default function LembretesPage() {
     try {
       const settings = await getReminderSettings()
       setDaysBefore(settings.days_before)
-      setAutoSend(settings.auto_send)
     } catch {
       // keep defaults
     }
@@ -102,19 +100,23 @@ export default function LembretesPage() {
     }
     setSendingId(item.id)
     try {
-      const result = await sendEventReminderNow(
-        item.phone,
+      // O texto é montado no servidor; o ENVIO é feito pelo WhatsApp do próprio
+      // assinante (link wa.me), então sai do número dele — não do número da plataforma.
+      const result = await buildEventReminderMessage(
         item.customerName,
         item.eventType || (item.type === 'aniversario' ? 'Aniversário' : 'Evento'),
         item.date
       )
-      if (result.success) {
-        toast.success('Lembrete enviado por WhatsApp!')
-      } else {
-        toast.error(result.error || 'Erro ao enviar lembrete')
+      if ('error' in result) {
+        toast.error(result.error)
+        return
       }
+      const digits = item.phone.replace(/\D/g, '')
+      const waPhone = digits.length <= 11 && !digits.startsWith('55') ? `55${digits}` : digits
+      window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(result.message)}`, '_blank')
+      toast.success('Abrindo seu WhatsApp para enviar...')
     } catch {
-      toast.error('Erro ao enviar lembrete')
+      toast.error('Erro ao montar o lembrete')
     } finally {
       setSendingId(null)
     }
@@ -123,7 +125,7 @@ export default function LembretesPage() {
   async function handleSaveSettings() {
     setSavingSettings(true)
     try {
-      await updateReminderSettings({ days_before: daysBefore, auto_send: autoSend })
+      await updateReminderSettings({ days_before: daysBefore })
       toast.success('Configurações salvas!')
       await loadReminders()
     } catch (err) {
@@ -189,10 +191,9 @@ export default function LembretesPage() {
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
         <p className="font-medium">Como funciona o lembrete</p>
         <ul className="mt-1.5 list-disc space-y-1 pl-5 text-blue-700 dark:text-blue-300">
-          <li>A mensagem é enviada para o <strong>WhatsApp do cliente</strong> (não o seu), pelo número conectado do sistema.</li>
+          <li>Ao clicar em <strong>&ldquo;Enviar WhatsApp&rdquo;</strong>, abre o <strong>seu WhatsApp</strong> com a mensagem pronta para o cliente — o envio sai do <strong>seu número</strong>, não de um número da plataforma.</li>
           <li>Quando um cliente tem <strong>aniversário</strong> cadastrado, todo ano ele aparece aqui na janela de antecedência para você reativar a venda.</li>
-          <li>Com <strong>&ldquo;Enviar WhatsApp automático&rdquo;</strong> ligado, o sistema dispara sozinho na antecedência configurada. Desligado, você clica em <strong>&ldquo;Enviar WhatsApp&rdquo;</strong> manualmente.</li>
-          <li>O texto enviado é o modelo <strong>&ldquo;Lembrete de Evento&rdquo;</strong>, editável em Admin → WhatsApp (variáveis: nome do cliente, tipo e data).</li>
+          <li>O texto é o modelo <strong>&ldquo;Lembrete de Evento&rdquo;</strong>, editável em Admin → WhatsApp (variáveis: nome do cliente, tipo e data).</li>
         </ul>
       </div>
 
@@ -215,27 +216,6 @@ export default function LembretesPage() {
                 onChange={(e) => setDaysBefore(parseInt(e.target.value, 10) || 0)}
                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={autoSend}
-                onClick={() => setAutoSend((v) => !v)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  autoSend ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-700'
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform mt-0.5 ${
-                    autoSend ? 'translate-x-[22px]' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                Enviar WhatsApp automático
-              </span>
             </div>
 
             <div className="sm:ml-auto">
