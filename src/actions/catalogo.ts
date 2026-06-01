@@ -1,7 +1,6 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender'
 
 // ── Tipos públicos ────────────────────────────────────────
 
@@ -345,18 +344,10 @@ export async function submitCatalogQuote(
     /* notificação é secundária, não bloqueia o sucesso */
   }
 
-  // Notificação opcional via WhatsApp para a empresa (não bloqueia o sucesso)
-  if (company.phone) {
-    try {
-      await sendWhatsAppMessage(
-        company.phone,
-        `🛒 *Novo orçamento pelo catálogo*\n\nCliente: ${customerName}\nTelefone: ${customerPhone}\nData do evento: ${eventDate}${eventTime ? ` às ${eventTime}` : ''}${eventAddress ? `\nEndereço: ${eventAddress}` : ''}\nTotal estimado: R$ ${total.toFixed(2)}\n\nAcesse o painel para confirmar.`,
-        { companyId: company.id }
-      )
-    } catch {
-      /* falha de WhatsApp não impede o envio do orçamento */
-    }
-  }
+  // Não disparamos WhatsApp aqui: o único número configurado é global (do dono
+  // da plataforma), então qualquer envio sairia desse número para o assinante,
+  // como se a plataforma fosse a pessoa avisando. O assinante vê o aviso no
+  // sininho (notification acima); o painel mostra o orçamento na lista.
 
   return { success: true, quoteId: quote.id }
 }

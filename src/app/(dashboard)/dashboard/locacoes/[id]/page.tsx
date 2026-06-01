@@ -528,6 +528,7 @@ export default function LocacaoDetailPage({
         <p style="margin-top: 40px;">Data: ${formatDate(new Date())}</p>
 
         <div style="margin-top: 60px; text-align: center; width: 60%; margin-left: auto; margin-right: auto;">
+          ${company?.signature_url ? `<img src="${company.signature_url}" style="max-width: 200px; height: 80px; object-fit: contain; display: block; margin: 0 auto 10px;" />` : ''}
           <div style="border-top: 1px solid #333; padding-top: 10px;">
             <strong>${company?.name || 'Empresa'}</strong>
           </div>
