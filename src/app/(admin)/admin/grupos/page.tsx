@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect, useCallback } from 'react'
-import { UsersRound, RefreshCw, Send, Clock, Trash2, Upload, UserPlus, Loader2, X } from 'lucide-react'
+import { UsersRound, RefreshCw, Send, Clock, Trash2, Upload, UserPlus, Loader2, X, Download } from 'lucide-react'
 import {
   listWhatsAppGroups,
   sendToGroup,
@@ -11,6 +11,7 @@ import {
   listScheduledGroupMessages,
   deleteScheduledGroupMessage,
   captureGroupContacts,
+  exportGroupContactsCsv,
   type WhatsAppGroup,
   type ScheduledGroupMessage,
 } from '@/actions/grupos'
@@ -33,6 +34,7 @@ export default function GruposPage() {
   const [media, setMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [capturingId, setCapturingId] = useState<string | null>(null)
+  const [exportingId, setExportingId] = useState<string | null>(null)
   const [scheduled, setScheduled] = useState<ScheduledGroupMessage[]>([])
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -149,6 +151,29 @@ export default function GruposPage() {
     }
   }
 
+  async function handleExportCsv(group: WhatsAppGroup) {
+    setExportingId(group.id)
+    setToast(null)
+    try {
+      const result = await exportGroupContactsCsv(group.id)
+      if (result.error || !result.csv) return showToast('error', result.error || 'Erro ao gerar CSV.')
+
+      const safeName = (group.name || 'grupo').replace(/[^\w\-]+/g, '_').slice(0, 40)
+      const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `contatos_${safeName}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast('success', `CSV gerado com ${result.total} contato(s). Abra direto no Excel.`)
+    } finally {
+      setExportingId(null)
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
       {toast && (
@@ -215,6 +240,17 @@ export default function GruposPage() {
                   >
                     {capturingId === group.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                     Captar contatos
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleExportCsv(group)}
+                    disabled={exportingId === group.id}
+                    title="Baixar participantes como CSV (abre no Excel)"
+                  >
+                    {exportingId === group.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    Baixar CSV
                   </Button>
                 </div>
               ))}

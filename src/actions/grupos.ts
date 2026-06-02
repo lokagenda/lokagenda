@@ -397,39 +397,40 @@ export async function deleteScheduledGroupMessage(id: string): Promise<{ success
 
 // ── Captação de contatos de um grupo ──────────────────────────────────────
 
-export async function captureGroupContacts(
+/**
+ * Busca os participantes do grupo na Z-API + tenta mapear telefone → nome a
+ * partir da agenda. Retornado em forma usável tanto pela captação quanto pelo
+ * export CSV.
+ */
+async function fetchGroupParticipantsWithNames(
+  cfg: NonNullable<Awaited<ReturnType<typeof getZApiConfig>>>,
   groupId: string
-): Promise<{ imported?: number; total?: number; error?: string }> {
-  const companyId = await getCompanyId()
-  const id = groupId?.trim()
-  if (!id) return { error: 'Grupo inválido.' }
-
-  const cfg = await getZApiConfig()
-  if (!cfg) return { error: 'Captação só está disponível para a Z-API configurada.' }
-
+): Promise<{ phones: string[]; nameMap: Map<string, string>; error?: string }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (cfg.clientToken) headers['Client-Token'] = cfg.clientToken
 
   let participants: { phone?: string }[] = []
   try {
     const response = await fetch(
-      `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/group-metadata/${encodeURIComponent(id)}`,
+      `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/group-metadata/${encodeURIComponent(groupId)}`,
       { method: 'GET', headers, signal: AbortSignal.timeout(20000) }
     )
     const data = await response.json().catch(() => null)
     if (!response.ok) {
-      return { error: data?.error || data?.message || `Erro HTTP ${response.status}` }
+      return { phones: [], nameMap: new Map(), error: data?.error || data?.message || `Erro HTTP ${response.status}` }
     }
     participants = Array.isArray(data?.participants) ? data.participants : []
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Erro ao buscar participantes.' }
+    return { phones: [], nameMap: new Map(), error: err instanceof Error ? err.message : 'Erro ao buscar participantes.' }
   }
 
-  const phones = participants
-    .map((p) => String(p.phone || '').replace(/\D/g, ''))
-    .filter((p) => p.length >= 10)
-  const total = phones.length
-  if (total === 0) return { imported: 0, total: 0 }
+  const phones = Array.from(
+    new Set(
+      participants
+        .map((p) => String(p.phone || '').replace(/\D/g, ''))
+        .filter((p) => p.length >= 10)
+    )
+  )
 
   // Best-effort: busca a agenda de contatos do número (Z-API /contacts) para
   // mapear telefone -> nome. Só vem nome de quem está salvo na agenda; os demais
@@ -456,15 +457,32 @@ export async function captureGroupContacts(
     // segue sem nomes
   }
 
+  return { phones, nameMap }
+}
+
+export async function captureGroupContacts(
+  groupId: string
+): Promise<{ imported?: number; total?: number; error?: string }> {
+  const companyId = await getCompanyId()
+  const id = groupId?.trim()
+  if (!id) return { error: 'Grupo inválido.' }
+
+  const cfg = await getZApiConfig()
+  if (!cfg) return { error: 'Captação só está disponível para a Z-API configurada.' }
+
+  const { phones, nameMap, error: fetchError } = await fetchGroupParticipantsWithNames(cfg, id)
+  if (fetchError) return { error: fetchError }
+  const total = phones.length
+  if (total === 0) return { imported: 0, total: 0 }
+
   const admin = createAdminClient()
 
   // Quais já existem (evita duplicar). Em lotes: grupos grandes têm centenas de
   // membros, e um .in() gigante estoura o tamanho da URL do PostgREST (400).
   const existingSet = new Set<string>()
   const CHUNK = 150
-  const uniquePhones = Array.from(new Set(phones))
-  for (let i = 0; i < uniquePhones.length; i += CHUNK) {
-    const slice = uniquePhones.slice(i, i + CHUNK)
+  for (let i = 0; i < phones.length; i += CHUNK) {
+    const slice = phones.slice(i, i + CHUNK)
     const { data: existing } = await admin
       .from('campaign_contacts')
       .select('phone')
@@ -472,7 +490,7 @@ export async function captureGroupContacts(
       .in('phone', slice)
     for (const c of existing ?? []) existingSet.add(c.phone)
   }
-  const toInsert = Array.from(new Set(phones))
+  const toInsert = phones
     .filter((p) => !existingSet.has(p))
     .map((phone) => ({
       company_id: companyId,
@@ -484,8 +502,57 @@ export async function captureGroupContacts(
 
   if (toInsert.length === 0) return { imported: 0, total }
 
-  const { error } = await admin.from('campaign_contacts').insert(toInsert)
-  if (error) return { error: `Erro ao salvar contatos: ${error.message}` }
+  // Insert em lotes: PostgREST/Supabase pode aplicar limites internos a payloads
+  // muito grandes (já vimos importações travarem em ~1000 contatos). Lotes de
+  // 200 mantêm tudo dentro de margem segura e ainda permitem retomada parcial.
+  const INSERT_CHUNK = 200
+  let insertedCount = 0
+  for (let i = 0; i < toInsert.length; i += INSERT_CHUNK) {
+    const slice = toInsert.slice(i, i + INSERT_CHUNK)
+    const { error } = await admin.from('campaign_contacts').insert(slice)
+    if (error) {
+      return { error: `Erro ao salvar contatos (${insertedCount} já salvos): ${error.message}`, imported: insertedCount, total }
+    }
+    insertedCount += slice.length
+  }
 
-  return { imported: toInsert.length, total }
+  return { imported: insertedCount, total }
+}
+
+// ── Export CSV (não salva no DB) ───────────────────────────────────────────
+
+/**
+ * Captura os participantes do grupo e retorna como CSV pronto pra baixar no
+ * Excel — sem passar pelo DB. Útil quando o grupo é maior do que o tamanho
+ * que vale salvar como contatos (Léo pediu como alternativa à captação direta).
+ *
+ * CSV usa `;` como separador (compatível com Excel BR) e inclui BOM UTF-8 pra
+ * acentos não saírem corrompidos.
+ */
+export async function exportGroupContactsCsv(
+  groupId: string
+): Promise<{ csv?: string; total?: number; error?: string }> {
+  await getCompanyId()
+  const id = groupId?.trim()
+  if (!id) return { error: 'Grupo inválido.' }
+
+  const cfg = await getZApiConfig()
+  if (!cfg) return { error: 'Captação só está disponível para a Z-API configurada.' }
+
+  const { phones, nameMap, error: fetchError } = await fetchGroupParticipantsWithNames(cfg, id)
+  if (fetchError) return { error: fetchError }
+  if (phones.length === 0) return { csv: '﻿telefone;nome\n', total: 0 }
+
+  // Escape básico de CSV: aspas duplas dobradas + envolve em aspas se houver
+  // separador, aspas ou quebra de linha.
+  const esc = (v: string) => {
+    if (!v) return ''
+    if (/[";\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
+    return v
+  }
+
+  const rows = phones.map((phone) => `${esc(phone)};${esc(nameMap.get(phone) || '')}`)
+  const csv = '﻿telefone;nome\n' + rows.join('\n') + '\n'
+
+  return { csv, total: phones.length }
 }
