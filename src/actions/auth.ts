@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -120,11 +121,25 @@ export async function signUp(formData: FormData) {
     // Demo data copy is non-critical, don't block registration
   }
 
-  // 7. Send WhatsApp welcome message (fire-and-forget)
+  // 7. Send WhatsApp welcome message (anti-ban: delay aleatório de 15-75s).
+  // Se 2-3 cadastros caem em rajada, esse delay aleatório suaviza o burst — o
+  // Meta marcou o número como spam justamente porque saíam várias welcome
+  // messages do mesmo número em poucos segundos. `after()` deixa rodar em
+  // background (não segura o response do signup).
   if (phone) {
-    import('@/lib/whatsapp-api/sender').then(({ sendTemplateMessage }) => {
-      sendTemplateMessage('welcome', phone, { nome_empresa: companyName }, company.id).catch(() => {})
-    }).catch(() => {})
+    const welcomePhone = phone
+    const welcomeCompanyId = company.id
+    const welcomeCompanyName = companyName
+    after(async () => {
+      const delayMs = 15000 + Math.floor(Math.random() * 60000)
+      await new Promise((r) => setTimeout(r, delayMs))
+      try {
+        const { sendTemplateMessage } = await import('@/lib/whatsapp-api/sender')
+        await sendTemplateMessage('welcome', welcomePhone, { nome_empresa: welcomeCompanyName }, welcomeCompanyId)
+      } catch {
+        /* welcome falha silenciosamente — não afeta cadastro */
+      }
+    })
   }
 
   return { success: true }
