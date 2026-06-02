@@ -41,11 +41,16 @@ export async function listContacts(filter?: { status?: ContactStatus; search?: s
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
 
+  // PostgREST corta o response em 1000 linhas por padrão (max-rows da Supabase).
+  // Como assinantes captam grupos inteiros de WhatsApp (1000+ contatos), subimos
+  // explicitamente esse teto pra mostrar todo mundo. Se um dia passar de 10k,
+  // entra paginação real.
   let query = supabase
     .from('campaign_contacts')
     .select('*')
     .eq('company_id', companyId)
     .order('created_at', { ascending: false })
+    .range(0, 9999)
 
   if (filter?.status) {
     query = query.eq('status', filter.status)

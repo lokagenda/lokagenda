@@ -551,7 +551,13 @@ export async function exportGroupContactsCsv(
     return v
   }
 
-  const rows = phones.map((phone) => `${esc(phone)};${esc(nameMap.get(phone) || '')}`)
+  // Telefone tem 12-13 dígitos: o Excel "ajuda" abrindo como número e mostra em
+  // notação científica (5,51E+12). Truque clássico: cada célula vira a fórmula
+  // ="55..." → o Excel avalia, devolve string, e exibe os dígitos completos.
+  // No CSV, isso fica como "=""55..."" " (aspas dobradas pelo escape padrão).
+  const phoneCell = (phone: string) => phone ? `"=""${phone}"""` : ''
+
+  const rows = phones.map((phone) => `${phoneCell(phone)};${esc(nameMap.get(phone) || '')}`)
   const csv = '﻿telefone;nome\n' + rows.join('\n') + '\n'
 
   return { csv, total: phones.length }
