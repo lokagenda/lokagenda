@@ -41,29 +41,41 @@ export async function listContacts(filter?: { status?: ContactStatus; search?: s
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
 
-  // PostgREST corta o response em 1000 linhas por padrão (max-rows da Supabase).
-  // Como assinantes captam grupos inteiros de WhatsApp (1000+ contatos), subimos
-  // explicitamente esse teto pra mostrar todo mundo. Se um dia passar de 10k,
-  // entra paginação real.
-  let query = supabase
-    .from('campaign_contacts')
-    .select('*')
-    .eq('company_id', companyId)
-    .order('created_at', { ascending: false })
-    .range(0, 9999)
+  // O PostgREST hospedado pela Supabase impõe um teto externo (~1000 rows) que o
+  // .range(0, 9999) sozinho não vence. Pra mostrar TUDO, paginamos no servidor
+  // em páginas de 1000 e concatenamos até a página voltar curta.
+  // Cap de segurança em 50k pra não rodar indefinidamente.
+  const PAGE = 1000
+  const SAFETY_CAP = 50000
+  const all: CampaignContact[] = []
+  let from = 0
 
-  if (filter?.status) {
-    query = query.eq('status', filter.status)
+  while (from < SAFETY_CAP) {
+    let query = supabase
+      .from('campaign_contacts')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1)
+
+    if (filter?.status) {
+      query = query.eq('status', filter.status)
+    }
+
+    if (filter?.search && filter.search.trim() !== '') {
+      const search = `%${filter.search.trim()}%`
+      query = query.or(`name.ilike.${search},phone.ilike.${search},tags.ilike.${search}`)
+    }
+
+    const { data, error } = await query
+    if (error) return { error: error.message, contacts: [] as CampaignContact[] }
+    if (!data || data.length === 0) break
+    all.push(...(data as CampaignContact[]))
+    if (data.length < PAGE) break
+    from += PAGE
   }
 
-  if (filter?.search && filter.search.trim() !== '') {
-    const search = `%${filter.search.trim()}%`
-    query = query.or(`name.ilike.${search},phone.ilike.${search},tags.ilike.${search}`)
-  }
-
-  const { data, error } = await query
-  if (error) return { error: error.message, contacts: [] as CampaignContact[] }
-  return { contacts: (data || []) as CampaignContact[] }
+  return { contacts: all }
 }
 
 export async function createContact(data: {
