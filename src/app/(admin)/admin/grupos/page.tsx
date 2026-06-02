@@ -145,7 +145,15 @@ export default function GruposPage() {
     try {
       const result = await captureGroupContacts(groupId)
       if (result.error) return showToast('error', result.error)
-      showToast('success', `${result.imported} novo(s) contato(s) importado(s) de ${result.total} participante(s).`)
+      // Toast detalhado pra diagnosticar quando o número parece estranho
+      // (ex.: grupo pequeno mas captação alta = Z-API mandando demais).
+      const raw = result.rawCount ?? result.total ?? 0
+      const unique = result.total ?? 0
+      const existing = result.existingCount ?? 0
+      showToast(
+        'success',
+        `Importados ${result.imported} novos. Z-API enviou ${raw} participantes, ${unique} únicos, ${existing} já cadastrados.`
+      )
     } finally {
       setCapturingId(null)
     }

@@ -405,11 +405,12 @@ export async function deleteScheduledGroupMessage(id: string): Promise<{ success
 async function fetchGroupParticipantsWithNames(
   cfg: NonNullable<Awaited<ReturnType<typeof getZApiConfig>>>,
   groupId: string
-): Promise<{ phones: string[]; nameMap: Map<string, string>; error?: string }> {
+): Promise<{ phones: string[]; nameMap: Map<string, string>; rawCount: number; metaKeys: string[]; error?: string }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (cfg.clientToken) headers['Client-Token'] = cfg.clientToken
 
   let participants: { phone?: string }[] = []
+  let metaKeys: string[] = []
   try {
     const response = await fetch(
       `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/group-metadata/${encodeURIComponent(groupId)}`,
@@ -417,13 +418,27 @@ async function fetchGroupParticipantsWithNames(
     )
     const data = await response.json().catch(() => null)
     if (!response.ok) {
-      return { phones: [], nameMap: new Map(), error: data?.error || data?.message || `Erro HTTP ${response.status}` }
+      console.error('[captureGroup] erro Z-API group-metadata', response.status, data)
+      return { phones: [], nameMap: new Map(), rawCount: 0, metaKeys: [], error: data?.error || data?.message || `Erro HTTP ${response.status}` }
     }
+    metaKeys = data && typeof data === 'object' ? Object.keys(data) : []
     participants = Array.isArray(data?.participants) ? data.participants : []
+    console.log('[captureGroup] group-metadata response', {
+      status: response.status,
+      groupId,
+      metaKeys,
+      participantsCount: participants.length,
+      sampleParticipants: participants.slice(0, 3),
+      // tamanho do grupo segundo a própria Z-API (alguns retornam `size`/`subject` etc.)
+      reportedSize: (data as Record<string, unknown> | null)?.size,
+      reportedParticipantsCount: (data as Record<string, unknown> | null)?.participantsCount,
+    })
   } catch (err) {
-    return { phones: [], nameMap: new Map(), error: err instanceof Error ? err.message : 'Erro ao buscar participantes.' }
+    console.error('[captureGroup] exceção ao buscar group-metadata', err)
+    return { phones: [], nameMap: new Map(), rawCount: 0, metaKeys: [], error: err instanceof Error ? err.message : 'Erro ao buscar participantes.' }
   }
 
+  const rawCount = participants.length
   const phones = Array.from(
     new Set(
       participants
@@ -431,6 +446,7 @@ async function fetchGroupParticipantsWithNames(
         .filter((p) => p.length >= 10)
     )
   )
+  console.log('[captureGroup] após dedup', { rawCount, uniquePhones: phones.length })
 
   // Best-effort: busca a agenda de contatos do número (Z-API /contacts) para
   // mapear telefone -> nome. Só vem nome de quem está salvo na agenda; os demais
@@ -457,12 +473,12 @@ async function fetchGroupParticipantsWithNames(
     // segue sem nomes
   }
 
-  return { phones, nameMap }
+  return { phones, nameMap, rawCount, metaKeys }
 }
 
 export async function captureGroupContacts(
   groupId: string
-): Promise<{ imported?: number; total?: number; error?: string }> {
+): Promise<{ imported?: number; total?: number; rawCount?: number; existingCount?: number; error?: string }> {
   const companyId = await getCompanyId()
   const id = groupId?.trim()
   if (!id) return { error: 'Grupo inválido.' }
@@ -470,10 +486,10 @@ export async function captureGroupContacts(
   const cfg = await getZApiConfig()
   if (!cfg) return { error: 'Captação só está disponível para a Z-API configurada.' }
 
-  const { phones, nameMap, error: fetchError } = await fetchGroupParticipantsWithNames(cfg, id)
+  const { phones, nameMap, rawCount, error: fetchError } = await fetchGroupParticipantsWithNames(cfg, id)
   if (fetchError) return { error: fetchError }
   const total = phones.length
-  if (total === 0) return { imported: 0, total: 0 }
+  if (total === 0) return { imported: 0, total: 0, rawCount }
 
   const admin = createAdminClient()
 
@@ -500,7 +516,15 @@ export async function captureGroupContacts(
       status: 'lead' as const,
     }))
 
-  if (toInsert.length === 0) return { imported: 0, total }
+  console.log('[captureGroup] resumo pré-insert', {
+    groupId: id,
+    rawCount,
+    uniqueAfterDedup: total,
+    existing: existingSet.size,
+    toInsert: toInsert.length,
+  })
+
+  if (toInsert.length === 0) return { imported: 0, total, rawCount, existingCount: existingSet.size }
 
   // Insert em lotes: PostgREST/Supabase pode aplicar limites internos a payloads
   // muito grandes (já vimos importações travarem em ~1000 contatos). Lotes de
@@ -511,12 +535,14 @@ export async function captureGroupContacts(
     const slice = toInsert.slice(i, i + INSERT_CHUNK)
     const { error } = await admin.from('campaign_contacts').insert(slice)
     if (error) {
-      return { error: `Erro ao salvar contatos (${insertedCount} já salvos): ${error.message}`, imported: insertedCount, total }
+      console.error('[captureGroup] erro no insert', { insertedCount, error })
+      return { error: `Erro ao salvar contatos (${insertedCount} já salvos): ${error.message}`, imported: insertedCount, total, rawCount, existingCount: existingSet.size }
     }
     insertedCount += slice.length
   }
 
-  return { imported: insertedCount, total }
+  console.log('[captureGroup] insert concluído', { insertedCount })
+  return { imported: insertedCount, total, rawCount, existingCount: existingSet.size }
 }
 
 // ── Export CSV (não salva no DB) ───────────────────────────────────────────
