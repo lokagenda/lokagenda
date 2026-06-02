@@ -32,6 +32,7 @@ import {
   updateContact,
   deleteContact,
   deleteContacts,
+  deleteAllContacts,
   importContactsCSV,
   listCampaigns,
   createCampaign,
@@ -290,6 +291,23 @@ function ContatosTab() {
     })
   }
 
+  const handleDeleteAll = () => {
+    // Apaga tudo da empresa via SQL direto (DELETE WHERE company_id), sem depender
+    // da seleção visual — que ficava limitada ao que estava carregado e deixava
+    // centenas de contatos invisíveis pra trás.
+    if (!confirm('Apagar TODOS os contatos da empresa? Esta ação não pode ser desfeita.')) return
+    if (!confirm('Tem certeza absoluta? Vai apagar tudo, inclusive contatos que não estão na tela.')) return
+    startTransition(async () => {
+      const res = await deleteAllContacts()
+      if (res.error) toast.error(res.error)
+      else {
+        toast.success(`${res.deleted ?? 0} contato(s) apagado(s)`)
+        setContacts([])
+        setSelectedIds(new Set())
+      }
+    })
+  }
+
   const handleExportCSV = () => {
     if (contacts.length === 0) {
       toast.error('Nenhum contato para exportar')
@@ -397,17 +415,31 @@ function ContatosTab() {
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {loading ? 'Carregando...' : `${contacts.length} contato(s)`}
         </p>
-        {selectedIds.size > 0 && (
-          <Button
-            variant="outline"
-            onClick={handleDeleteSelected}
-            disabled={isPending}
-            className="text-red-700 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
-          >
-            <Trash2 className="h-4 w-4" />
-            Excluir selecionados ({selectedIds.size})
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleDeleteSelected}
+              disabled={isPending}
+              className="text-red-700 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+            >
+              <Trash2 className="h-4 w-4" />
+              Excluir selecionados ({selectedIds.size})
+            </Button>
+          )}
+          {contacts.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleDeleteAll}
+              disabled={isPending}
+              className="text-red-700 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+              title="Apaga TODOS os contatos da empresa, mesmo os que não estão na tela"
+            >
+              <Trash2 className="h-4 w-4" />
+              Apagar TODOS
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* List */}

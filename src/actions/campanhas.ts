@@ -185,6 +185,25 @@ export async function deleteContacts(ids: string[]) {
   return { success: true, deleted }
 }
 
+/**
+ * Apaga TODOS os contatos da empresa de uma vez (DELETE WHERE company_id) —
+ * sem depender da seleção visual da tela, que era limitada ao que estava
+ * carregado (causou o bug do "exclui tudo" deixar centenas pra trás).
+ */
+export async function deleteAllContacts() {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { error, count } = await supabase
+    .from('campaign_contacts')
+    .delete({ count: 'exact' })
+    .eq('company_id', companyId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/marketing')
+  return { success: true, deleted: count ?? 0 }
+}
+
 export async function updateContactStatus(id: string, status: ContactStatus) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
