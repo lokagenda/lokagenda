@@ -27,7 +27,8 @@ export default function GruposPage() {
   const [isSending, startSending] = useTransition()
   const [groups, setGroups] = useState<WhatsAppGroup[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [selectedGroupId, setSelectedGroupId] = useState('')
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set())
+  const [intervalMinutes, setIntervalMinutes] = useState('15')
   const [message, setMessage] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [recurrence, setRecurrence] = useState<'once' | 'daily' | 'weekly'>('once')
@@ -38,7 +39,17 @@ export default function GruposPage() {
   const [scheduled, setScheduled] = useState<ScheduledGroupMessage[]>([])
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
+  const selectedGroupId = selectedGroupIds.size > 0 ? Array.from(selectedGroupIds)[0] : ''
   const selectedGroup = groups.find((g) => g.id === selectedGroupId)
+
+  function toggleSelectGroup(id: string) {
+    setSelectedGroupIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   function showToast(type: 'success' | 'error', text: string) {
     setToast({ type, message: text })
@@ -109,26 +120,30 @@ export default function GruposPage() {
   }
 
   function handleSchedule() {
-    if (!selectedGroupId) return showToast('error', 'Selecione um grupo.')
+    const ids = Array.from(selectedGroupIds)
+    if (ids.length === 0) return showToast('error', 'Selecione ao menos um grupo.')
     if (!message.trim() && !media) return showToast('error', 'Escreva uma mensagem ou anexe mídia.')
     if (!scheduledAt) return showToast('error', 'Defina a data e hora do envio.')
+    const interval = parseInt(intervalMinutes, 10)
     setToast(null)
     startSending(async () => {
       const result = await scheduleGroupMessage({
-        group_id: selectedGroupId,
-        group_name: selectedGroup?.name,
+        group_ids: ids,
+        group_name: ids.length === 1 ? selectedGroup?.name : undefined,
         content: message,
         media_url: media?.url,
         media_type: media?.type,
         scheduled_at: scheduledAt,
         recurrence,
+        interval_minutes: ids.length > 1 ? (Number.isFinite(interval) && interval > 0 ? interval : 15) : 0,
       })
       if (result.error) return showToast('error', result.error)
-      showToast('success', 'Mensagem agendada!')
+      showToast('success', `${result.scheduled || ids.length} mensagem(ns) agendada(s)!`)
       setMessage('')
       setMedia(null)
       setScheduledAt('')
       setRecurrence('once')
+      setSelectedGroupIds(new Set())
       await loadScheduled()
     })
   }
@@ -222,15 +237,13 @@ export default function GruposPage() {
               {groups.map((group) => (
                 <div
                   key={group.id}
-                  className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${selectedGroupId === group.id ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-800'}`}
+                  className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${selectedGroupIds.has(group.id) ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40' : 'border-zinc-200 dark:border-zinc-800'}`}
                 >
                   <label className="flex flex-1 cursor-pointer items-center gap-3">
                     <input
-                      type="radio"
-                      name="group"
-                      value={group.id}
-                      checked={selectedGroupId === group.id}
-                      onChange={() => setSelectedGroupId(group.id)}
+                      type="checkbox"
+                      checked={selectedGroupIds.has(group.id)}
+                      onChange={() => toggleSelectGroup(group.id)}
                       className="h-4 w-4 accent-blue-600"
                     />
                     <div className="min-w-0">
@@ -322,10 +335,22 @@ export default function GruposPage() {
                 <option value="weekly">Toda semana</option>
               </select>
             </div>
+            {selectedGroupIds.size > 1 && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Intervalo entre grupos (min)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={intervalMinutes}
+                  onChange={(e) => setIntervalMinutes(e.target.value)}
+                  className="w-32 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+              </div>
+            )}
             <div className="ml-auto flex gap-2">
-              <Button type="button" variant="outline" onClick={handleSchedule} disabled={isSending || !selectedGroupId || !scheduledAt}>
+              <Button type="button" variant="outline" onClick={handleSchedule} disabled={isSending || selectedGroupIds.size === 0 || !scheduledAt}>
                 <Clock className="h-4 w-4" />
-                Agendar
+                Agendar{selectedGroupIds.size > 1 ? ` (${selectedGroupIds.size})` : ''}
               </Button>
               <Button type="button" onClick={handleSendNow} disabled={isSending || !selectedGroupId}>
                 <Send className="h-4 w-4" />
@@ -334,7 +359,7 @@ export default function GruposPage() {
             </div>
           </div>
           <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-            Agendamentos são processados pelo robô diário (plano atual envia 1x/dia, no horário do cron).
+            Hora em <strong>BRT</strong>. O cron processa a cada ~5min, então pode haver leve atraso. Selecione vários grupos pra agendar a mesma mensagem com intervalo (anti-ban). &quot;Enviar agora&quot; usa só o primeiro grupo selecionado.
           </p>
         </div>
 

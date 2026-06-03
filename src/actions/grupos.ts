@@ -307,7 +307,10 @@ export async function uploadGroupMedia(formData: FormData): Promise<{ url?: stri
   await getCompanyId()
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) return { error: 'Selecione um arquivo.' }
-  if (file.size > 16 * 1024 * 1024) return { error: 'O arquivo deve ter no máximo 16MB.' }
+  // Limite acompanha o body limit do server action no next.config (25MB).
+  if (file.size > 25 * 1024 * 1024) {
+    return { error: 'Arquivo muito grande (limite 25MB). Compacte o vídeo (ex.: HandBrake) ou use uma imagem.' }
+  }
 
   const isVideo = file.type.startsWith('video/')
   const isImage = file.type.startsWith('image/')
@@ -343,36 +346,62 @@ export interface ScheduledGroupMessage {
   error: string | null
 }
 
+/**
+ * O input <datetime-local> manda "YYYY-MM-DDTHH:mm" sem timezone. O server da
+ * Vercel roda em UTC, então `new Date(str)` interpretava esse horário como UTC,
+ * fazendo o agendado para "13:31 BRT" virar "13:31Z" = "10:31 BRT" no banco —
+ * e o cron disparava 3h adiantado. Esta função trata a string como BRT (UTC-3)
+ * e devolve o ISO em UTC correto.
+ */
+function parseBrtToUtcIso(s: string): string {
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!m) return new Date(s).toISOString()
+  const [, Y, M, D, h, min] = m
+  return new Date(Date.UTC(+Y, +M - 1, +D, +h + 3, +min)).toISOString()
+}
+
 export async function scheduleGroupMessage(data: {
-  group_id: string
+  group_id?: string
+  group_ids?: string[]
   group_name?: string
   content?: string
   media_url?: string
   media_type?: string
   scheduled_at: string
   recurrence?: 'once' | 'daily' | 'weekly'
-}): Promise<{ success?: boolean; error?: string }> {
+  interval_minutes?: number
+}): Promise<{ success?: boolean; scheduled?: number; error?: string }> {
   const companyId = await getCompanyId()
   const supabase = await createClient()
 
-  if (!data.group_id) return { error: 'Selecione um grupo.' }
+  const targetIds = (data.group_ids && data.group_ids.length > 0)
+    ? data.group_ids
+    : (data.group_id ? [data.group_id] : [])
+
+  if (targetIds.length === 0) return { error: 'Selecione pelo menos um grupo.' }
   if (!data.content?.trim() && !data.media_url) return { error: 'Escreva uma mensagem ou anexe uma mídia.' }
   if (!data.scheduled_at) return { error: 'Defina a data e hora do envio.' }
 
-  const { error } = await supabase.from('group_scheduled_messages').insert({
+  const baseUtcMs = new Date(parseBrtToUtcIso(data.scheduled_at)).getTime()
+  const intervalMs = Math.max(0, (data.interval_minutes ?? 0)) * 60 * 1000
+
+  const rows = targetIds.map((groupId, i) => ({
     company_id: companyId,
-    group_id: data.group_id,
-    group_name: data.group_name || null,
+    group_id: groupId,
+    // Quando vem do "agendar em vários grupos", mantemos o group_name genérico
+    // (cada linha já tem o group_id certo; o nome só popula se vier um único).
+    group_name: targetIds.length === 1 ? (data.group_name || null) : null,
     content: data.content?.trim() || null,
     media_url: data.media_url || null,
     media_type: data.media_type || null,
-    scheduled_at: new Date(data.scheduled_at).toISOString(),
+    scheduled_at: new Date(baseUtcMs + i * intervalMs).toISOString(),
     status: 'pending',
     recurrence: data.recurrence || 'once',
-  })
+  }))
 
+  const { error } = await supabase.from('group_scheduled_messages').insert(rows)
   if (error) return { error: `Erro ao agendar: ${error.message}` }
-  return { success: true }
+  return { success: true, scheduled: rows.length }
 }
 
 export async function listScheduledGroupMessages(): Promise<ScheduledGroupMessage[]> {
