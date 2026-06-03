@@ -337,18 +337,59 @@ function ContatosTab() {
     URL.revokeObjectURL(url)
   }
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setCsvFileName(file.name)
-    const reader = new FileReader()
-    reader.onload = () => {
-      const text = String(reader.result || '')
-      const rows = parseCSV(text)
+    const lower = file.name.toLowerCase()
+    try {
+      let rows: { phone: string; name?: string; tags?: string }[] = []
+      if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+        // Excel: lê como buffer, pega a primeira aba, converte cada linha em
+        // string e joga no parseCSV (que já tem heurística pra detectar header,
+        // ordem das colunas, etc).
+        const XLSX = await import('xlsx')
+        const buf = await file.arrayBuffer()
+        const wb = XLSX.read(buf, { type: 'array' })
+        const sheetName = wb.SheetNames[0]
+        if (!sheetName) {
+          toast.error('Planilha sem abas.')
+          return
+        }
+        const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], {
+          header: 1,
+          blankrows: false,
+          defval: '',
+          raw: false,
+        })
+        const csv = aoa
+          .map((row) =>
+            (row as unknown[])
+              .map((v) => {
+                const s = v == null ? '' : String(v).trim()
+                // Excel às vezes guarda telefones longos como número e devolve
+                // em notação científica (5,51E+12). Recupera o valor inteiro.
+                if (/^-?\d+([.,]\d+)?[eE][+-]?\d+$/.test(s)) {
+                  const n = Number(s.replace(',', '.'))
+                  if (Number.isFinite(n)) return String(Math.round(n))
+                }
+                return s.replace(/[,"]/g, ' ')
+              })
+              .join(',')
+          )
+          .join('\n')
+        rows = parseCSV(csv)
+      } else {
+        // CSV / TXT
+        const text = await file.text()
+        rows = parseCSV(text)
+      }
       setCsvRows(rows)
-      if (rows.length === 0) toast.error('Nenhuma linha válida encontrada no arquivo')
+      if (rows.length === 0) toast.error('Nenhuma linha válida encontrada no arquivo.')
+    } catch (err) {
+      console.error('[import] erro ao ler arquivo:', err)
+      toast.error('Não consegui ler esse arquivo. Use CSV ou Excel (.xlsx).')
     }
-    reader.readAsText(file)
   }
 
   const handleImport = () => {
@@ -584,7 +625,7 @@ function ContatosTab() {
       </Modal>
 
       {/* Import modal */}
-      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="Importar contatos (CSV)">
+      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="Importar contatos (CSV ou Excel)">
         <div className="space-y-4">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Envie um arquivo com as colunas <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">nome,telefone</code>{' '}
@@ -592,8 +633,13 @@ function ContatosTab() {
           </p>
           <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-500 transition-colors hover:border-blue-400 dark:border-zinc-700 dark:text-zinc-400">
             <Upload className="h-6 w-6" />
-            <span>{csvFileName || 'Clique para selecionar um arquivo CSV'}</span>
-            <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={handleFile} />
+            <span>{csvFileName || 'Clique para selecionar um arquivo CSV ou Excel'}</span>
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={handleFile}
+            />
           </label>
           {csvRows.length > 0 && (
             <p className="text-sm text-emerald-600 dark:text-emerald-400">
