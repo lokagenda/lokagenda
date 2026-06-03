@@ -16,8 +16,11 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     const supabase = createClient()
+    // `next` é o caminho que o callback usa quando troca o code por sessão; com
+    // `next=/reset-password` o usuário cai na tela de definir nova senha em vez
+    // de ir direto pro dashboard (que era o sintoma do "clica e já loga").
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/auth/callback?type=recovery',
+      redirectTo: window.location.origin + '/auth/callback?next=/reset-password',
     })
 
     if (error) {
