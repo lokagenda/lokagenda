@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   const { data: campaigns } = await admin
     .from('campaigns')
-    .select('id, company_id, message_template, daily_limit, sent_count, send_window_start, send_window_end')
+    .select('id, company_id, message_template, daily_limit, sent_count, send_window_start, send_window_end, last_sent_at')
     .eq('status', 'running')
 
   if (!campaigns || campaigns.length === 0) {
@@ -79,21 +79,21 @@ export async function GET(request: NextRequest) {
     const remainingDailyBudget = dailyLimit - sentToday
     if (remainingDailyBudget <= 0) continue
 
-    // Quantos "deveriam" já ter saído até este minuto da janela.
+    // Anti-ban v2: ao invés de "catch-up" (que mandava vários de uma vez quando a
+    // campanha entrava no meio da janela), agora respeitamos o INTERVALO REAL
+    // entre envios. Calcula o gap ideal (janela / cota) e só dispara se o último
+    // envio já foi há tempo suficiente. NUNCA mais de 1 por execução do cron.
     const windowMinutes = Math.max(1, endMin - startMin)
-    const minutesIntoWindow = Math.min(windowMinutes, brtMinutes - startMin)
-    const targetByNow = Math.min(
-      dailyLimit,
-      Math.floor((minutesIntoWindow / windowMinutes) * dailyLimit) + 1
-    )
+    const intervalMinutesDesired = windowMinutes / Math.max(1, dailyLimit)
 
-    let toSend = Math.min(
-      targetByNow - sentToday,
-      remainingDailyBudget,
-      MAX_PER_CAMPAIGN_PER_RUN,
-      MAX_PER_RUN - processed
-    )
-    if (toSend <= 0) continue // ainda não está na hora do próximo
+    let minutesSinceLast = Infinity
+    if (campaign.last_sent_at) {
+      minutesSinceLast = (nowMs - new Date(campaign.last_sent_at).getTime()) / 60000
+    }
+    if (minutesSinceLast < intervalMinutesDesired) continue
+
+    let toSend = Math.min(1, remainingDailyBudget, MAX_PER_RUN - processed)
+    if (toSend <= 0) continue
 
     const { data: queueItems } = await admin
       .from('campaign_queue')
