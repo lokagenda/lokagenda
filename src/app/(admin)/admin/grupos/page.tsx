@@ -6,7 +6,6 @@ import {
   listWhatsAppGroups,
   sendToGroup,
   sendMediaToGroup,
-  uploadGroupMedia,
   scheduleGroupMessage,
   listScheduledGroupMessages,
   deleteScheduledGroupMessage,
@@ -15,6 +14,7 @@ import {
   type WhatsAppGroup,
   type ScheduledGroupMessage,
 } from '@/actions/grupos'
+import { createClient as createSbClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 
 function formatDateTime(iso: string): string {
@@ -89,15 +89,37 @@ export default function GruposPage() {
     setUploading(true)
     setToast(null)
     try {
-      const fd = new FormData()
-      fd.set('file', file)
-      const result = await uploadGroupMedia(fd)
-      if (result.error || !result.url) {
-        showToast('error', result.error || 'Falha no upload')
+      // Validações no client antes de subir.
+      if (file.size > 25 * 1024 * 1024) {
+        showToast('error', 'Arquivo muito grande (limite 25MB). Compacte o vídeo (ex.: HandBrake) ou use uma imagem.')
         return
       }
-      setMedia({ url: result.url, type: result.type! })
+      const isVideo = file.type.startsWith('video/')
+      const isImage = file.type.startsWith('image/')
+      if (!isVideo && !isImage) {
+        showToast('error', 'Envie uma imagem ou vídeo.')
+        return
+      }
+
+      // Upload direto pro Storage do Supabase (sem passar por server action).
+      // Server actions têm body limit + timeout que tropeçam em vídeos de 10MB+;
+      // o caminho via client-SDK vai direto pro S3 do Storage, sem essa fricção.
+      const supabase = createSbClient()
+      const ext = file.name.split('.').pop()?.toLowerCase() || (isVideo ? 'mp4' : 'jpg')
+      const fileName = `${crypto.randomUUID()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('group-media')
+        .upload(fileName, file, { cacheControl: '3600', upsert: false, contentType: file.type })
+      if (upErr) {
+        showToast('error', `Falha no upload: ${upErr.message}`)
+        return
+      }
+      const { data: { publicUrl } } = supabase.storage.from('group-media').getPublicUrl(fileName)
+      setMedia({ url: publicUrl, type: isVideo ? 'video' : 'image' })
       showToast('success', 'Mídia anexada.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro inesperado no upload.'
+      showToast('error', msg)
     } finally {
       setUploading(false)
       e.target.value = ''
