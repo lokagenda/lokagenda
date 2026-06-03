@@ -159,6 +159,7 @@ function ContatosTab() {
   // Import
   const [csvRows, setCsvRows] = useState<{ name?: string; phone: string; tags?: string }[]>([])
   const [csvFileName, setCsvFileName] = useState('')
+  const [importTag, setImportTag] = useState('')
 
   // Seleção em lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -398,7 +399,7 @@ function ContatosTab() {
       return
     }
     startTransition(async () => {
-      const res = await importContactsCSV(csvRows)
+      const res = await importContactsCSV(csvRows, importTag)
       if (res.error) {
         toast.error(res.error)
       } else {
@@ -408,6 +409,7 @@ function ContatosTab() {
         setImportOpen(false)
         setCsvRows([])
         setCsvFileName('')
+        setImportTag('')
         load()
       }
     })
@@ -646,6 +648,13 @@ function ContatosTab() {
               {csvRows.length} linha(s) prontas para importar.
             </p>
           )}
+          <Input
+            label="Tag deste lote (opcional)"
+            value={importTag}
+            onChange={(e) => setImportTag(e.target.value)}
+            placeholder="Ex: lote-0306, indicacao-feira, etc"
+            hint="Marca todos os contatos deste lote com a mesma tag. Você usa essa tag depois pra escolher quem entra na campanha (em vez de mandar pra todos os contatos)."
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setImportOpen(false)} disabled={isPending}>
               Cancelar
@@ -734,6 +743,11 @@ function CampanhasTab() {
   const [editAiEnabled, setEditAiEnabled] = useState(false)
   const [editAiPrompt, setEditAiPrompt] = useState('')
 
+  // Modal de iniciar (escolha pra quem disparar)
+  const [startingId, setStartingId] = useState<string | null>(null)
+  const [startMode, setStartMode] = useState<'all' | 'tag'>('all')
+  const [startTag, setStartTag] = useState('')
+
   const load = useCallback(async () => {
     const res = await listCampaigns()
     if ('error' in res && res.error) {
@@ -807,12 +821,24 @@ function CampanhasTab() {
     })
   }
 
-  const handleStart = (id: string) => {
+  const openStart = (id: string) => {
+    setStartingId(id)
+    setStartMode('all')
+    setStartTag('')
+  }
+
+  const handleStartConfirm = () => {
+    if (!startingId) return
+    const filter =
+      startMode === 'tag' && startTag.trim()
+        ? { tags: startTag.trim() }
+        : undefined
     startTransition(async () => {
-      const res = await startCampaign(id)
+      const res = await startCampaign(startingId, filter)
       if (res.error) toast.error(res.error)
       else {
         toast.success(`Campanha iniciada (${res.queued ?? 0} na fila)`)
+        setStartingId(null)
         load()
       }
     })
@@ -965,7 +991,7 @@ function CampanhasTab() {
 
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {c.status === 'draft' || c.status === 'completed' ? (
-                      <Button size="sm" onClick={() => handleStart(c.id)} disabled={isPending}>
+                      <Button size="sm" onClick={() => openStart(c.id)} disabled={isPending}>
                         <Play className="h-4 w-4" />
                         Iniciar
                       </Button>
@@ -1088,6 +1114,64 @@ function CampanhasTab() {
             <Button onClick={handleCreate} disabled={isPending}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Criar campanha
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Start campaign modal — escolhe pra quem vai */}
+      <Modal open={startingId !== null} onClose={() => !isPending && setStartingId(null)} title="Iniciar campanha">
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Escolha pra quem essa campanha vai disparar. Você pode mandar pra todos os contatos cadastrados ou só pra um grupo (filtrando por tag — ex.: o lote que você importou agora).
+          </p>
+          <div className="space-y-2">
+            <label className="flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <input
+                type="radio"
+                name="startMode"
+                value="all"
+                checked={startMode === 'all'}
+                onChange={() => setStartMode('all')}
+                className="mt-0.5"
+              />
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Todos os contatos</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Dispara pra todos os contatos cadastrados na sua empresa.</p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <input
+                type="radio"
+                name="startMode"
+                value="tag"
+                checked={startMode === 'tag'}
+                onChange={() => setStartMode('tag')}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Filtrar por tag</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Só os contatos que tiverem a tag abaixo entram na fila.</p>
+                {startMode === 'tag' && (
+                  <input
+                    type="text"
+                    value={startTag}
+                    onChange={(e) => setStartTag(e.target.value)}
+                    placeholder="Ex: lote-0306"
+                    className="mt-2 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                    autoFocus
+                  />
+                )}
+              </div>
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setStartingId(null)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button onClick={handleStartConfirm} disabled={isPending || (startMode === 'tag' && !startTag.trim())}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              Iniciar disparo
             </Button>
           </div>
         </div>

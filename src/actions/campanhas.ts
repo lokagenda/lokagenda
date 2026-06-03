@@ -231,7 +231,10 @@ export async function updateContactStatus(id: string, status: ContactStatus) {
   return { success: true }
 }
 
-export async function importContactsCSV(rows: { name?: string; phone: string; tags?: string }[]) {
+export async function importContactsCSV(
+  rows: { name?: string; phone: string; tags?: string }[],
+  commonTag?: string,
+) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
 
@@ -239,14 +242,22 @@ export async function importContactsCSV(rows: { name?: string; phone: string; ta
     return { error: 'Nenhum contato para importar', imported: 0, skipped: 0 }
   }
 
+  // Tag aplicada a todo o lote — Léo usa pra marcar lotes (ex.: "lote-0603")
+  // e depois escolher na hora de iniciar a campanha pra disparar só esse grupo.
+  const lotTag = commonTag?.trim() || ''
+
   // Normalize + dedupe within the incoming batch
   const seen = new Set<string>()
   const normalized = rows
-    .map((r) => ({
-      name: r.name?.trim() || null,
-      phone: normalizePhoneDigits(r.phone),
-      tags: r.tags?.trim() || null,
-    }))
+    .map((r) => {
+      const rowTag = r.tags?.trim() || ''
+      const combined = [lotTag, rowTag].filter(Boolean).join(', ').trim() || null
+      return {
+        name: r.name?.trim() || null,
+        phone: normalizePhoneDigits(r.phone),
+        tags: combined,
+      }
+    })
     .filter((r) => {
       if (!r.phone) return false
       if (seen.has(r.phone)) return false
