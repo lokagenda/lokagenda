@@ -36,6 +36,7 @@ import {
   importContactsCSV,
   listCampaigns,
   createCampaign,
+  updateCampaign,
   duplicateCampaign,
   deleteCampaign,
   startCampaign,
@@ -677,6 +678,16 @@ function CampanhasTab() {
   const [aiEnabled, setAiEnabled] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
 
+  // Edit form (campos próprios pra não conflitar com o create)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editMessage, setEditMessage] = useState('')
+  const [editDailyLimit, setEditDailyLimit] = useState('50')
+  const [editWindowStart, setEditWindowStart] = useState('8')
+  const [editWindowEnd, setEditWindowEnd] = useState('20')
+  const [editAiEnabled, setEditAiEnabled] = useState(false)
+  const [editAiPrompt, setEditAiPrompt] = useState('')
+
   const load = useCallback(async () => {
     const res = await listCampaigns()
     if ('error' in res && res.error) {
@@ -806,6 +817,46 @@ function CampanhasTab() {
     })
   }
 
+  const openCampaignEdit = (c: Campaign) => {
+    setEditingId(c.id)
+    setEditName(c.name || '')
+    setEditMessage(c.message_template || '')
+    setEditDailyLimit(String(c.daily_limit ?? 50))
+    setEditWindowStart(String(c.send_window_start ?? 8))
+    setEditWindowEnd(String(c.send_window_end ?? 20))
+    setEditAiEnabled(!!c.ai_enabled)
+    setEditAiPrompt(c.ai_prompt || '')
+  }
+
+  const handleSaveCampaignEdit = () => {
+    if (!editingId) return
+    if (!editName.trim()) {
+      toast.error('Informe o nome da campanha')
+      return
+    }
+    if (!editMessage.trim()) {
+      toast.error('Informe a mensagem')
+      return
+    }
+    startTransition(async () => {
+      const res = await updateCampaign(editingId, {
+        name: editName,
+        message_template: editMessage,
+        daily_limit: parseInt(editDailyLimit, 10) || 50,
+        send_window_start: parseInt(editWindowStart, 10),
+        send_window_end: parseInt(editWindowEnd, 10),
+        ai_enabled: editAiEnabled,
+        ai_prompt: editAiEnabled ? editAiPrompt : null,
+      })
+      if (res.error) toast.error(res.error)
+      else {
+        toast.success('Campanha atualizada')
+        setEditingId(null)
+        await load()
+      }
+    })
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -883,6 +934,10 @@ function CampanhasTab() {
                         Retomar
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" onClick={() => openCampaignEdit(c)} disabled={isPending} title="Editar nome, mensagem, IA, janela e limite">
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => handleDuplicate(c.id)} disabled={isPending} title="Duplicar (reaproveita o prompt e as configurações)">
                       <Copy className="h-4 w-4" />
                       Duplicar
@@ -987,6 +1042,97 @@ function CampanhasTab() {
             <Button onClick={handleCreate} disabled={isPending}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Criar campanha
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit campaign modal */}
+      <Modal open={editingId !== null} onClose={() => !isPending && setEditingId(null)} title="Editar campanha">
+        <div className="space-y-4">
+          <Input
+            label="Nome da campanha"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="Ex: Reativação de leads"
+          />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Mensagem
+            </label>
+            <textarea
+              value={editMessage}
+              onChange={(e) => setEditMessage(e.target.value)}
+              rows={4}
+              placeholder="Olá {{nome}}, temos novidades para você..."
+              className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            />
+            <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+              Use <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">{'{{nome}}'}</code> para inserir o nome do contato.
+            </p>
+          </div>
+          <Input
+            label="Limite diário de envios"
+            type="number"
+            min={1}
+            value={editDailyLimit}
+            onChange={(e) => setEditDailyLimit(e.target.value)}
+            hint="Quantidade máxima de mensagens por dia (anti-bloqueio)."
+          />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Horário de envio (distribuído na janela)
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={23}
+                value={editWindowStart}
+                onChange={(e) => setEditWindowStart(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">até</span>
+              <Input
+                type="number"
+                min={1}
+                max={23}
+                value={editWindowEnd}
+                onChange={(e) => setEditWindowEnd(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">horas</span>
+            </div>
+          </div>
+          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={editAiEnabled}
+                onChange={(e) => setEditAiEnabled(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+              />
+              Habilitar respostas com IA
+            </label>
+            {editAiEnabled && (
+              <div className="mt-3">
+                <textarea
+                  value={editAiPrompt}
+                  onChange={(e) => setEditAiPrompt(e.target.value)}
+                  rows={3}
+                  placeholder="Instruções para a IA responder os contatos (opcional)..."
+                  className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setEditingId(null)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveCampaignEdit} disabled={isPending}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Salvar
             </Button>
           </div>
         </div>

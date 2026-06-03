@@ -328,6 +328,21 @@ export async function updateUserRole(id: string, role: 'owner' | 'admin' | 'oper
   revalidatePath('/admin/usuarios')
 }
 
+/**
+ * Define uma senha nova pra um usuário (super admin only). Usa o auth.admin do
+ * Supabase pra atualizar direto pelo service role — não exige nem código de
+ * recuperação por email nem sessão do usuário-alvo.
+ */
+export async function adminSetUserPassword(id: string, password: string) {
+  await requireSuperAdmin()
+  if (!password || password.length < 6) {
+    throw new Error('A senha precisa ter pelo menos 6 caracteres.')
+  }
+  const admin = createAdminClient()
+  const { error } = await admin.auth.admin.updateUserById(id, { password })
+  if (error) throw new Error(error.message)
+}
+
 // ── Global Banners ─────────────────────────────────────────
 
 export async function listGlobalBanners() {
