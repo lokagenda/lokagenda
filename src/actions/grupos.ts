@@ -424,6 +424,58 @@ export async function deleteScheduledGroupMessage(id: string): Promise<{ success
   return { success: true }
 }
 
+/**
+ * Apaga várias mensagens agendadas de uma vez. Em lotes pra não estourar a URL
+ * do PostgREST quando o usuário seleciona muitos.
+ */
+export async function deleteScheduledGroupMessages(ids: string[]): Promise<{ success?: boolean; deleted?: number; error?: string }> {
+  if (!ids?.length) return { success: true, deleted: 0 }
+  await getCompanyId()
+  const supabase = await createClient()
+  const CHUNK = 150
+  let deleted = 0
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK)
+    const { error } = await supabase.from('group_scheduled_messages').delete().in('id', slice)
+    if (error) return { error: `Erro ao excluir agendamentos (${deleted} já apagados): ${error.message}`, deleted }
+    deleted += slice.length
+  }
+  return { success: true, deleted }
+}
+
+/**
+ * Edita uma mensagem agendada (só faz sentido enquanto status='pending'). Aceita
+ * conteúdo, horário e recorrência. Não muda grupo nem mídia — pra esses, melhor
+ * apagar e criar nova.
+ */
+export async function updateScheduledGroupMessage(
+  id: string,
+  data: { content?: string; scheduled_at?: string; recurrence?: 'once' | 'daily' | 'weekly' },
+): Promise<{ success?: boolean; error?: string }> {
+  await getCompanyId()
+  const supabase = await createClient()
+
+  const update: Record<string, unknown> = {}
+  if (data.content !== undefined) update.content = data.content.trim() || null
+  if (data.recurrence !== undefined) update.recurrence = data.recurrence
+  if (data.scheduled_at) {
+    // Reusa o mesmo parser BRT→UTC do scheduleGroupMessage pra não introduzir
+    // o velho bug de timezone na edição.
+    update.scheduled_at = parseBrtToUtcIso(data.scheduled_at)
+  }
+
+  if (Object.keys(update).length === 0) return { success: true }
+
+  const { error } = await supabase
+    .from('group_scheduled_messages')
+    .update(update)
+    .eq('id', id)
+    .eq('status', 'pending')
+
+  if (error) return { error: `Erro ao atualizar agendamento: ${error.message}` }
+  return { success: true }
+}
+
 // ── Captação de contatos de um grupo ──────────────────────────────────────
 
 /**

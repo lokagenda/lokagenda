@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect, useCallback } from 'react'
-import { UsersRound, RefreshCw, Send, Clock, Trash2, Upload, UserPlus, Loader2, X, Download } from 'lucide-react'
+import { UsersRound, RefreshCw, Send, Clock, Trash2, Upload, UserPlus, Loader2, X, Download, Pencil, Check } from 'lucide-react'
 import {
   listWhatsAppGroups,
   sendToGroup,
@@ -9,6 +9,8 @@ import {
   scheduleGroupMessage,
   listScheduledGroupMessages,
   deleteScheduledGroupMessage,
+  deleteScheduledGroupMessages,
+  updateScheduledGroupMessage,
   captureGroupContacts,
   exportGroupContactsCsv,
   type WhatsAppGroup,
@@ -16,6 +18,7 @@ import {
 } from '@/actions/grupos'
 import { createClient as createSbClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { Modal } from '@/components/ui/modal'
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso)
@@ -29,6 +32,14 @@ export default function GruposPage() {
   const [loaded, setLoaded] = useState(false)
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set())
   const [intervalMinutes, setIntervalMinutes] = useState('15')
+
+  // Seleção múltipla e edição das mensagens agendadas
+  const [selectedScheduledIds, setSelectedScheduledIds] = useState<Set<string>>(new Set())
+  const [editingScheduled, setEditingScheduled] = useState<ScheduledGroupMessage | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [editScheduledAt, setEditScheduledAt] = useState('')
+  const [editRecurrence, setEditRecurrence] = useState<'once' | 'daily' | 'weekly'>('once')
+  const [savingEdit, setSavingEdit] = useState(false)
   const [message, setMessage] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [recurrence, setRecurrence] = useState<'once' | 'daily' | 'weekly'>('once')
@@ -173,7 +184,68 @@ export default function GruposPage() {
   async function handleDeleteScheduled(id: string) {
     const result = await deleteScheduledGroupMessage(id)
     if (result.error) return showToast('error', result.error)
+    setSelectedScheduledIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
     await loadScheduled()
+  }
+
+  function toggleSelectScheduled(id: string) {
+    setSelectedScheduledIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAllScheduledPending() {
+    const pendingIds = scheduled.filter((m) => m.status === 'pending').map((m) => m.id)
+    const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selectedScheduledIds.has(id))
+    setSelectedScheduledIds(allSelected ? new Set() : new Set(pendingIds))
+  }
+
+  async function handleBulkDeleteScheduled() {
+    const ids = Array.from(selectedScheduledIds)
+    if (ids.length === 0) return
+    if (!confirm(`Excluir ${ids.length} agendamento(s) selecionado(s)?`)) return
+    const result = await deleteScheduledGroupMessages(ids)
+    if (result.error) return showToast('error', result.error)
+    showToast('success', `${result.deleted ?? ids.length} agendamento(s) excluído(s).`)
+    setSelectedScheduledIds(new Set())
+    await loadScheduled()
+  }
+
+  function openEditScheduled(m: ScheduledGroupMessage) {
+    setEditingScheduled(m)
+    setEditContent(m.content || '')
+    // Converte o ISO UTC do banco pro formato datetime-local em BRT (UTC-3).
+    const d = new Date(m.scheduled_at)
+    const brt = new Date(d.getTime() - 3 * 60 * 60 * 1000)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const value = `${brt.getUTCFullYear()}-${pad(brt.getUTCMonth() + 1)}-${pad(brt.getUTCDate())}T${pad(brt.getUTCHours())}:${pad(brt.getUTCMinutes())}`
+    setEditScheduledAt(value)
+    setEditRecurrence((m.recurrence as 'once' | 'daily' | 'weekly') || 'once')
+  }
+
+  async function handleSaveEditScheduled() {
+    if (!editingScheduled) return
+    setSavingEdit(true)
+    try {
+      const result = await updateScheduledGroupMessage(editingScheduled.id, {
+        content: editContent,
+        scheduled_at: editScheduledAt,
+        recurrence: editRecurrence,
+      })
+      if (result.error) return showToast('error', result.error)
+      showToast('success', 'Agendamento atualizado!')
+      setEditingScheduled(null)
+      await loadScheduled()
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   async function handleCapture(groupId: string) {
@@ -387,33 +459,79 @@ export default function GruposPage() {
 
         {/* Agendamentos */}
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Mensagens agendadas</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Mensagens agendadas</h2>
+            {scheduled.some((m) => m.status === 'pending') && (
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={
+                      scheduled.filter((m) => m.status === 'pending').length > 0 &&
+                      scheduled.filter((m) => m.status === 'pending').every((m) => selectedScheduledIds.has(m.id))
+                    }
+                    onChange={toggleSelectAllScheduledPending}
+                    className="h-4 w-4 accent-blue-600"
+                  />
+                  Selecionar todas pendentes
+                </label>
+                {selectedScheduledIds.size > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBulkDeleteScheduled}
+                    className="text-red-700 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir selecionados ({selectedScheduledIds.size})
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
           {scheduled.length === 0 ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Nenhuma mensagem agendada.</p>
           ) : (
             <div className="space-y-2">
               {scheduled.map((m) => (
                 <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                      {m.group_name || m.group_id}
-                    </p>
-                    <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                      {formatDateTime(m.scheduled_at)}
-                      {m.recurrence === 'daily' && ' · todo dia'}
-                      {m.recurrence === 'weekly' && ' · toda semana'}
-                      {' · '}
-                      {m.content ? m.content.slice(0, 40) : `[${m.media_type || 'mídia'}]`}
-                    </p>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    {m.status === 'pending' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedScheduledIds.has(m.id)}
+                        onChange={() => toggleSelectScheduled(m.id)}
+                        className="h-4 w-4 shrink-0 accent-blue-600"
+                        aria-label="Selecionar agendamento"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                        {m.group_name || m.group_id}
+                      </p>
+                      <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                        {formatDateTime(m.scheduled_at)}
+                        {m.recurrence === 'daily' && ' · todo dia'}
+                        {m.recurrence === 'weekly' && ' · toda semana'}
+                        {' · '}
+                        {m.content ? m.content.slice(0, 40) : `[${m.media_type || 'mídia'}]`}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${m.status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : m.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
                       {m.status === 'sent' ? 'Enviada' : m.status === 'failed' ? 'Falhou' : 'Agendada'}
                     </span>
                     {m.status === 'pending' && (
-                      <button onClick={() => handleDeleteScheduled(m.id)} className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" aria-label="Excluir">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <>
+                        <button onClick={() => openEditScheduled(m)} className="rounded-md p-1.5 text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10" aria-label="Editar">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => handleDeleteScheduled(m.id)} className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" aria-label="Excluir">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -421,6 +539,58 @@ export default function GruposPage() {
             </div>
           )}
         </div>
+
+        {/* Modal editar agendamento */}
+        <Modal open={editingScheduled !== null} onClose={() => !savingEdit && setEditingScheduled(null)} title="Editar agendamento">
+          <div className="space-y-4">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Grupo: <strong className="text-zinc-700 dark:text-zinc-300">{editingScheduled?.group_name || editingScheduled?.group_id}</strong>
+              {editingScheduled?.media_url && <> · <span>mídia anexada (preservada)</span></>}
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Mensagem</label>
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={4}
+                className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Agendar para</label>
+                <input
+                  type="datetime-local"
+                  value={editScheduledAt}
+                  onChange={(e) => setEditScheduledAt(e.target.value)}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Repetição</label>
+                <select
+                  value={editRecurrence}
+                  onChange={(e) => setEditRecurrence(e.target.value as 'once' | 'daily' | 'weekly')}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                >
+                  <option value="once">Uma vez</option>
+                  <option value="daily">Todo dia</option>
+                  <option value="weekly">Toda semana</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Pra trocar o grupo ou a mídia, apague esse agendamento e crie um novo.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditingScheduled(null)} disabled={savingEdit}>Cancelar</Button>
+              <Button onClick={handleSaveEditScheduled} disabled={savingEdit}>
+                {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   )
