@@ -3,6 +3,32 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+/**
+ * Atualiza o nome do usuário logado (campo `full_name` em profiles + metadata).
+ * Usado pelo botão "Editar perfil" do dropdown do header.
+ */
+export async function updateMyProfileName(fullName: string): Promise<{ success?: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Não autorizado' }
+
+  const trimmed = fullName.trim()
+  if (!trimmed) return { error: 'Informe o nome.' }
+  if (trimmed.length > 80) return { error: 'Nome muito longo (máx. 80 caracteres).' }
+
+  const { error: pErr } = await supabase
+    .from('profiles')
+    .update({ full_name: trimmed, updated_at: new Date().toISOString() })
+    .eq('id', user.id)
+  if (pErr) return { error: pErr.message }
+
+  // Mantém o metadata em sincronia (alguns lugares usam user_metadata.full_name).
+  await supabase.auth.updateUser({ data: { full_name: trimmed } }).catch(() => {})
+
+  revalidatePath('/dashboard', 'layout')
+  return { success: true }
+}
+
 async function getAuthenticatedProfile() {
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()

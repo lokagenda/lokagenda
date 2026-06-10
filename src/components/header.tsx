@@ -1,11 +1,12 @@
 'use client'
 
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
-import { ChevronDown, User, KeyRound, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { ChevronDown, User, KeyRound, Eye, EyeOff, Loader2, Pencil, Check } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import { updateMyProfileName } from '@/actions/company'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationBell } from '@/components/notification-bell'
 import { Modal } from '@/components/ui/modal'
@@ -28,8 +29,14 @@ const routeTitles: Record<string, string> = {
 
 export function Header({ userName, avatarUrl }: HeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Modal de editar perfil (nome)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [profileName, setProfileName] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
 
   // Modal de troca de senha
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
@@ -60,6 +67,29 @@ export function Header({ userName, avatarUrl }: HeaderProps) {
     const supabase = createClient()
     await supabase.auth.signOut()
     window.location.href = '/login'
+  }
+
+  function openProfileModal() {
+    setProfileName(userName === 'Usuário' ? '' : userName)
+    setProfileModalOpen(true)
+    setDropdownOpen(false)
+  }
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingProfile(true)
+    try {
+      const res = await updateMyProfileName(profileName)
+      if (res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success('Nome atualizado!')
+      setProfileModalOpen(false)
+      router.refresh()
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
   function openPasswordModal() {
@@ -162,6 +192,13 @@ export function Header({ userName, avatarUrl }: HeaderProps) {
               <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{userName}</p>
             </div>
             <button
+              onClick={openProfileModal}
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Pencil className="h-4 w-4" />
+              Editar perfil
+            </button>
+            <button
               onClick={openPasswordModal}
               className="flex w-full items-center gap-2 px-4 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
@@ -178,6 +215,40 @@ export function Header({ userName, avatarUrl }: HeaderProps) {
         )}
         </div>
       </div>
+
+      {/* Modal de editar perfil (nome) */}
+      <Modal open={profileModalOpen} onClose={() => !savingProfile && setProfileModalOpen(false)} title="Editar perfil">
+        <form onSubmit={handleSaveProfile} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Nome</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="Seu nome"
+                required
+                maxLength={80}
+                autoFocus
+                className="w-full rounded-lg border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+              É o nome que aparece no &quot;Bem-vindo de volta&quot; do painel.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setProfileModalOpen(false)} disabled={savingProfile}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={savingProfile}>
+              {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Salvar
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Modal de alterar senha */}
       <Modal open={passwordModalOpen} onClose={() => !savingPassword && setPasswordModalOpen(false)} title="Alterar senha">
