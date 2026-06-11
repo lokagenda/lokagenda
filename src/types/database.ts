@@ -1383,6 +1383,7 @@ export interface Database {
           status: "lead" | "contacted" | "qualified" | "converted" | "lost";
           last_message_at: string | null;
           reactivated_at: string | null;
+          manual_takeover_at: string | null;
           notes: string | null;
           created_at: string;
           updated_at: string;
@@ -1397,6 +1398,7 @@ export interface Database {
           status?: "lead" | "contacted" | "qualified" | "converted" | "lost";
           last_message_at?: string | null;
           reactivated_at?: string | null;
+          manual_takeover_at?: string | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1411,6 +1413,7 @@ export interface Database {
           status?: "lead" | "contacted" | "qualified" | "converted" | "lost";
           last_message_at?: string | null;
           reactivated_at?: string | null;
+          manual_takeover_at?: string | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;

@@ -53,22 +53,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
-    // Ignorar: mensagens nossas, grupos, status e newsletters (evita responder em grupo
-    // e evita loops de IA-com-IA).
-    if (payload.fromMe === true || payload.isGroup || payload.isStatusReply || payload.isNewsletter) {
+    // Ignora grupos/status/newsletters de saída — só faria barulho.
+    if (payload.isGroup || payload.isStatusReply || payload.isNewsletter) {
       return NextResponse.json({ received: true })
     }
 
     const rawPhone = payload.phone
-    const incomingText = extractText(payload)
+    if (!rawPhone) return NextResponse.json({ received: true })
+    const phone = normalizePhone(rawPhone)
+    const admin = createAdminClient()
 
-    if (!rawPhone || !incomingText) {
-      // Sem telefone ou sem texto (ex.: mídia, status): ignorar.
+    // Mensagem do PRÓPRIO assinante (Léo respondendo manualmente pelo WhatsApp).
+    // Marca manual_takeover_at no contato — enquanto < 12h, a IA fica em silêncio
+    // pra não falar por cima do atendimento humano. NÃO responde nada.
+    if (payload.fromMe === true) {
+      try {
+        await admin
+          .from('campaign_contacts')
+          .update({ manual_takeover_at: new Date().toISOString() })
+          .eq('phone', phone)
+      } catch (err) {
+        console.error('[inbound] falha ao marcar manual_takeover_at', err)
+      }
       return NextResponse.json({ received: true })
     }
 
-    const phone = normalizePhone(rawPhone)
-    const admin = createAdminClient()
+    const incomingText = extractText(payload)
+    if (!incomingText) {
+      // Sem texto (ex.: mídia, status): ignorar.
+      return NextResponse.json({ received: true })
+    }
 
     // Anti-loop: se a IA já respondeu este contato nos últimos 8 segundos, ignora
     // (evita conversas IA-com-IA e respostas duplicadas em rajada).
@@ -92,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     const { data: contact } = await admin
       .from('campaign_contacts')
-      .select('id, company_id')
+      .select('id, company_id, manual_takeover_at')
       .eq('phone', phone)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(1)
@@ -101,6 +115,22 @@ export async function POST(request: NextRequest) {
     if (contact) {
       companyId = contact.company_id
       contactId = contact.id
+
+      // Manual takeover: se o assinante mandou mensagem manual pra esse contato nas
+      // últimas 12h, a IA fica em silêncio. Atende caso o Léo já tenha entrado na
+      // conversa — evita "duas vozes" respondendo o lead ao mesmo tempo.
+      const takeoverAt = (contact as { manual_takeover_at: string | null }).manual_takeover_at
+      if (takeoverAt) {
+        const elapsedMs = Date.now() - new Date(takeoverAt).getTime()
+        if (elapsedMs >= 0 && elapsedMs < 12 * 60 * 60 * 1000) {
+          // Só atualiza last_message_at pra UI ficar correta; não chama IA.
+          await admin
+            .from('campaign_contacts')
+            .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq('id', contact.id)
+          return NextResponse.json({ received: true, skipped: 'manual_takeover' })
+        }
+      }
 
       // Atualizar status do lead para "contacted" e marcar última mensagem.
       await admin
