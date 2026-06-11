@@ -30,6 +30,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const result = await runWhatsappLifecycle()
+  return NextResponse.json({ success: true, ...result })
+}
+
+/**
+ * Lógica central do cron de ciclo de vida do WhatsApp. Exportada pra que admin
+ * actions possam disparar manualmente sem precisar fazer fetch HTTP (que exporia
+ * o CRON_SECRET via Authorization header e seria suscetível a Host-header SSRF).
+ */
+export async function runWhatsappLifecycle(): Promise<{ messages_sent: number; messages_failed: number }> {
   const admin = createAdminClient()
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
@@ -204,5 +214,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true, messages_sent: messagesSent, messages_failed: messagesFailed })
+  return { messages_sent: messagesSent, messages_failed: messagesFailed }
 }
