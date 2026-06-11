@@ -23,6 +23,7 @@ import {
   updateWhatsAppTemplate,
   listWhatsAppLogs,
 } from '@/actions/admin-whatsapp'
+import { runWhatsappLifecycleCron } from '@/actions/admin'
 import type { WhatsAppProvider } from '@/lib/whatsapp-api/types'
 
 // ── Types ─────────────────────────────────────────────────
@@ -95,6 +96,22 @@ function getProviderFields(provider: WhatsAppProvider) {
 
 export default function AdminWhatsAppPage() {
   const [activeTab, setActiveTab] = useState<'config' | 'templates' | 'logs'>('config')
+  const [firingLifecycle, setFiringLifecycle] = useState(false)
+
+  async function handleFireLifecycle() {
+    if (!confirm('Disparar agora as mensagens de ciclo de vida (plan_3_days / plan_expires_today / trial_*) pra todos os assinantes elegíveis hoje?')) return
+    setFiringLifecycle(true)
+    try {
+      const res = await runWhatsappLifecycleCron()
+      if ('error' in res) {
+        toast.error(res.error)
+        return
+      }
+      toast.success(`Disparo concluído — enviadas: ${res.sent} · falhas: ${res.failed}`, { duration: 8000 })
+    } finally {
+      setFiringLifecycle(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -104,6 +121,22 @@ export default function AdminWhatsAppPage() {
           WhatsApp
         </h2>
       </div>
+
+      {/* Disparo manual do cron de ciclo de vida */}
+      <Card className="border-amber-200 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-950/20">
+        <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Disparar mensagens de ciclo de vida agora</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Roda o cron <code>/api/cron/whatsapp</code> na hora — manda <strong>plan_3_days</strong>, <strong>plan_expires_today</strong>, <strong>trial_1_day</strong>, etc. pra quem está na janela hoje. Use quando o cron diário atrasou.
+            </p>
+          </div>
+          <Button onClick={handleFireLifecycle} disabled={firingLifecycle}>
+            {firingLifecycle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Disparar agora
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Tab Navigation */}
       <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">

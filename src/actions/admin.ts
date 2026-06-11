@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import type { Json } from '@/types/database'
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'expired'
@@ -553,5 +554,39 @@ export async function getAdminStats() {
     annualCount: annualSubs.count || 0,
     expiredCount: expiredSubs.count || 0,
     notRenewedCount: notRenewedSubs.count || 0,
+  }
+}
+
+/**
+ * Dispara o cron de ciclo de vida do WhatsApp (plan_3_days, plan_expires_today,
+ * trial_*, etc) na hora. Útil quando o cron diário do Vercel atrasou ou falhou,
+ * ou pra cobrir assinantes que estão exatamente vencendo agora.
+ */
+export async function runWhatsappLifecycleCron(): Promise<
+  { sent: number; failed: number } | { error: string }
+> {
+  await requireSuperAdmin()
+  const secret = process.env.CRON_SECRET
+  if (!secret) return { error: 'CRON_SECRET não configurado no ambiente.' }
+
+  const h = await headers()
+  const proto = h.get('x-forwarded-proto') || 'https'
+  const host = h.get('host')
+  if (!host) return { error: 'Host não detectado na requisição.' }
+
+  try {
+    const res = await fetch(`${proto}://${host}/api/cron/whatsapp`, {
+      headers: { Authorization: `Bearer ${secret}` },
+      // Sem cache; sempre dispara fresh.
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      return { error: `HTTP ${res.status}: ${body.slice(0, 200)}` }
+    }
+    const data = await res.json().catch(() => null) as { messages_sent?: number; messages_failed?: number } | null
+    return { sent: data?.messages_sent ?? 0, failed: data?.messages_failed ?? 0 }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro inesperado ao chamar o cron.' }
   }
 }

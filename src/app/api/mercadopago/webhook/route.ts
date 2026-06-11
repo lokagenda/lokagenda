@@ -93,20 +93,23 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient()
 
     if (payment.status === 'approved') {
-      // Calcular período com base no billing_cycle
       const now = new Date()
-      const periodEnd = new Date(now)
 
-      switch (billingCycle) {
-        case 'monthly':
-          periodEnd.setMonth(periodEnd.getMonth() + 1)
-          break
-        case 'semiannual':
-          periodEnd.setMonth(periodEnd.getMonth() + 6)
-          break
-        case 'annual':
-          periodEnd.setFullYear(periodEnd.getFullYear() + 1)
-          break
+      // Helper local: soma 1/6/12 meses (ou ano) a partir de uma data.
+      const addCycle = (d: Date, cycle: string): Date => {
+        const r = new Date(d)
+        switch (cycle) {
+          case 'monthly':
+            r.setMonth(r.getMonth() + 1)
+            break
+          case 'semiannual':
+            r.setMonth(r.getMonth() + 6)
+            break
+          case 'annual':
+            r.setFullYear(r.getFullYear() + 1)
+            break
+        }
+        return r
       }
 
       const paidAmount = payment.transaction_amount || 0
@@ -134,11 +137,29 @@ export async function POST(request: NextRequest) {
       // Verificar se já existe assinatura para a empresa
       const { data: existing } = await admin
         .from('subscriptions')
-        .select('id')
+        .select('id, status, current_period_end')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single()
+
+      // Pagamento antecipado: se a assinatura está ATIVA e o período atual ainda
+      // não terminou, ESTENDE (não substitui) — cliente não perde dias pagos.
+      // Caso contrário (expirada, cancelada, primeira vez), começa do zero (now).
+      let periodStart: Date
+      let periodEnd: Date
+      if (
+        existing &&
+        existing.status === 'active' &&
+        existing.current_period_end &&
+        new Date(existing.current_period_end).getTime() > now.getTime()
+      ) {
+        periodStart = new Date(existing.current_period_end)
+        periodEnd = addCycle(periodStart, billingCycle)
+      } else {
+        periodStart = now
+        periodEnd = addCycle(now, billingCycle)
+      }
 
       if (existing) {
         // Atualizar assinatura existente
@@ -150,7 +171,7 @@ export async function POST(request: NextRequest) {
             billing_cycle: billingCycle as 'monthly' | 'semiannual' | 'annual',
             current_price: paidAmount,
             mercadopago_payer_id: payment.payer?.id?.toString() || null,
-            current_period_start: now.toISOString(),
+            current_period_start: periodStart.toISOString(),
             current_period_end: periodEnd.toISOString(),
             coupon_code: normalizedCoupon,
             discount_applied: discountApplied,
@@ -166,7 +187,7 @@ export async function POST(request: NextRequest) {
           billing_cycle: billingCycle as 'monthly' | 'semiannual' | 'annual',
           current_price: paidAmount,
           mercadopago_payer_id: payment.payer?.id?.toString() || null,
-          current_period_start: now.toISOString(),
+          current_period_start: periodStart.toISOString(),
           current_period_end: periodEnd.toISOString(),
           coupon_code: normalizedCoupon,
           discount_applied: discountApplied,

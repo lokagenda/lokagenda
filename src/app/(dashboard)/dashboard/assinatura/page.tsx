@@ -607,15 +607,18 @@ export default function AssinaturaPage() {
                   </ul>
 
                   {/* CTA */}
+                  {isCurrentCycle && (
+                    <p className="mb-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
+                      Seu plano atual
+                    </p>
+                  )}
                   <button
                     onClick={() => handleSubscribe(cycle)}
-                    disabled={!!subscribing || isCurrentCycle}
+                    disabled={!!subscribing}
                     className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-50 ${
-                      isCurrentCycle
-                        ? 'border border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-                        : isPopular
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                          : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
+                      isPopular
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
                     }`}
                   >
                     {subscribing === cycle ? (
@@ -624,11 +627,25 @@ export default function AssinaturaPage() {
                         Processando...
                       </>
                     ) : isCurrentCycle ? (
-                      'Plano atual'
+                      'Renovar agora'
                     ) : (
                       'Assinar'
                     )}
                   </button>
+                  {isCurrentCycle && subscription?.current_period_end && (
+                    <p className="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                      Estende seu plano até{' '}
+                      <strong className="text-zinc-700 dark:text-zinc-300">
+                        {(() => {
+                          const end = new Date(subscription.current_period_end)
+                          if (cycle === 'monthly') end.setMonth(end.getMonth() + 1)
+                          else if (cycle === 'semiannual') end.setMonth(end.getMonth() + 6)
+                          else end.setFullYear(end.getFullYear() + 1)
+                          return end.toLocaleDateString('pt-BR')
+                        })()}
+                      </strong>
+                    </p>
+                  )}
                 </div>
               )
             })}
