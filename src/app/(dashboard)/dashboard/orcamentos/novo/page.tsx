@@ -55,6 +55,7 @@ export default function NovoOrcamentoPage() {
   const [customerDocument, setCustomerDocument] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [eventEndDate, setEventEndDate] = useState('')
+  const [eventType, setEventType] = useState('')
   const [eventAddress, setEventAddress] = useState('')
   const [eventCity, setEventCity] = useState('')
   const [eventState, setEventState] = useState('')
@@ -102,6 +103,7 @@ export default function NovoOrcamentoPage() {
         setCustomerDocument((q as any).customer_document || '')
         setCustomerSearch(q.customer_name || '')
         setEventDate(q.event_date || '')
+        setEventType((q as any).event_type || '')
         setEventEndDate((q as any).event_end_date || '')
         setEventAddress(q.event_address || '')
         setEventCity(q.event_city || '')
@@ -278,6 +280,7 @@ export default function NovoOrcamentoPage() {
         customer_phone: customerPhone || undefined,
         customer_email: customerEmail || undefined,
         event_date: eventDate,
+        event_type: eventType || null,
         event_end_date: eventEndDate || null,
         event_address: eventAddress || undefined,
         event_city: eventCity || undefined,
@@ -307,6 +310,7 @@ export default function NovoOrcamentoPage() {
       customer_email: customerEmail || undefined,
       customer_document: customerDocument || undefined,
       event_date: eventDate,
+      event_type: eventType || null,
       event_end_date: eventEndDate || null,
       event_address: eventAddress || undefined,
       event_city: eventCity || undefined,
@@ -353,6 +357,7 @@ export default function NovoOrcamentoPage() {
       customer_email: customerEmail || undefined,
       customer_document: customerDocument || undefined,
       event_date: eventDate,
+      event_type: eventType || null,
       event_end_date: eventEndDate || null,
       event_address: eventAddress || undefined,
       event_city: eventCity || undefined,
@@ -388,6 +393,7 @@ export default function NovoOrcamentoPage() {
         customer_phone: customerPhone,
         customer_email: customerEmail,
         event_date: eventDate,
+        event_type: eventType || null,
         event_address: eventAddress,
         event_city: eventCity,
         event_state: eventState,
@@ -552,6 +558,12 @@ export default function NovoOrcamentoPage() {
               type="time"
               value={pickupTime}
               onChange={(e) => setPickupTime(e.target.value)}
+            />
+            <Input
+              label="Tipo de evento"
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+              placeholder="Ex: aniversário, festa junina, casamento..."
             />
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -797,6 +809,7 @@ export default function NovoOrcamentoPage() {
                     customer_phone: customerPhone || undefined,
                     customer_email: customerEmail || undefined,
                     event_date: eventDate,
+        event_type: eventType || null,
                     event_end_date: eventEndDate || null,
                     event_address: eventAddress || undefined,
                     event_city: eventCity || undefined,
@@ -819,6 +832,7 @@ export default function NovoOrcamentoPage() {
                     const rentalObj = {
                       customer_name: customerName,
                       event_date: eventDate,
+        event_type: eventType || null,
                       event_address: eventAddress || undefined,
                       event_city: eventCity || undefined,
                       event_state: eventState || undefined,
@@ -844,6 +858,7 @@ export default function NovoOrcamentoPage() {
                   customer_phone: customerPhone || undefined,
                   customer_email: customerEmail || undefined,
                   event_date: eventDate,
+        event_type: eventType || null,
                   event_end_date: eventEndDate || null,
                   event_address: eventAddress || undefined,
                   event_city: eventCity || undefined,
@@ -872,6 +887,7 @@ export default function NovoOrcamentoPage() {
                     customer_phone: customerPhone,
                     customer_email: customerEmail,
                     event_date: eventDate,
+        event_type: eventType || null,
                     event_address: eventAddress,
                     event_city: eventCity,
                     event_state: eventState,

@@ -131,6 +131,25 @@ export async function deleteEmployee(id: string) {
 }
 
 /**
+ * Atribui (ou desatribui) um funcionário a uma locação. Usado na tela /montagem
+ * pra Léo saber quem está cuidando de cada item e não duplicar disparos.
+ */
+export async function assignRentalEmployee(rentalId: string, employeeId: string | null) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { error } = await supabase
+    .from('rentals')
+    .update({ assigned_employee_id: employeeId })
+    .eq('id', rentalId)
+    .eq('company_id', companyId)
+
+  if (error) return { error: `Erro ao atribuir funcionário: ${error.message}` }
+  revalidatePath('/dashboard/montagem')
+  return { success: true }
+}
+
+/**
  * Monta o texto do "roteiro do dia" e RETORNA (não envia).
  * O envio é feito pelo navegador via link wa.me, a partir do WhatsApp do PRÓPRIO
  * assinante — assim a mensagem sai do número dele para o montador, e não do

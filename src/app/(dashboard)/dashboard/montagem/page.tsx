@@ -6,6 +6,7 @@ import {
   getRentalsForDay,
   listEmployees,
   createEmployee,
+  assignRentalEmployee,
   updateEmployee,
   deleteEmployee,
   buildMontagemMessage,
@@ -467,6 +468,35 @@ export default function MontagemPage() {
                       <span className="font-medium text-red-600 dark:text-red-400">
                         A receber: {formatCurrency(pending)}
                       </span>
+                    </div>
+
+                    {/* Funcionário responsável por essa locação */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                      <label className="text-xs text-zinc-500 dark:text-zinc-400">Responsável:</label>
+                      <select
+                        value={(rental as any).assigned_employee_id || ''}
+                        onChange={async (e) => {
+                          const empId = e.target.value || null
+                          const res = await assignRentalEmployee(rental.id, empId)
+                          if (res.error) {
+                            toast.error(res.error)
+                            return
+                          }
+                          setRentals((prev) =>
+                            prev.map((r) =>
+                              r.id === rental.id
+                                ? ({ ...r, assigned_employee_id: empId } as RentalWithItems)
+                                : r
+                            )
+                          )
+                        }}
+                        className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                      >
+                        <option value="">— sem responsável —</option>
+                        {employees.map((emp) => (
+                          <option key={emp.id} value={emp.id}>{emp.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>

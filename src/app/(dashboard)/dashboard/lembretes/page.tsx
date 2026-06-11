@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
 import {
   Bell,
@@ -248,12 +249,23 @@ export default function LembretesPage() {
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {reminders.map((item) => {
                 const isBirthday = item.type === 'aniversario'
+                // Locação → detalhe da locação. Aniversário → ficha do cliente
+                // (customerId vem embutido no item.id como `birthday-<uuid>`).
+                const detailHref = isBirthday
+                  ? `/dashboard/clientes/${item.id.replace(/^birthday-/, '')}`
+                  : item.rentalId
+                    ? `/dashboard/locacoes/${item.rentalId}`
+                    : '#'
                 return (
                   <div
                     key={item.id}
                     className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex items-center gap-3">
+                    <Link
+                      href={detailHref}
+                      className="flex flex-1 items-center gap-3 rounded-md transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                      title="Abrir detalhes"
+                    >
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-lg ${
                           isBirthday
@@ -277,7 +289,7 @@ export default function LembretesPage() {
                           {item.phone ? ` • ${item.phone}` : ' • sem telefone'}
                         </p>
                       </div>
-                    </div>
+                    </Link>
                     <div className="sm:shrink-0">
                       <Button
                         variant="outline"

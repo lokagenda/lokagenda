@@ -142,7 +142,7 @@ export default function NovoClientePage() {
           {/* Aniversário */}
           <div>
             <label htmlFor="birthday" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              Aniversário
+              Aniversário do cliente
             </label>
             <input
               type="date"
@@ -150,6 +150,9 @@ export default function NovoClientePage() {
               name="birthday"
               className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Data de nascimento do cliente (não do evento). Todo ano ele aparece em <strong>Lembretes</strong> na janela de antecedência pra você reativar a venda. A data do evento é cadastrada na locação.
+            </p>
           </div>
 
           {/* Endereço */}

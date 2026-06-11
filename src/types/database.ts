@@ -430,6 +430,7 @@ export interface Database {
           event_type: string | null;
           payment_date_signal: string | null;
           payment_date_total: string | null;
+          assigned_employee_id: string | null;
           created_by: string;
           created_at: string;
           updated_at: string;
@@ -465,6 +466,7 @@ export interface Database {
           event_type?: string | null;
           payment_date_signal?: string | null;
           payment_date_total?: string | null;
+          assigned_employee_id?: string | null;
           created_by: string;
           created_at?: string;
           updated_at?: string;
@@ -500,6 +502,7 @@ export interface Database {
           event_type?: string | null;
           payment_date_signal?: string | null;
           payment_date_total?: string | null;
+          assigned_employee_id?: string | null;
           created_by?: string;
           created_at?: string;
           updated_at?: string;
