@@ -1,6 +1,5 @@
 'use server'
 
-import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp-api/sender'
@@ -268,8 +267,13 @@ async function listReactivationTargetsInner(filter: ReactivationFilter) {
 // ── Batch Send ────────────────────────────────────────────
 
 /**
- * Envia o template de reativação para as empresas selecionadas (em lote,
- * com pequeno intervalo entre envios). Empresas sem telefone são puladas.
+ * Enfileira o template de reativação para as empresas selecionadas. NÃO envia
+ * direto — só insere em `reactivation_queue`. O cron /api/cron/reactivate-queue
+ * processa em lotes com intervalo anti-ban e respeita o limite de execução do
+ * Vercel. Empresas sem telefone são puladas.
+ *
+ * Antes esta função usava `after()` pra mandar em background, mas o Vercel mata
+ * a task em ~3min, perdendo envios em lotes grandes (98 viraram 13 sent).
  */
 export async function sendReactivationBatch(
   companyIds: string[],
@@ -300,32 +304,28 @@ export async function sendReactivationBatch(
   if (error) return { error: error.message }
 
   const companies = data || []
-  const queue = companies.filter((c) => c.phone?.trim())
-  const skipped = companyIds.length - queue.length
+  const toQueue = companies
+    .filter((c) => c.phone?.trim())
+    .map((c) => ({
+      company_id: c.id,
+      phone: c.phone!.trim(),
+      company_name: c.name,
+      template_slug: templateSlug,
+      status: 'pending' as const,
+    }))
+  const skipped = companyIds.length - toQueue.length
 
-  // Processa em background com intervalo aleatório anti-ban (8-20s). Server action
-  // retorna imediato com "queued" pro front mostrar status; envios reais vão saindo
-  // ao longo dos próximos minutos sem timeout.
-  after(async () => {
-    const bgAdmin = createAdminClient()
-    for (const company of queue) {
-      try {
-        await sendTemplateMessage(
-          templateSlug,
-          company.phone!.trim(),
-          { nome: company.name, cupom: 'VOLTAR50' },
-          company.id
-        )
-      } catch (err) {
-        console.error('[reativacao] envio em background falhou:', company.id, err)
+  if (toQueue.length > 0) {
+    // Insert em lotes pra não estourar o body do PostgREST com 1000+ items.
+    const CHUNK = 200
+    for (let i = 0; i < toQueue.length; i += CHUNK) {
+      const slice = toQueue.slice(i, i + CHUNK)
+      const { error: insertErr } = await admin.from('reactivation_queue').insert(slice)
+      if (insertErr) {
+        return { error: `Erro ao enfileirar (${i} já enfileirados): ${insertErr.message}` }
       }
-      const delay = 8000 + Math.floor(Math.random() * 12000)
-      await new Promise((r) => setTimeout(r, delay))
     }
-    // Touch table only se houver algo a registrar — atualmente o sender já loga em
-    // whatsapp_message_log; o admin fica disponível pra futuras extensões.
-    void bgAdmin
-  })
+  }
 
-  return { queued: queue.length, skipped }
+  return { queued: toQueue.length, skipped }
 }

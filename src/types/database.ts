@@ -1428,6 +1428,53 @@ export interface Database {
           },
         ];
       };
+      reactivation_queue: {
+        Row: {
+          id: string;
+          company_id: string;
+          phone: string;
+          company_name: string | null;
+          template_slug: string;
+          status: "pending" | "sent" | "failed";
+          attempts: number;
+          last_error: string | null;
+          created_at: string;
+          sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          phone: string;
+          company_name?: string | null;
+          template_slug: string;
+          status?: "pending" | "sent" | "failed";
+          attempts?: number;
+          last_error?: string | null;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          phone?: string;
+          company_name?: string | null;
+          template_slug?: string;
+          status?: "pending" | "sent" | "failed";
+          attempts?: number;
+          last_error?: string | null;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reactivation_queue_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaigns: {
         Row: {
           id: string;
