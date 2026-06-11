@@ -1,5 +1,6 @@
 'use server'
 
+import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp-api/sender'
@@ -273,7 +274,7 @@ async function listReactivationTargetsInner(filter: ReactivationFilter) {
 export async function sendReactivationBatch(
   companyIds: string[],
   templateSlug: string
-): Promise<{ sent: number; failed: number; skipped: number } | { error: string }> {
+): Promise<{ queued: number; skipped: number } | { error: string }> {
   let admin: ReturnType<typeof createAdminClient>
   try {
     await requireSuperAdmin()
@@ -284,7 +285,7 @@ export async function sendReactivationBatch(
   }
 
   if (!companyIds.length) {
-    return { sent: 0, failed: 0, skipped: 0 }
+    return { queued: 0, skipped: 0 }
   }
 
   if (!REACTIVATION_TEMPLATE_SLUGS.includes(templateSlug as never)) {
@@ -299,36 +300,32 @@ export async function sendReactivationBatch(
   if (error) return { error: error.message }
 
   const companies = data || []
-  let sent = 0
-  let failed = 0
-  let skipped = 0
+  const queue = companies.filter((c) => c.phone?.trim())
+  const skipped = companyIds.length - queue.length
 
-  for (const company of companies) {
-    const phone = company.phone?.trim()
-    if (!phone) {
-      skipped++
-      continue
+  // Processa em background com intervalo aleatório anti-ban (8-20s). Server action
+  // retorna imediato com "queued" pro front mostrar status; envios reais vão saindo
+  // ao longo dos próximos minutos sem timeout.
+  after(async () => {
+    const bgAdmin = createAdminClient()
+    for (const company of queue) {
+      try {
+        await sendTemplateMessage(
+          templateSlug,
+          company.phone!.trim(),
+          { nome: company.name, cupom: 'VOLTAR50' },
+          company.id
+        )
+      } catch (err) {
+        console.error('[reativacao] envio em background falhou:', company.id, err)
+      }
+      const delay = 8000 + Math.floor(Math.random() * 12000)
+      await new Promise((r) => setTimeout(r, delay))
     }
+    // Touch table only se houver algo a registrar — atualmente o sender já loga em
+    // whatsapp_message_log; o admin fica disponível pra futuras extensões.
+    void bgAdmin
+  })
 
-    try {
-      const ok = await sendTemplateMessage(
-        templateSlug,
-        phone,
-        { nome: company.name, cupom: 'VOLTAR50' },
-        company.id
-      )
-      if (ok) sent++
-      else failed++
-    } catch {
-      failed++
-    }
-
-    // Pequeno intervalo entre envios para não saturar o provedor.
-    await new Promise((r) => setTimeout(r, 1500))
-  }
-
-  // Empresas selecionadas que não existem mais também contam como puladas.
-  skipped += companyIds.length - companies.length
-
-  return { sent, failed, skipped }
+  return { queued: queue.length, skipped }
 }

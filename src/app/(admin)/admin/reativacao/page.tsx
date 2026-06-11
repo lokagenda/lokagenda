@@ -158,8 +158,10 @@ export default function AdminReativacaoPage() {
       if ('error' in result) {
         toast.error(result.error)
       } else {
+        const eta = Math.max(1, Math.ceil((result.queued * 14) / 60)) // ~14s médio por envio
         toast.success(
-          `Enviadas: ${result.sent} | Falhas: ${result.failed} | Puladas: ${result.skipped}`
+          `${result.queued} mensagem(ns) na fila${result.skipped ? `, ${result.skipped} pulada(s) sem telefone` : ''}. Disparos saem espaçados em ~${eta} min (anti-ban).`,
+          { duration: 8000 }
         )
         setSelected(new Set())
       }

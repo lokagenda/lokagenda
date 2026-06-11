@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+// Notifications faz loop por todas as empresas e várias queries por empresa;
+// com a base crescendo, precisa de janela maior. 5min cobre com folga.
+export const maxDuration = 300
+
 export async function GET(request: NextRequest) {
   // Verify authorization
   const cronSecret = process.env.CRON_SECRET

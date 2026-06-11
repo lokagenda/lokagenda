@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTemplateMessage } from '@/lib/whatsapp-api/sender'
 
+// Ciclo de vida do trial/assinatura: 7 queries x N empresas. 5min de folga.
+export const maxDuration = 300
+
+const MIN_DELAY_MS = 8000
+const MAX_DELAY_MS = 20000
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const randomDelay = () => Math.floor(MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS))
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
@@ -184,6 +192,9 @@ export async function GET(request: NextRequest) {
           const sent = await sendTemplateMessage(slug, company.phone, variables, row.company_id)
           if (sent) messagesSent++
           else messagesFailed++
+          // Anti-ban: intervalo aleatório entre cada envio (8-20s) pra não dar
+          // burst quando há muitos assinantes na mesma janela.
+          await sleep(randomDelay())
         } catch {
           messagesFailed++
         }
