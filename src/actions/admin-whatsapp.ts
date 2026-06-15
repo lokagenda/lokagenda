@@ -172,6 +172,32 @@ export async function listWhatsAppLogs(
 // Sem essa flag, a Z-API não avisa quando o assinante manda mensagem do celular
 // e o nosso `manual_takeovers` nunca é gravado — IA segue respondendo por cima.
 
+/**
+ * Resolve a URL pública do app pra registrar como webhook na Z-API. Lê de envs
+ * server-side em vez de headers (Host header é manipulável — SSRF).
+ */
+function resolveAppBaseUrl(): { url: string } | { error: string } {
+  const candidates = [
+    process.env.WEBHOOK_BASE_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null,
+  ]
+  for (const c of candidates) {
+    if (!c) continue
+    try {
+      const parsed = new URL(c)
+      if (parsed.protocol === 'https:' || parsed.hostname === 'localhost') {
+        return { url: parsed.origin }
+      }
+    } catch {
+      // ignora env inválida
+    }
+  }
+  return {
+    error: 'Configure WEBHOOK_BASE_URL=https://www.lokagenda.com.br nas envs da Vercel.',
+  }
+}
+
 type ZApiCtx = { base: string; headers: Record<string, string> }
 
 async function getActiveZApi(): Promise<ZApiCtx | { error: string }> {
@@ -204,64 +230,73 @@ async function getActiveZApi(): Promise<ZApiCtx | { error: string }> {
 }
 
 /**
- * Lê a flag `notifySentByMe` da Z-API. Quando true, a Z-API envia `fromMe=true`
- * pro nosso /api/whatsapp/inbound toda vez que o assinante manda mensagem pelo
- * próprio celular. Sem isso, o manual_takeover_at nunca é gravado e a IA
- * continua respondendo por cima do humano.
+ * Lê o estado de `notifySentByMe` do NOSSO banco (snapshot local).
+ * A Z-API não expõe um endpoint GET pra essa flag — confiamos no que gravamos
+ * quando o super admin clicou "Ativar".
  */
 export async function getZApiNotifyOnSendStatus(): Promise<
   { enabled: boolean } | { error: string }
 > {
   await requireSuperAdmin()
-  const zapi = await getActiveZApi()
-  if ('error' in zapi) return zapi
-  try {
-    const res = await fetch(`${zapi.base}/notification/notifySentByMe`, {
-      method: 'GET',
-      headers: zapi.headers,
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      console.error('[zapi-onsend] status', res.status, body.slice(0, 200))
-      return { error: `Z-API respondeu ${res.status} ao consultar notifySentByMe.` }
-    }
-    const data = await res.json().catch(() => null) as { value?: boolean } | null
-    return { enabled: data?.value === true }
-  } catch (err) {
-    console.error('[zapi-onsend] consulta', err)
-    return { error: err instanceof Error ? err.message : 'Erro ao consultar Z-API.' }
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('whatsapp_config')
+    .select('notify_sent_by_me_enabled')
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    console.error('[zapi-onsend] read flag', error)
+    return { error: error.message }
   }
+  return { enabled: data?.notify_sent_by_me_enabled === true }
 }
 
 /**
- * Ativa `notifySentByMe` na Z-API. Após isso, mensagens que o assinante mandar
- * do celular chegam no nosso webhook com `fromMe=true` e disparam o manual
- * takeover (IA cala por 12h pra esse contato).
+ * Ativa `notifySentByMe` via `POST {base}/webhook/update-all` (endpoint
+ * documentado na Z-API). Esse endpoint aceita `value` (URL) + `notifySentByMe`,
+ * configurando todos os webhooks (on-receive, on-send, status) pra mesma URL e
+ * ativando a flag. Após sucesso, marca `whatsapp_config.notify_sent_by_me_enabled`
+ * no nosso banco pra o status local refletir.
  */
 export async function setupZApiNotifyOnSend(): Promise<
-  { ok: true } | { error: string }
+  { ok: true; webhookUrl: string } | { error: string }
 > {
   await requireSuperAdmin()
+  const baseRes = resolveAppBaseUrl()
+  if ('error' in baseRes) return baseRes
+  const webhookUrl = `${baseRes.url}/api/whatsapp/inbound`
+
   const zapi = await getActiveZApi()
   if ('error' in zapi) return zapi
+
   try {
-    const res = await fetch(`${zapi.base}/notification/notifySentByMe`, {
-      method: 'PUT',
+    const res = await fetch(`${zapi.base}/webhook/update-all`, {
+      method: 'POST',
       headers: zapi.headers,
-      body: JSON.stringify({ notifySentByMe: true }),
+      body: JSON.stringify({ value: webhookUrl, notifySentByMe: true }),
       cache: 'no-store',
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      console.error('[zapi-onsend] put', res.status, body.slice(0, 200))
+      console.error('[zapi-onsend] update-all', res.status, body.slice(0, 200))
       return { error: `Z-API respondeu ${res.status}: ${body.slice(0, 200)}` }
     }
-    return { ok: true }
+
+    // Persiste o snapshot local.
+    const admin = createAdminClient()
+    const { error: updErr } = await admin
+      .from('whatsapp_config')
+      .update({ notify_sent_by_me_enabled: true, updated_at: new Date().toISOString() })
+      .eq('active', true)
+    if (updErr) {
+      console.error('[zapi-onsend] persist flag', updErr)
+      // A Z-API já foi configurada — só perdemos o snapshot local. Não bloqueia.
+    }
+    return { ok: true, webhookUrl }
   } catch (err) {
-    console.error('[zapi-onsend] put exception', err)
+    console.error('[zapi-onsend] update-all exception', err)
     return { error: err instanceof Error ? err.message : 'Erro ao configurar Z-API.' }
   }
 }

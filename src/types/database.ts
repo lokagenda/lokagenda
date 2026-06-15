@@ -1112,6 +1112,7 @@ export interface Database {
           instance_id: string | null;
           phone_number_id: string | null;
           active: boolean;
+          notify_sent_by_me_enabled: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -1123,6 +1124,7 @@ export interface Database {
           instance_id?: string | null;
           phone_number_id?: string | null;
           active?: boolean;
+          notify_sent_by_me_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -1134,6 +1136,7 @@ export interface Database {
           instance_id?: string | null;
           phone_number_id?: string | null;
           active?: boolean;
+          notify_sent_by_me_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
