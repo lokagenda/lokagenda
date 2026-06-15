@@ -231,6 +231,44 @@ export async function updateContactStatus(id: string, status: ContactStatus) {
   return { success: true }
 }
 
+// Pausa a IA pra um contato específico por N horas (default 24). Não depende
+// da Z-API — escreve direto em `campaign_contacts.ai_paused_until`. O inbound
+// checa essa janela antes de chamar a IA.
+export async function pauseContactAi(id: string, hours: number = 24) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const ms = Math.max(1, Math.min(24 * 7, hours)) * 60 * 60 * 1000
+  const until = new Date(Date.now() + ms).toISOString()
+
+  const { error } = await supabase
+    .from('campaign_contacts')
+    .update({ ai_paused_until: until, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('company_id', companyId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/admin/marketing')
+  revalidatePath('/dashboard/marketing')
+  return { success: true, until }
+}
+
+export async function resumeContactAi(id: string) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { error } = await supabase
+    .from('campaign_contacts')
+    .update({ ai_paused_until: null, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('company_id', companyId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/admin/marketing')
+  revalidatePath('/dashboard/marketing')
+  return { success: true }
+}
+
 export async function importContactsCSV(
   rows: { name?: string; phone: string; tags?: string }[],
   commonTag?: string,

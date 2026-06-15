@@ -229,6 +229,48 @@ async function getActiveZApi(): Promise<ZApiCtx | { error: string }> {
   return { base, headers }
 }
 
+// ── Modo silencioso global ─────────────────────────────────
+// Panic button — desliga TODA a IA. Independente da Z-API (que é instável
+// no `notifySentByMe`). Léo usa quando quer atender 100% manual.
+
+export async function getGlobalAiPauseStatus(): Promise<
+  { paused: boolean; pausedAt: string | null; reason: string | null } | { error: string }
+> {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('whatsapp_config')
+    .select('ai_globally_paused_at, ai_globally_paused_reason')
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle()
+  if (error) return { error: error.message }
+  return {
+    paused: !!data?.ai_globally_paused_at,
+    pausedAt: data?.ai_globally_paused_at ?? null,
+    reason: data?.ai_globally_paused_reason ?? null,
+  }
+}
+
+export async function setGlobalAiPause(paused: boolean, reason?: string): Promise<
+  { ok: true } | { error: string }
+> {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const nowIso = new Date().toISOString()
+  const { error } = await admin
+    .from('whatsapp_config')
+    .update({
+      ai_globally_paused_at: paused ? nowIso : null,
+      ai_globally_paused_reason: paused ? (reason?.trim() || null) : null,
+      updated_at: nowIso,
+    })
+    .eq('active', true)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/whatsapp')
+  return { ok: true }
+}
+
 /**
  * Lê o estado de `notifySentByMe` do NOSSO banco (snapshot local).
  * A Z-API não expõe um endpoint GET pra essa flag — confiamos no que gravamos

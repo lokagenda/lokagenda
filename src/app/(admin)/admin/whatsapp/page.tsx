@@ -10,6 +10,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Power,
+  PowerOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +26,8 @@ import {
   listWhatsAppLogs,
   setupZApiNotifyOnSend,
   getZApiNotifyOnSendStatus,
+  setGlobalAiPause,
+  getGlobalAiPauseStatus,
 } from '@/actions/admin-whatsapp'
 import { runWhatsappLifecycleCron } from '@/actions/admin'
 import type { WhatsAppProvider } from '@/lib/whatsapp-api/types'
@@ -102,6 +106,27 @@ export default function AdminWhatsAppPage() {
   const [zapiOnSendEnabled, setZapiOnSendEnabled] = useState<boolean | null>(null)
   const [zapiOnSendChecking, setZapiOnSendChecking] = useState(false)
   const [zapiOnSendSaving, setZapiOnSendSaving] = useState(false)
+  const [aiPaused, setAiPaused] = useState<boolean | null>(null)
+  const [aiPausedAt, setAiPausedAt] = useState<string | null>(null)
+  const [aiPausedReason, setAiPausedReason] = useState<string | null>(null)
+  const [aiPauseChecking, setAiPauseChecking] = useState(false)
+  const [aiPauseSaving, setAiPauseSaving] = useState(false)
+
+  const refreshAiPause = useCallback(async () => {
+    setAiPauseChecking(true)
+    try {
+      const res = await getGlobalAiPauseStatus()
+      if ('error' in res) {
+        setAiPaused(null)
+      } else {
+        setAiPaused(res.paused)
+        setAiPausedAt(res.pausedAt)
+        setAiPausedReason(res.reason)
+      }
+    } finally {
+      setAiPauseChecking(false)
+    }
+  }, [])
 
   const refreshZapiOnSend = useCallback(async () => {
     setZapiOnSendChecking(true)
@@ -119,7 +144,34 @@ export default function AdminWhatsAppPage() {
 
   useEffect(() => {
     refreshZapiOnSend()
-  }, [refreshZapiOnSend])
+    refreshAiPause()
+  }, [refreshZapiOnSend, refreshAiPause])
+
+  async function handleToggleGlobalPause() {
+    if (aiPaused === null) return
+    const turningOn = !aiPaused
+    let reason: string | undefined
+    if (turningOn) {
+      if (!confirm('SILENCIAR a IA pra TODOS os contatos? Ela vai parar de responder qualquer mensagem até você reativar.')) return
+      const r = prompt('Motivo (opcional, só pra você lembrar):', 'Léo atendendo manual')
+      if (r === null) return
+      reason = r
+    } else {
+      if (!confirm('Reativar a IA? Ela volta a responder os leads.')) return
+    }
+    setAiPauseSaving(true)
+    try {
+      const res = await setGlobalAiPause(turningOn, reason)
+      if ('error' in res) {
+        toast.error(res.error)
+        return
+      }
+      toast.success(turningOn ? 'IA SILENCIADA (modo manual).' : 'IA REATIVADA.', { duration: 6000 })
+      await refreshAiPause()
+    } finally {
+      setAiPauseSaving(false)
+    }
+  }
 
   async function handleSetupZapiOnSend() {
     setZapiOnSendSaving(true)
@@ -172,6 +224,49 @@ export default function AdminWhatsAppPage() {
           <Button onClick={handleFireLifecycle} disabled={firingLifecycle}>
             {firingLifecycle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Disparar agora
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Panic button: silenciar TODA a IA */}
+      <Card
+        className={
+          aiPaused
+            ? 'border-red-300 bg-red-50/60 dark:border-red-900/60 dark:bg-red-950/30'
+            : 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+        }
+      >
+        <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              {aiPaused ? '🔇 IA SILENCIADA (modo manual)' : '🟢 IA ativa'}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Botão de pânico — quando ativo, a IA não responde NENHUM contato. Independente da Z-API. Use quando você quer atender 100% manual.
+            </p>
+            {aiPaused && (
+              <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+                Silenciada {aiPausedAt ? `desde ${new Date(aiPausedAt).toLocaleString('pt-BR')}` : ''}
+                {aiPausedReason ? ` — motivo: ${aiPausedReason}` : ''}
+              </p>
+            )}
+            {aiPauseChecking && (
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Consultando…</p>
+            )}
+          </div>
+          <Button
+            onClick={handleToggleGlobalPause}
+            disabled={aiPauseSaving || aiPauseChecking || aiPaused === null}
+            variant={aiPaused ? 'primary' : 'danger'}
+          >
+            {aiPauseSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : aiPaused ? (
+              <Power className="h-4 w-4" />
+            ) : (
+              <PowerOff className="h-4 w-4" />
+            )}
+            {aiPaused ? 'Reativar IA' : 'Silenciar IA'}
           </Button>
         </CardContent>
       </Card>

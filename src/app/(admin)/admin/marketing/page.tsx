@@ -43,6 +43,8 @@ import {
   pauseCampaign,
   resumeCampaign,
   getCampaignStats,
+  pauseContactAi,
+  resumeContactAi,
 } from '@/actions/campanhas'
 
 type TabType = 'contatos' | 'campanhas'
@@ -237,6 +239,31 @@ function ContatosTab() {
           return next
         })
       }
+    })
+  }
+
+  const handlePauseAi = (id: string) => {
+    if (!confirm('Pausar a IA pra este contato por 24h? Você atende manualmente nesse período.')) return
+    startTransition(async () => {
+      const res = await pauseContactAi(id, 24)
+      if ('error' in res && res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success('IA pausada por 24h pra esse contato.')
+      setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ai_paused_until: (res as { until: string }).until } : c)))
+    })
+  }
+
+  const handleResumeAi = (id: string) => {
+    startTransition(async () => {
+      const res = await resumeContactAi(id)
+      if ('error' in res && res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success('IA reativada pra esse contato.')
+      setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ai_paused_until: null } : c)))
     })
   }
 
@@ -543,6 +570,30 @@ function ContatosTab() {
                     <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{c.tags || '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {(() => {
+                          const paused = c.ai_paused_until && new Date(c.ai_paused_until).getTime() > Date.now()
+                          return paused ? (
+                            <button
+                              onClick={() => handleResumeAi(c.id)}
+                              disabled={isPending}
+                              className="text-emerald-500 hover:text-emerald-700 disabled:opacity-50"
+                              aria-label="Reativar IA"
+                              title={`IA pausada até ${new Date(c.ai_paused_until as string).toLocaleString('pt-BR')}`}
+                            >
+                              <Play className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handlePauseAi(c.id)}
+                              disabled={isPending}
+                              className="text-zinc-400 hover:text-amber-600 disabled:opacity-50"
+                              aria-label="Pausar IA 24h"
+                              title="Pausar IA pra esse contato por 24h"
+                            >
+                              <Pause className="h-4 w-4" />
+                            </button>
+                          )
+                        })()}
                         <button
                           onClick={() => openEdit(c)}
                           disabled={isPending}

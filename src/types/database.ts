@@ -1113,6 +1113,8 @@ export interface Database {
           phone_number_id: string | null;
           active: boolean;
           notify_sent_by_me_enabled: boolean;
+          ai_globally_paused_at: string | null;
+          ai_globally_paused_reason: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1125,6 +1127,8 @@ export interface Database {
           phone_number_id?: string | null;
           active?: boolean;
           notify_sent_by_me_enabled?: boolean;
+          ai_globally_paused_at?: string | null;
+          ai_globally_paused_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1137,6 +1141,8 @@ export interface Database {
           phone_number_id?: string | null;
           active?: boolean;
           notify_sent_by_me_enabled?: boolean;
+          ai_globally_paused_at?: string | null;
+          ai_globally_paused_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1387,6 +1393,7 @@ export interface Database {
           last_message_at: string | null;
           reactivated_at: string | null;
           manual_takeover_at: string | null;
+          ai_paused_until: string | null;
           notes: string | null;
           created_at: string;
           updated_at: string;
@@ -1402,6 +1409,7 @@ export interface Database {
           last_message_at?: string | null;
           reactivated_at?: string | null;
           manual_takeover_at?: string | null;
+          ai_paused_until?: string | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1417,6 +1425,7 @@ export interface Database {
           last_message_at?: string | null;
           reactivated_at?: string | null;
           manual_takeover_at?: string | null;
+          ai_paused_until?: string | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;

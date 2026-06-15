@@ -141,6 +141,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
+    // Gate global "modo silencioso" (panic button do admin). Quando ativo,
+    // a IA não responde NADA — Léo cuida 100% manual. Independente da Z-API.
+    const { data: cfg } = await admin
+      .from('whatsapp_config')
+      .select('ai_globally_paused_at')
+      .eq('active', true)
+      .limit(1)
+      .maybeSingle()
+    if (cfg?.ai_globally_paused_at) {
+      return NextResponse.json({ received: true, skipped: 'globally_paused' })
+    }
+
     const incomingText = extractText(payload)
     if (!incomingText) {
       // Sem texto (ex.: mídia, status): ignorar.
@@ -191,7 +203,7 @@ export async function POST(request: NextRequest) {
 
     const { data: contact } = await admin
       .from('campaign_contacts')
-      .select('id, company_id, status')
+      .select('id, company_id, status, ai_paused_until')
       .eq('phone', phone)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(1)
@@ -200,6 +212,19 @@ export async function POST(request: NextRequest) {
     if (contact) {
       companyId = contact.company_id
       contactId = contact.id
+
+      // Léo pausou a IA pra esse contato manualmente (botão "Pausar IA" no
+      // /admin/marketing). Não chama a IA enquanto a janela estiver ativa.
+      if (contact.ai_paused_until && new Date(contact.ai_paused_until).getTime() > Date.now()) {
+        await admin
+          .from('campaign_contacts')
+          .update({
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', contact.id)
+        return NextResponse.json({ received: true, skipped: 'contact_paused' })
+      }
 
       // Contato fora do funil ativo: já foi qualificado, convertido ou perdido.
       // A IA não deve mais responder — humano cuida (ou já desistiu). Inclui o
