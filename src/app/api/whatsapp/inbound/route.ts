@@ -112,24 +112,31 @@ export async function POST(request: NextRequest) {
     // olhando whatsapp_message_log: se acabamos de mandar (< 10s) algo pra esse
     // mesmo phone, NÃO conta como takeover humano.
     if (payload.fromMe === true) {
+      console.log('[inbound/fromMe] entrou phone=' + phone)
       try {
         const { data: recentSelf } = await admin
           .from('whatsapp_message_log')
-          .select('id')
+          .select('id, created_at')
           .eq('phone', phone)
           .gte('created_at', new Date(Date.now() - 10000).toISOString())
           .limit(1)
           .maybeSingle()
         if (recentSelf) {
+          console.log('[inbound/fromMe] cortado por self_send phone=' + phone + ' last_log_id=' + recentSelf.id + ' created_at=' + recentSelf.created_at)
           return NextResponse.json({ received: true, skipped: 'self_send' })
         }
 
         const nowIso = new Date().toISOString()
-        await admin
+        const { error: upErr } = await admin
           .from('manual_takeovers')
           .upsert({ phone, takeover_at: nowIso, updated_at: nowIso }, { onConflict: 'phone' })
+        if (upErr) {
+          console.error('[inbound/fromMe] upsert manual_takeovers FALHOU phone=' + phone, upErr)
+        } else {
+          console.log('[inbound/fromMe] takeover gravado phone=' + phone + ' at=' + nowIso)
+        }
       } catch (err) {
-        console.error('[inbound] falha ao marcar takeover', err)
+        console.error('[inbound/fromMe] exception phone=' + phone, err)
       }
       return NextResponse.json({ received: true })
     }
@@ -184,7 +191,7 @@ export async function POST(request: NextRequest) {
 
     const { data: contact } = await admin
       .from('campaign_contacts')
-      .select('id, company_id')
+      .select('id, company_id, status')
       .eq('phone', phone)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(1)
@@ -193,6 +200,21 @@ export async function POST(request: NextRequest) {
     if (contact) {
       companyId = contact.company_id
       contactId = contact.id
+
+      // Contato fora do funil ativo: já foi qualificado, convertido ou perdido.
+      // A IA não deve mais responder — humano cuida (ou já desistiu). Inclui o
+      // caso clássico da esposa cadastrada por importação antiga (status='lost')
+      // e do lead que já vendeu ('qualified'/'converted').
+      if (contact.status === 'qualified' || contact.status === 'converted' || contact.status === 'lost') {
+        await admin
+          .from('campaign_contacts')
+          .update({
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', contact.id)
+        return NextResponse.json({ received: true, skipped: `status_${contact.status}` })
+      }
 
       // Takeover já foi checado no topo do handler (tabela manual_takeovers).
       // Aqui só atualizamos status pra "contacted" + last_message_at.
