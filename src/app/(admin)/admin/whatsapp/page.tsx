@@ -22,6 +22,8 @@ import {
   listWhatsAppTemplates,
   updateWhatsAppTemplate,
   listWhatsAppLogs,
+  setupZApiNotifyOnSend,
+  getZApiNotifyOnSendStatus,
 } from '@/actions/admin-whatsapp'
 import { runWhatsappLifecycleCron } from '@/actions/admin'
 import type { WhatsAppProvider } from '@/lib/whatsapp-api/types'
@@ -97,6 +99,42 @@ function getProviderFields(provider: WhatsAppProvider) {
 export default function AdminWhatsAppPage() {
   const [activeTab, setActiveTab] = useState<'config' | 'templates' | 'logs'>('config')
   const [firingLifecycle, setFiringLifecycle] = useState(false)
+  const [zapiOnSendEnabled, setZapiOnSendEnabled] = useState<boolean | null>(null)
+  const [zapiOnSendChecking, setZapiOnSendChecking] = useState(false)
+  const [zapiOnSendSaving, setZapiOnSendSaving] = useState(false)
+
+  const refreshZapiOnSend = useCallback(async () => {
+    setZapiOnSendChecking(true)
+    try {
+      const res = await getZApiNotifyOnSendStatus()
+      if ('error' in res) {
+        setZapiOnSendEnabled(null)
+      } else {
+        setZapiOnSendEnabled(res.enabled)
+      }
+    } finally {
+      setZapiOnSendChecking(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshZapiOnSend()
+  }, [refreshZapiOnSend])
+
+  async function handleSetupZapiOnSend() {
+    setZapiOnSendSaving(true)
+    try {
+      const res = await setupZApiNotifyOnSend()
+      if ('error' in res) {
+        toast.error(res.error)
+        return
+      }
+      toast.success('Notificações de mensagens enviadas ATIVADAS na Z-API.', { duration: 8000 })
+      await refreshZapiOnSend()
+    } finally {
+      setZapiOnSendSaving(false)
+    }
+  }
 
   async function handleFireLifecycle() {
     if (!confirm('Disparar agora as mensagens de ciclo de vida (plan_3_days / plan_expires_today / trial_*) pra todos os assinantes elegíveis hoje?')) return
@@ -134,6 +172,31 @@ export default function AdminWhatsAppPage() {
           <Button onClick={handleFireLifecycle} disabled={firingLifecycle}>
             {firingLifecycle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Disparar agora
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Z-API: notificações de mensagens enviadas (manual takeover) */}
+      <Card className="border-blue-200 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-950/20">
+        <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Notificar Z-API quando você mandar mensagem (manual takeover)</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Liga a flag <code>notifySentByMe</code> na Z-API. Quando você responde direto pelo celular, a Z-API avisa o sistema e a IA fica em silêncio por 12h naquele contato — evita ela falar por cima do seu atendimento.
+            </p>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+              {zapiOnSendChecking
+                ? 'Consultando status…'
+                : zapiOnSendEnabled === true
+                  ? <>Status: <strong className="text-emerald-600 dark:text-emerald-400">Ativado</strong></>
+                  : zapiOnSendEnabled === false
+                    ? <>Status: <strong className="text-amber-600 dark:text-amber-400">Desativado</strong></>
+                    : 'Status: não disponível.'}
+            </p>
+          </div>
+          <Button onClick={handleSetupZapiOnSend} disabled={zapiOnSendSaving || zapiOnSendChecking}>
+            {zapiOnSendSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" />}
+            {zapiOnSendEnabled ? 'Reativar' : 'Ativar'}
           </Button>
         </CardContent>
       </Card>

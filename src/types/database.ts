@@ -1428,6 +1428,24 @@ export interface Database {
           },
         ];
       };
+      manual_takeovers: {
+        Row: {
+          phone: string;
+          takeover_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          phone: string;
+          takeover_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          phone?: string;
+          takeover_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       reactivation_queue: {
         Row: {
           id: string;

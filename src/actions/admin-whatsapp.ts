@@ -167,3 +167,101 @@ export async function listWhatsAppLogs(
     currentPage: page,
   }
 }
+
+// Z-API: liga/desliga o notifySentByMe (manual takeover).
+// Sem essa flag, a Z-API não avisa quando o assinante manda mensagem do celular
+// e o nosso `manual_takeovers` nunca é gravado — IA segue respondendo por cima.
+
+type ZApiCtx = { base: string; headers: Record<string, string> }
+
+async function getActiveZApi(): Promise<ZApiCtx | { error: string }> {
+  const admin = createAdminClient()
+  const { data: cfg } = await admin
+    .from('whatsapp_config')
+    .select('provider, api_url, api_key, instance_id, phone_number_id')
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle()
+  if (!cfg) return { error: 'WhatsApp não está configurado.' }
+  if (cfg.provider !== 'z_api') return { error: 'Esta função é específica da Z-API.' }
+  if (!cfg.api_url || !cfg.api_key || !cfg.instance_id) {
+    return { error: 'Config Z-API incompleta (api_url/api_key/instance_id).' }
+  }
+  // Allowlist do host pra evitar SSRF via api_url editado no banco.
+  let apiUrl: URL
+  try {
+    apiUrl = new URL(cfg.api_url)
+  } catch {
+    return { error: 'api_url inválido na config.' }
+  }
+  if (!/(^|\.)z-api\.io$/.test(apiUrl.hostname) || apiUrl.protocol !== 'https:') {
+    return { error: 'api_url deve ser https://*.z-api.io.' }
+  }
+  const base = `${apiUrl.origin}/instances/${cfg.instance_id}/token/${cfg.api_key}`
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (cfg.phone_number_id) headers['Client-Token'] = cfg.phone_number_id
+  return { base, headers }
+}
+
+/**
+ * Lê a flag `notifySentByMe` da Z-API. Quando true, a Z-API envia `fromMe=true`
+ * pro nosso /api/whatsapp/inbound toda vez que o assinante manda mensagem pelo
+ * próprio celular. Sem isso, o manual_takeover_at nunca é gravado e a IA
+ * continua respondendo por cima do humano.
+ */
+export async function getZApiNotifyOnSendStatus(): Promise<
+  { enabled: boolean } | { error: string }
+> {
+  await requireSuperAdmin()
+  const zapi = await getActiveZApi()
+  if ('error' in zapi) return zapi
+  try {
+    const res = await fetch(`${zapi.base}/notification/notifySentByMe`, {
+      method: 'GET',
+      headers: zapi.headers,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error('[zapi-onsend] status', res.status, body.slice(0, 200))
+      return { error: `Z-API respondeu ${res.status} ao consultar notifySentByMe.` }
+    }
+    const data = await res.json().catch(() => null) as { value?: boolean } | null
+    return { enabled: data?.value === true }
+  } catch (err) {
+    console.error('[zapi-onsend] consulta', err)
+    return { error: err instanceof Error ? err.message : 'Erro ao consultar Z-API.' }
+  }
+}
+
+/**
+ * Ativa `notifySentByMe` na Z-API. Após isso, mensagens que o assinante mandar
+ * do celular chegam no nosso webhook com `fromMe=true` e disparam o manual
+ * takeover (IA cala por 12h pra esse contato).
+ */
+export async function setupZApiNotifyOnSend(): Promise<
+  { ok: true } | { error: string }
+> {
+  await requireSuperAdmin()
+  const zapi = await getActiveZApi()
+  if ('error' in zapi) return zapi
+  try {
+    const res = await fetch(`${zapi.base}/notification/notifySentByMe`, {
+      method: 'PUT',
+      headers: zapi.headers,
+      body: JSON.stringify({ notifySentByMe: true }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error('[zapi-onsend] put', res.status, body.slice(0, 200))
+      return { error: `Z-API respondeu ${res.status}: ${body.slice(0, 200)}` }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('[zapi-onsend] put exception', err)
+    return { error: err instanceof Error ? err.message : 'Erro ao configurar Z-API.' }
+  }
+}

@@ -44,6 +44,46 @@ function extractText(payload: ZApiInboundPayload): string | null {
   return null
 }
 
+/**
+ * Heurística pra mensagens "automáticas" do WhatsApp Business (boas-vindas com
+ * menu numérico, "agradecemos seu contato, retornaremos em breve", "fora do
+ * expediente"). Score por sinal — ≥2 sinais = silêncio. Reduz a chance de a IA
+ * cair em "menus de atendimento" do lead e poluir histórico/tokens.
+ */
+function looksLikeAutoReply(text: string): boolean {
+  let score = 0
+
+  // (1) Instruções numéricas explícitas ("digite 1", "aperte 2", "escolha uma opção").
+  if (/(?:digite|aperte|tecle|escolha|selecione|responda\s+com)\s+(?:o\s+n[úu]mero\s+)?\d/i.test(text)) {
+    score++
+  }
+
+  // (2) ≥2 emojis numerados (1️⃣ 2️⃣ ...).
+  const numEmojis = text.match(/[1-9]️?⃣|🔟/g)
+  if (numEmojis && numEmojis.length >= 2) score++
+
+  // (3) ≥2 linhas começando com lista numerada ("1) ...", "2. ...", "3 - ...").
+  const numberedLines = text.match(/^\s*\d+\s*[\)\.\-:]\s+\S/gm)
+  if (numberedLines && numberedLines.length >= 2) score++
+
+  // (4) Palavras-chave clássicas de auto-resposta.
+  if (
+    /seja\s+bem[-\s]?vind|agradec(?:emos|imento).*contato|fora\s+do\s+(?:hor[áa]rio|expediente)|respondido(?:\s+em\s+breve)?|atendente\s+(?:entrar[áa]\s+em\s+contato|ir[áa]\s+lhe\s+responder)|menu\s+(?:de\s+)?atendimento|sua\s+mensagem\s+(?:foi\s+recebida|ser[áa]\s+respondida)/i.test(
+      text,
+    )
+  ) {
+    score++
+  }
+
+  // (5) "Boas-vindas elaboradas": texto longo (≥200 chars), múltiplas linhas, ≥2 emojis.
+  if (text.length >= 200 && text.split(/\r?\n/).length >= 3) {
+    const emojiCount = (text.match(/\p{Extended_Pictographic}/gu) || []).length
+    if (emojiCount >= 2) score++
+  }
+
+  return score >= 2
+}
+
 export async function POST(request: NextRequest) {
   try {
     const payload = (await request.json().catch(() => null)) as ZApiInboundPayload | null
@@ -64,16 +104,32 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient()
 
     // Mensagem do PRÓPRIO assinante (Léo respondendo manualmente pelo WhatsApp).
-    // Marca manual_takeover_at no contato — enquanto < 12h, a IA fica em silêncio
-    // pra não falar por cima do atendimento humano. NÃO responde nada.
+    // Marca takeover global pra esse phone — IA fica em silêncio por 12h.
+    //
+    // IMPORTANTE: a Z-API também dispara fromMe=true pras mensagens que o
+    // NOSSO sistema mandou via sendWhatsAppMessage. Sem filtro, a IA marcaria
+    // a si mesma como takeover (calar a si mesma sempre que responde). Filtra
+    // olhando whatsapp_message_log: se acabamos de mandar (< 10s) algo pra esse
+    // mesmo phone, NÃO conta como takeover humano.
     if (payload.fromMe === true) {
       try {
-        await admin
-          .from('campaign_contacts')
-          .update({ manual_takeover_at: new Date().toISOString() })
+        const { data: recentSelf } = await admin
+          .from('whatsapp_message_log')
+          .select('id')
           .eq('phone', phone)
+          .gte('created_at', new Date(Date.now() - 10000).toISOString())
+          .limit(1)
+          .maybeSingle()
+        if (recentSelf) {
+          return NextResponse.json({ received: true, skipped: 'self_send' })
+        }
+
+        const nowIso = new Date().toISOString()
+        await admin
+          .from('manual_takeovers')
+          .upsert({ phone, takeover_at: nowIso, updated_at: nowIso }, { onConflict: 'phone' })
       } catch (err) {
-        console.error('[inbound] falha ao marcar manual_takeover_at', err)
+        console.error('[inbound] falha ao marcar takeover', err)
       }
       return NextResponse.json({ received: true })
     }
@@ -82,6 +138,28 @@ export async function POST(request: NextRequest) {
     if (!incomingText) {
       // Sem texto (ex.: mídia, status): ignorar.
       return NextResponse.json({ received: true })
+    }
+
+    // Auto-resposta do WhatsApp Business ("Seja bem-vindo, digite 1 pra X"):
+    // a IA não deve responder — ela ficaria preso na árvore de menu do lead e
+    // pareceria que dois bots conversam entre si.
+    if (looksLikeAutoReply(incomingText)) {
+      return NextResponse.json({ received: true, skipped: 'auto_reply' })
+    }
+
+    // Manual takeover global: se o assinante (Léo) respondeu manualmente esse
+    // telefone nas últimas 12h, a IA cala. Funciona pra QUALQUER phone — esteja
+    // ele em campaign_contacts, em conversa de cliente final, ou desconhecido.
+    const { data: takeover } = await admin
+      .from('manual_takeovers')
+      .select('takeover_at')
+      .eq('phone', phone)
+      .maybeSingle()
+    if (takeover?.takeover_at) {
+      const elapsedMs = Date.now() - new Date(takeover.takeover_at).getTime()
+      if (elapsedMs >= 0 && elapsedMs < 12 * 60 * 60 * 1000) {
+        return NextResponse.json({ received: true, skipped: 'manual_takeover' })
+      }
     }
 
     // Anti-loop: se a IA já respondeu este contato nos últimos 8 segundos, ignora
@@ -106,7 +184,7 @@ export async function POST(request: NextRequest) {
 
     const { data: contact } = await admin
       .from('campaign_contacts')
-      .select('id, company_id, manual_takeover_at')
+      .select('id, company_id')
       .eq('phone', phone)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(1)
@@ -116,23 +194,8 @@ export async function POST(request: NextRequest) {
       companyId = contact.company_id
       contactId = contact.id
 
-      // Manual takeover: se o assinante mandou mensagem manual pra esse contato nas
-      // últimas 12h, a IA fica em silêncio. Atende caso o Léo já tenha entrado na
-      // conversa — evita "duas vozes" respondendo o lead ao mesmo tempo.
-      const takeoverAt = (contact as { manual_takeover_at: string | null }).manual_takeover_at
-      if (takeoverAt) {
-        const elapsedMs = Date.now() - new Date(takeoverAt).getTime()
-        if (elapsedMs >= 0 && elapsedMs < 12 * 60 * 60 * 1000) {
-          // Só atualiza last_message_at pra UI ficar correta; não chama IA.
-          await admin
-            .from('campaign_contacts')
-            .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-            .eq('id', contact.id)
-          return NextResponse.json({ received: true, skipped: 'manual_takeover' })
-        }
-      }
-
-      // Atualizar status do lead para "contacted" e marcar última mensagem.
+      // Takeover já foi checado no topo do handler (tabela manual_takeovers).
+      // Aqui só atualizamos status pra "contacted" + last_message_at.
       await admin
         .from('campaign_contacts')
         .update({
@@ -144,6 +207,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Fallback: primeira empresa com agente de IA habilitado.
+    //    (takeover já foi checado no topo via manual_takeovers — cobre tanto o
+    //    path com contact_id quanto sem.)
     if (!companyId) {
       const { data: enabledCompany } = await admin
         .from('companies')
