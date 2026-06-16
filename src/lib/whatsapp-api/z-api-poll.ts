@@ -80,7 +80,7 @@ const ADDRESSED_RE = /^\s*(nick|ia|assistente|agente|jess?i)\b[\s,:]/i
 // formas que Léo usou nos testes: "eu atendo", "eu assumo", "pode parar de
 // atender", "paro de responder", "fica quieta", "obrigado, eu darei continuidade".
 const PAUSE_RE =
-  /(continuidade|encerr|assum(?:o|ir|i|imos)|para?r?\s+de\s+(?:respond|atend)|pausa|cala\s|calad|silenci|n[ãa]o\s+respond|n[ãa]o\s+atend|desliga|fica\s+(?:quieta|calad)|me\s+deixa\s+cuidar|eu\s+(?:cuido|atendo|respondo|sigo))/i
+  /(continuidade|encerr|assum(?:o|ir|i|imos)|para?r?\s+de\s+(?:respond|atend)|pausa|cala\s|calad|silenci|(?:n[ãa]o|nunca|jamais)\s+respond|(?:n[ãa]o|nunca|jamais)\s+atend|desliga|fica\s+(?:quieta|calad)|me\s+deixa\s+cuidar|eu\s+(?:cuido|atendo|respondo|sigo))/i
 
 // "continue" (imperativo) ou variações sinalizam retomada.
 const RESUME_RE =
@@ -88,17 +88,28 @@ const RESUME_RE =
 
 type AiCommand = 'pause' | 'resume' | null
 
-function parseAiCommand(text: string): AiCommand {
+// Negacao/parar tem prioridade absoluta — "Nick, pode PARAR de responder" tem
+// "pode\s+respond" (que casa RESUME_RE) MAS é semanticamente PAUSE. Pré-detectar
+// negacao + checar PAUSE primeiro evita inversão de polaridade.
+const NEGATION_RE = /\b(n[ãa]o|nao|nunca|jamais)\b|parar?\s+de\b/i
+
+export function parseAiCommand(text: string): AiCommand {
   if (!text) return null
   if (!ADDRESSED_RE.test(text)) return null
-  // Resume tem prioridade (caso a msg contenha ambos: pause RE casa "continue" parcial)
-  if (RESUME_RE.test(text)) {
-    console.log('[zapi-poll/cmd] match=resume text="' + text.slice(0, 80) + '"')
-    return 'resume'
+  const negated = NEGATION_RE.test(text)
+  // Negacao inverte polaridade: "Nick, NAO continue" ou "Nick, pode parar de
+  // responder" -> ambas pause. Cobre RESUME_RE e PAUSE_RE com negacao.
+  if (negated && (PAUSE_RE.test(text) || RESUME_RE.test(text))) {
+    console.log('[zapi-poll/cmd] match=pause via_negacao text="' + text.slice(0, 80) + '"')
+    return 'pause'
   }
   if (PAUSE_RE.test(text)) {
     console.log('[zapi-poll/cmd] match=pause text="' + text.slice(0, 80) + '"')
     return 'pause'
+  }
+  if (RESUME_RE.test(text)) {
+    console.log('[zapi-poll/cmd] match=resume text="' + text.slice(0, 80) + '"')
+    return 'resume'
   }
   console.log('[zapi-poll/cmd] addressed mas SEM intent text="' + text.slice(0, 80) + '"')
   return null
@@ -201,12 +212,20 @@ export async function pollZApiTakeovers(): Promise<PollStats> {
         stats.errors++
         continue
       }
-      const body = (await res.json().catch(() => null)) as ZApiChatMessage[] | { messages?: ZApiChatMessage[] } | null
+      const body = (await res.json().catch(() => null)) as ZApiChatMessage[] | { messages?: ZApiChatMessage[]; error?: string } | null
       const msgs: ZApiChatMessage[] = Array.isArray(body)
         ? body
-        : Array.isArray(body?.messages)
-          ? body.messages
+        : Array.isArray((body as { messages?: ZApiChatMessage[] })?.messages)
+          ? ((body as { messages: ZApiChatMessage[] }).messages)
           : []
+      // Bug C7 fix: Z-API retorna {error: "Does not work in multi device version"}
+      // com status 200 (res.ok=true). Sem esse warn, polling cai em msgs=[] silente
+      // e parece que "nao tem nada novo". Loga explicitamente.
+      if (!Array.isArray(body) && !Array.isArray((body as { messages?: ZApiChatMessage[] })?.messages)) {
+        console.warn('[zapi-poll] payload inesperado phone=' + phone + ' body=' + JSON.stringify(body).slice(0, 200))
+        stats.errors++
+        continue
+      }
 
       // Mensagens fromMe MAIS recentes que o último takeover registrado pra esse phone
       const lastTakeover = lastTakeoverByPhone.get(phone) ?? 0

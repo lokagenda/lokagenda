@@ -181,22 +181,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Anti-loop: 30s pra cortar rajada IA-vê-própria-msg sem perder respostas
-    // legítimas do lead. 90s era largo demais (16/jun: Locador-20 respondeu
-    // "Inflável eu não tenho" 30s após a IA — ficou no vácuo). Pra detectar
-    // takeover manual do Léo, confiamos no cron de polling Z-API + comandos
-    // inline "Nick, ...".
-    const { data: recentReply } = await admin
+    // Anti-loop por ECO REAL: só corta se a mensagem do lead for IDÊNTICA aos
+    // primeiros 60 chars da última resposta da IA nos 30s anteriores (caso de
+    // Z-API espelhar nossa própria mensagem de volta). Antes era "qualquer
+    // assistant recente" — engolia respostas legítimas do lead (caso 16/jun
+    // Locador-20 "Inflavel eu nao tenho" 30s após IA = ficou no vácuo).
+    const { data: lastAssist } = await admin
       .from('ai_conversations')
-      .select('id')
+      .select('content')
       .eq('contact_phone', phone)
       .eq('role', 'assistant')
       .gte('created_at', new Date(Date.now() - 30000).toISOString())
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (recentReply) {
-      return NextResponse.json({ received: true })
+    if (lastAssist?.content) {
+      const incNorm = incomingText.trim().slice(0, 60).toLowerCase()
+      const lastNorm = lastAssist.content.trim().slice(0, 60).toLowerCase()
+      if (incNorm && incNorm === lastNorm) {
+        console.log('[inbound/anti-loop] eco real cortado phone=' + phone)
+        return NextResponse.json({ received: true, skipped: 'echo' })
+      }
     }
 
     // 1. Tentar resolver a empresa via campaign_contact existente para esse telefone
