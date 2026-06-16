@@ -1106,7 +1106,7 @@ export interface Database {
       whatsapp_config: {
         Row: {
           id: string;
-          provider: "evolution_api" | "z_api" | "twilio" | "meta_cloud";
+          provider: "evolution_api" | "z_api" | "twilio" | "meta_cloud" | "uazapi";
           api_url: string | null;
           api_key: string | null;
           instance_id: string | null;
@@ -1120,7 +1120,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          provider: "evolution_api" | "z_api" | "twilio" | "meta_cloud";
+          provider: "evolution_api" | "z_api" | "twilio" | "meta_cloud" | "uazapi";
           api_url?: string | null;
           api_key?: string | null;
           instance_id?: string | null;
@@ -1134,7 +1134,7 @@ export interface Database {
         };
         Update: {
           id?: string;
-          provider?: "evolution_api" | "z_api" | "twilio" | "meta_cloud";
+          provider?: "evolution_api" | "z_api" | "twilio" | "meta_cloud" | "uazapi";
           api_url?: string | null;
           api_key?: string | null;
           instance_id?: string | null;

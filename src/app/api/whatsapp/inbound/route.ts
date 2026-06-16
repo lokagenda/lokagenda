@@ -33,14 +33,80 @@ interface ZApiInboundPayload {
   isGroup?: boolean
   isStatusReply?: boolean
   isNewsletter?: boolean
-  // Outros campos da Z-API são ignorados.
 }
 
-function extractText(payload: ZApiInboundPayload): string | null {
-  const text = payload.text?.message ?? payload.message
-  if (typeof text === 'string' && text.trim() !== '') {
-    return text.trim()
+interface UazapiInboundPayload {
+  event?: string // 'message' | 'connection' | ...
+  instance?: string
+  data?: {
+    chatid?: string
+    sender?: string
+    sender_pn?: string // phone resolvido se sender veio como @lid
+    sender_lid?: string
+    fromMe?: boolean
+    isGroup?: boolean
+    text?: string // UazAPI já entrega o texto pronto
+    messageType?: string
+    messageTimestamp?: number
+    messageid?: string
+    wasSentByApi?: boolean // disparada pela própria API (filtramos via webhook config)
   }
+}
+
+interface NormalizedInbound {
+  phone: string | null
+  fromMe: boolean
+  text: string | null
+  isGroup: boolean
+  isStatusReply: boolean
+  isNewsletter: boolean
+  wasSentByApi: boolean
+  source: 'z_api' | 'uazapi' | 'unknown'
+}
+
+/**
+ * Detecta o formato do payload pelo SHAPE (não pelo provider configurado no
+ * banco). Tolerante a ambos os providers rodando em paralelo durante migração.
+ */
+function normalizeInbound(raw: unknown): NormalizedInbound | null {
+  if (!raw || typeof raw !== 'object') return null
+  const p = raw as Record<string, unknown>
+
+  // UazAPI: envelope {event, instance, data: {...}}
+  if (p.event && p.data && typeof p.data === 'object') {
+    const u = raw as UazapiInboundPayload
+    const d = u.data || {}
+    const rawSender = d.sender_pn || d.sender || d.chatid || ''
+    const phoneStr = typeof rawSender === 'string' ? rawSender.split('@')[0] : ''
+    const phone = phoneStr && /^\d+$/.test(phoneStr) ? phoneStr : null
+    return {
+      phone,
+      fromMe: d.fromMe === true,
+      text: typeof d.text === 'string' && d.text.trim() !== '' ? d.text.trim() : null,
+      isGroup: d.isGroup === true,
+      isStatusReply: false,
+      isNewsletter: false,
+      wasSentByApi: d.wasSentByApi === true,
+      source: 'uazapi',
+    }
+  }
+
+  // Z-API legacy: campos top-level
+  if (typeof p.phone === 'string' || typeof p.fromMe === 'boolean') {
+    const z = raw as ZApiInboundPayload
+    const txt = z.text?.message ?? z.message
+    return {
+      phone: typeof z.phone === 'string' ? z.phone : null,
+      fromMe: z.fromMe === true,
+      text: typeof txt === 'string' && txt.trim() !== '' ? txt.trim() : null,
+      isGroup: z.isGroup === true,
+      isStatusReply: z.isStatusReply === true,
+      isNewsletter: z.isNewsletter === true,
+      wasSentByApi: false,
+      source: 'z_api',
+    }
+  }
+
   return null
 }
 
@@ -86,32 +152,34 @@ function looksLikeAutoReply(text: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const payload = (await request.json().catch(() => null)) as ZApiInboundPayload | null
+    const raw = await request.json().catch(() => null)
+    const norm = normalizeInbound(raw)
 
-    if (!payload) {
-      // Payload inválido: nada a fazer, mas confirmamos recebimento.
+    if (!norm) {
+      // Payload inválido/desconhecido.
+      console.warn('[inbound] payload desconhecido', typeof raw === 'object' ? Object.keys(raw || {}) : raw)
       return NextResponse.json({ received: true })
     }
 
-    // Ignora grupos/status/newsletters de saída — só faria barulho.
-    if (payload.isGroup || payload.isStatusReply || payload.isNewsletter) {
+    // UazAPI: se a mensagem foi disparada pela própria API (nosso sistema),
+    // ignora — configuramos webhook com excludeMessages:['wasSentByApi'] mas
+    // defesa em profundidade não custa.
+    if (norm.wasSentByApi) {
+      return NextResponse.json({ received: true, skipped: 'was_sent_by_api' })
+    }
+
+    if (norm.isGroup || norm.isStatusReply || norm.isNewsletter) {
       return NextResponse.json({ received: true })
     }
 
-    const rawPhone = payload.phone
-    if (!rawPhone) return NextResponse.json({ received: true })
-    const phone = normalizePhone(rawPhone)
+    if (!norm.phone) return NextResponse.json({ received: true })
+    const phone = normalizePhone(norm.phone)
     const admin = createAdminClient()
 
-    // Mensagem do PRÓPRIO assinante (Léo respondendo manualmente pelo WhatsApp).
-    // Marca takeover global pra esse phone — IA fica em silêncio por 12h.
-    //
-    // IMPORTANTE: a Z-API também dispara fromMe=true pras mensagens que o
-    // NOSSO sistema mandou via sendWhatsAppMessage. Sem filtro, a IA marcaria
-    // a si mesma como takeover (calar a si mesma sempre que responde). Filtra
-    // olhando whatsapp_message_log: se acabamos de mandar (< 10s) algo pra esse
-    // mesmo phone, NÃO conta como takeover humano.
-    if (payload.fromMe === true) {
+    // Mensagem do próprio assinante (Léo respondendo manualmente pelo celular):
+    // marca takeover global. Filtro anti-self-send olha whatsapp_message_log
+    // pra não marcar takeover quando foi a IA que acabou de enviar.
+    if (norm.fromMe === true) {
       console.log('[inbound/fromMe] entrou phone=' + phone)
       try {
         const { data: recentSelf } = await admin
@@ -153,7 +221,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, skipped: 'globally_paused' })
     }
 
-    const incomingText = extractText(payload)
+    const incomingText = norm.text
     if (!incomingText) {
       // Sem texto (ex.: mídia, status): ignorar.
       return NextResponse.json({ received: true })

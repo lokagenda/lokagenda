@@ -64,8 +64,9 @@ type LogRow = {
 // ── Provider Config Fields ────────────────────────────────
 
 const providerOptions: { value: WhatsAppProvider; label: string }[] = [
-  { value: 'evolution_api', label: 'Evolution API' },
+  { value: 'uazapi', label: 'UazAPI (Baileys, multi-device)' },
   { value: 'z_api', label: 'Z-API' },
+  { value: 'evolution_api', label: 'Evolution API' },
   { value: 'twilio', label: 'Twilio' },
   { value: 'meta_cloud', label: 'Meta Cloud API' },
 ]
@@ -96,7 +97,15 @@ function getProviderFields(provider: WhatsAppProvider) {
         { key: 'api_key', label: 'Access Token', placeholder: 'Seu Access Token' },
         { key: 'phone_number_id', label: 'Phone Number ID', placeholder: 'ID do numero' },
       ]
+    case 'uazapi':
+      return [
+        { key: 'api_url', label: 'Base URL', placeholder: 'https://api.uazapi.com (ou seu subdominio)' },
+        { key: 'api_key', label: 'Token da Instancia', placeholder: 'Token retornado por POST /instance/create' },
+        { key: 'instance_id', label: 'Nome da Instancia', placeholder: 'leo-principal (informativo)' },
+        { key: 'phone_number_id', label: 'Admin Token (opcional)', placeholder: 'so se for recriar/reconectar via UI' },
+      ]
   }
+  return []
 }
 
 // ── Main Page Component ───────────────────────────────────
@@ -306,6 +315,38 @@ export default function AdminWhatsAppPage() {
             {pollingZapi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Sincronizar agora
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Guia Uazapi - solução definitiva (substitui Z-API) */}
+      <Card className="border-violet-300 bg-violet-50/60 dark:border-violet-900/50 dark:bg-violet-950/30">
+        <CardContent className="space-y-3 p-4">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              ✨ Migrar para UazAPI (solução definitiva - resolve a IA falando por cima)
+            </p>
+            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              A Z-API NÃO entrega <code>fromMe=true</code> em contas multi-device (limitação técnica deles, sem fix). A UazAPI usa Baileys multi-device e ENTREGA fromMe nativamente + tem filtro <code>excludeMessages: [&quot;wasSentByApi&quot;]</code> que mata o loop IA-com-IA sozinho. Preço similar (~R$ 27/mês).
+            </p>
+          </div>
+          <div className="space-y-1.5 text-xs text-zinc-700 dark:text-zinc-300">
+            <p><strong>Passo a passo:</strong></p>
+            <ol className="ml-4 list-decimal space-y-1">
+              <li>Cadastra em <a href="https://uazapi.dev" target="_blank" rel="noreferrer" className="text-violet-600 underline dark:text-violet-400">uazapi.dev</a> (plano básico).</li>
+              <li>Cria 1 instância com seu chip secundário pelo dashboard deles.</li>
+              <li>Escaneia o QR-code com o WhatsApp do chip secundário.</li>
+              <li>No webhook da instância, cola: <code>{`${typeof window !== 'undefined' ? window.location.origin : 'https://www.lokagenda.com.br'}/api/whatsapp/inbound`}</code></li>
+              <li>Eventos: <code>messages</code>, <code>connection</code>. Filtro: <code>excludeMessages: [&quot;wasSentByApi&quot;]</code>.</li>
+              <li>Copia o <strong>Token da Instância</strong> (retornado pelo painel deles).</li>
+              <li>Volta aqui, na aba <strong>Configuração</strong> seleciona Provedor = <em>UazAPI</em>, cola: Base URL <code>https://api.uazapi.com</code>, Token = o token da instância, Nome = <code>leo-secundario</code>.</li>
+              <li>Salva e clica em <strong>Testar Conexão</strong>. Manda uma mensagem do chip secundário pra um lead fictício, responde do celular.</li>
+              <li>Confirma no banco: <code>select * from manual_takeovers</code> — deve ter linha pro phone. Se sim, fromMe está entregando ✅.</li>
+              <li>Quando confirmado, repete o processo com seu chip PRINCIPAL e troca o provider na config.</li>
+            </ol>
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Após confirmação estável (1-2 semanas), eu apago todo código Z-API-specific (polling, notifySentByMe, etc).
+          </p>
         </CardContent>
       </Card>
 

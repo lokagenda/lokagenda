@@ -4,6 +4,7 @@ import { EvolutionApiClient } from './providers/evolution-api'
 import { ZApiClient } from './providers/z-api'
 import { TwilioClient } from './providers/twilio'
 import { MetaCloudClient } from './providers/meta-cloud'
+import { UazapiClient } from './providers/uazapi'
 
 export function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -20,6 +21,8 @@ function createProviderClient(config: WhatsAppConfig): WhatsAppProviderClient {
       return new TwilioClient(config)
     case 'meta_cloud':
       return new MetaCloudClient(config)
+    case 'uazapi':
+      return new UazapiClient(config)
     default:
       throw new Error(`Provedor não suportado: ${config.provider}`)
   }

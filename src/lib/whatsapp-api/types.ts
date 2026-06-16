@@ -1,4 +1,4 @@
-export type WhatsAppProvider = 'evolution_api' | 'z_api' | 'twilio' | 'meta_cloud'
+export type WhatsAppProvider = 'evolution_api' | 'z_api' | 'twilio' | 'meta_cloud' | 'uazapi'
 
 export interface SendMessageResult {
   success: boolean
