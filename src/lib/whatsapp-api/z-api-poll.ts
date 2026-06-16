@@ -67,9 +67,59 @@ function getMoment(m: ZApiChatMessage): number {
   return 0
 }
 
+// ── Comandos inline no chat ─────────────────────────────────
+// Léo pode mandar do celular pra dentro da conversa com o lead:
+//   "Nick, obrigado, eu darei continuidade"  → pausa a IA pra esse contato
+//   "Nick, continue atendimento"             → reativa a IA
+// O polling pega essas mensagens (fromMe=true), parseia, e aplica em
+// campaign_contacts.ai_paused_until. Lag típico: <= 2min (ciclo do cron).
+
+const ADDRESSED_RE = /^\s*(nick|ia|assistente|agente|jess?i)\b[\s,:]/i
+
+// "continuidade" (substantivo) sinaliza pausa. "fica quieta" idem.
+const PAUSE_RE = /(continuidade|encerr|assum(?:o|ir|i)|paro\s+(?:de\s+)?responder|pausa|cala\s|calad|silenci|n[ãa]o\s+respond|desliga|fica\s+(?:quieta|calad)|me\s+deixa\s+cuidar|eu\s+cuido)/i
+
+// "continue" (imperativo) ou variações sinalizam retomada.
+const RESUME_RE = /(continue\s+atend|continua\s+atend|reativ|volta\s+a\s+respond|pode\s+respond|liga\s+(?:de\s+novo|a\s+ia)|retoma\s+atend|responder\s+de\s+novo)/i
+
+type AiCommand = 'pause' | 'resume' | null
+
+function parseAiCommand(text: string): AiCommand {
+  if (!text) return null
+  if (!ADDRESSED_RE.test(text)) return null
+  // Resume tem prioridade (caso a msg contenha ambos: pause RE casa "continue" parcial)
+  if (RESUME_RE.test(text)) return 'resume'
+  if (PAUSE_RE.test(text)) return 'pause'
+  return null
+}
+
+const PAUSE_LONG_DAYS = 30 // efetivamente "até Léo voltar a chamar"
+
+async function applyContactCommand(phone: string, command: 'pause' | 'resume'): Promise<boolean> {
+  const admin = createAdminClient()
+  const update =
+    command === 'pause'
+      ? {
+          ai_paused_until: new Date(Date.now() + PAUSE_LONG_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      : { ai_paused_until: null, updated_at: new Date().toISOString() }
+  const { error, count } = await admin
+    .from('campaign_contacts')
+    .update(update, { count: 'exact' })
+    .eq('phone', phone)
+  if (error) {
+    console.error('[zapi-poll/cmd] update FALHOU phone=' + phone + ' cmd=' + command, error)
+    return false
+  }
+  console.log('[zapi-poll/cmd] phone=' + phone + ' cmd=' + command + ' updated=' + (count ?? '?'))
+  return true
+}
+
 export interface PollStats {
   phonesProcessed: number
   takeoversUpserted: number
+  commandsApplied: number
   errors: number
 }
 
@@ -80,7 +130,7 @@ export interface PollStats {
  * updated_at (chave por phone).
  */
 export async function pollZApiTakeovers(): Promise<PollStats> {
-  const stats: PollStats = { phonesProcessed: 0, takeoversUpserted: 0, errors: 0 }
+  const stats: PollStats = { phonesProcessed: 0, takeoversUpserted: 0, commandsApplied: 0, errors: 0 }
   const zapi = await resolveZApiContext()
   if (!zapi) {
     console.warn('[zapi-poll] config ausente ou inválida — pulando')
@@ -177,6 +227,18 @@ export async function pollZApiTakeovers(): Promise<PollStats> {
       })
 
       if (humanMsgs.length === 0) continue
+
+      // Comandos inline ("Nick, ..."): processa do mais antigo pro mais
+      // recente, pra um "pause" seguido de "resume" no mesmo ciclo respeitar
+      // a ordem.
+      const ordered = [...humanMsgs].sort((a, b) => getMoment(a) - getMoment(b))
+      for (const m of ordered) {
+        const cmd = parseAiCommand(extractText(m))
+        if (cmd) {
+          const ok = await applyContactCommand(phone, cmd)
+          if (ok) stats.commandsApplied++
+        }
+      }
 
       // Pega o mais recente como takeover_at (manual_takeovers é por-phone)
       const newestMoment = Math.max(...humanMsgs.map((m) => getMoment(m)))

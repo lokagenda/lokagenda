@@ -199,7 +199,7 @@ export default function AdminWhatsAppPage() {
         return
       }
       toast.success(
-        `Sincronização Z-API: ${res.phonesProcessed} contatos consultados · ${res.takeoversUpserted} takeovers detectados${res.errors ? ' · ' + res.errors + ' erros' : ''}.`,
+        `Sincronização Z-API: ${res.phonesProcessed} contatos · ${res.takeoversUpserted} takeovers · ${res.commandsApplied} comandos${res.errors ? ' · ' + res.errors + ' erros' : ''}.`,
         { duration: 8000 },
       )
     } finally {
@@ -296,7 +296,10 @@ export default function AdminWhatsAppPage() {
           <div className="min-w-0">
             <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Sincronizar respostas manuais (Z-API)</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              A cada 2min o sistema puxa o histórico recente da Z-API e detecta automaticamente as mensagens que você mandou pelo celular — IA cala nesses contatos. Use o botão se quiser forçar agora (ex.: acabou de responder vários leads no celular e quer evitar que a IA fale por cima do próximo).
+              A cada 2min o sistema puxa o histórico recente da Z-API e detecta automaticamente as mensagens que você mandou pelo celular — IA cala nesses contatos.
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <strong>Comandos no chat (do celular):</strong> mande <code>Nick, eu darei continuidade</code> pra pausar a IA naquele contato; <code>Nick, continue atendimento</code> pra ela voltar. Lag de até 2min.
             </p>
           </div>
           <Button onClick={handlePollZapi} disabled={pollingZapi} variant="secondary">

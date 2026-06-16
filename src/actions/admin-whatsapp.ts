@@ -278,7 +278,8 @@ export async function setGlobalAiPause(paused: boolean, reason?: string): Promis
  * cima sem ter esperado os 2min do cron.
  */
 export async function pollZApiTakeoversManually(): Promise<
-  { ok: true; phonesProcessed: number; takeoversUpserted: number; errors: number } | { error: string }
+  | { ok: true; phonesProcessed: number; takeoversUpserted: number; commandsApplied: number; errors: number }
+  | { error: string }
 > {
   await requireSuperAdmin()
   try {
