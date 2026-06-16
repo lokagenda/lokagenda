@@ -290,11 +290,15 @@ export async function POST(request: NextRequest) {
       companyId = contact.company_id
       contactId = contact.id
 
-      console.log('[inbound/contact] phone=' + phone + ' status=' + contact.status + ' ai_paused_until=' + (contact.ai_paused_until ?? 'null'))
+      const pausedUntilMs = contact.ai_paused_until ? new Date(contact.ai_paused_until).getTime() : 0
+      const nowMs = Date.now()
+      const pausedActive = pausedUntilMs > nowMs
+      console.log('[inbound/contact] phone=' + phone + ' status=' + contact.status + ' ai_paused_until=' + (contact.ai_paused_until ?? 'null') + ' pausedActive=' + pausedActive + ' diffMs=' + (pausedUntilMs - nowMs))
 
-      // Léo pausou a IA pra esse contato manualmente (botão "Pausar IA" no
-      // /admin/marketing). Não chama a IA enquanto a janela estiver ativa.
-      if (contact.ai_paused_until && new Date(contact.ai_paused_until).getTime() > Date.now()) {
+      // Gate 1 — Léo pausou a IA pra esse contato manualmente (botão "Pausar IA"
+      // ou via comando inline "Nick, eu respondo").
+      if (pausedActive) {
+        console.log('[inbound/contact] CUT_BY_PAUSE phone=' + phone)
         await admin
           .from('campaign_contacts')
           .update({
@@ -305,11 +309,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, skipped: 'contact_paused' })
       }
 
-      // Contato fora do funil ativo: já foi qualificado, convertido ou perdido.
-      // A IA não deve mais responder — humano cuida (ou já desistiu). Inclui o
-      // caso clássico da esposa cadastrada por importação antiga (status='lost')
-      // e do lead que já vendeu ('qualified'/'converted').
+      // Gate 2 — Contato fora do funil ativo: já foi qualificado, convertido ou perdido.
       if (contact.status === 'qualified' || contact.status === 'converted' || contact.status === 'lost') {
+        console.log('[inbound/contact] CUT_BY_STATUS phone=' + phone + ' status=' + contact.status)
         await admin
           .from('campaign_contacts')
           .update({
@@ -320,8 +322,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, skipped: `status_${contact.status}` })
       }
 
-      // Takeover já foi checado no topo do handler (tabela manual_takeovers).
-      // Aqui só atualizamos status pra "contacted" + last_message_at.
+      // Gate aberto — IA vai responder. Marca status='contacted'.
+      console.log('[inbound/contact] GATES_OPEN phone=' + phone + ' (IA vai responder)')
       await admin
         .from('campaign_contacts')
         .update({
