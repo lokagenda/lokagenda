@@ -385,11 +385,29 @@ export async function POST(request: NextRequest) {
       // A IA pode ter reclassificado o lead (modo campanha: qualified/converted/lost).
       // Grava direto pelo admin client — o webhook não tem sessão de usuário, então
       // NÃO dá pra usar updateContactStatus (que exige auth/getCompanyId).
+      //
+      // Quando IA classifica como lost/converted/qualified, ADICIONALMENTE seta
+      // ai_paused_until = +30 dias. Defesa em profundidade: se algo mais tarde
+      // mudar o status de volta pra 'contacted' (race condition, edição manual,
+      // bug futuro), o ai_paused_until permanece e a IA segue silenciada.
       if (aiResult.status && contactId) {
-        await admin
-          .from('campaign_contacts')
-          .update({ status: aiResult.status, updated_at: new Date().toISOString() })
-          .eq('id', contactId)
+        const offFunnel =
+          aiResult.status === 'lost' ||
+          aiResult.status === 'converted' ||
+          aiResult.status === 'qualified'
+        const update: {
+          status: 'lead' | 'contacted' | 'qualified' | 'converted' | 'lost'
+          updated_at: string
+          ai_paused_until?: string
+        } = {
+          status: aiResult.status,
+          updated_at: new Date().toISOString(),
+        }
+        if (offFunnel) {
+          update.ai_paused_until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          console.log('[inbound/classify] phone=' + phone + ' status=' + aiResult.status + ' ai_paused_until=+30d')
+        }
+        await admin.from('campaign_contacts').update(update).eq('id', contactId)
       }
 
       if (aiResult.reply) {
