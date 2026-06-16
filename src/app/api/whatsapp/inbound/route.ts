@@ -181,14 +181,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Anti-loop: se a IA já respondeu este contato nos últimos 8 segundos, ignora
-    // (evita conversas IA-com-IA e respostas duplicadas em rajada).
+    // Anti-loop: se a IA já respondeu este contato nos últimos 90 segundos, ignora.
+    // Janela GRANDE de propósito — dá tempo do cron /api/cron/zapi-poll-takeovers
+    // (a cada 2min) detectar uma resposta manual do Léo via celular e gravar
+    // manual_takeover. Trade-off: lead que manda 2 msgs em rajada perde a 2ª
+    // resposta — Léo prefere "calar demais" a "falar por cima" da conversa dele.
     const { data: recentReply } = await admin
       .from('ai_conversations')
       .select('id')
       .eq('contact_phone', phone)
       .eq('role', 'assistant')
-      .gte('created_at', new Date(Date.now() - 8000).toISOString())
+      .gte('created_at', new Date(Date.now() - 90000).toISOString())
       .limit(1)
       .maybeSingle()
 
@@ -212,6 +215,8 @@ export async function POST(request: NextRequest) {
     if (contact) {
       companyId = contact.company_id
       contactId = contact.id
+
+      console.log('[inbound/contact] phone=' + phone + ' status=' + contact.status + ' ai_paused_until=' + (contact.ai_paused_until ?? 'null'))
 
       // Léo pausou a IA pra esse contato manualmente (botão "Pausar IA" no
       // /admin/marketing). Não chama a IA enquanto a janela estiver ativa.

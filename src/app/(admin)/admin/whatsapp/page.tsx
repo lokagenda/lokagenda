@@ -28,6 +28,7 @@ import {
   getZApiNotifyOnSendStatus,
   setGlobalAiPause,
   getGlobalAiPauseStatus,
+  pollZApiTakeoversManually,
 } from '@/actions/admin-whatsapp'
 import { runWhatsappLifecycleCron } from '@/actions/admin'
 import type { WhatsAppProvider } from '@/lib/whatsapp-api/types'
@@ -111,6 +112,7 @@ export default function AdminWhatsAppPage() {
   const [aiPausedReason, setAiPausedReason] = useState<string | null>(null)
   const [aiPauseChecking, setAiPauseChecking] = useState(false)
   const [aiPauseSaving, setAiPauseSaving] = useState(false)
+  const [pollingZapi, setPollingZapi] = useState(false)
 
   const refreshAiPause = useCallback(async () => {
     setAiPauseChecking(true)
@@ -185,6 +187,23 @@ export default function AdminWhatsAppPage() {
       await refreshZapiOnSend()
     } finally {
       setZapiOnSendSaving(false)
+    }
+  }
+
+  async function handlePollZapi() {
+    setPollingZapi(true)
+    try {
+      const res = await pollZApiTakeoversManually()
+      if ('error' in res) {
+        toast.error(res.error)
+        return
+      }
+      toast.success(
+        `Sincronização Z-API: ${res.phonesProcessed} contatos consultados · ${res.takeoversUpserted} takeovers detectados${res.errors ? ' · ' + res.errors + ' erros' : ''}.`,
+        { duration: 8000 },
+      )
+    } finally {
+      setPollingZapi(false)
     }
   }
 
@@ -267,6 +286,22 @@ export default function AdminWhatsAppPage() {
               <PowerOff className="h-4 w-4" />
             )}
             {aiPaused ? 'Reativar IA' : 'Silenciar IA'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Z-API: polling de takeovers (cron a cada 2min + botão manual) */}
+      <Card className="border-purple-200 bg-purple-50/40 dark:border-purple-900/40 dark:bg-purple-950/20">
+        <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Sincronizar respostas manuais (Z-API)</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              A cada 2min o sistema puxa o histórico recente da Z-API e detecta automaticamente as mensagens que você mandou pelo celular — IA cala nesses contatos. Use o botão se quiser forçar agora (ex.: acabou de responder vários leads no celular e quer evitar que a IA fale por cima do próximo).
+            </p>
+          </div>
+          <Button onClick={handlePollZapi} disabled={pollingZapi} variant="secondary">
+            {pollingZapi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Sincronizar agora
           </Button>
         </CardContent>
       </Card>

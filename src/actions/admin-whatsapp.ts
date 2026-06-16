@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender'
+import { pollZApiTakeovers } from '@/lib/whatsapp-api/z-api-poll'
 import { revalidatePath } from 'next/cache'
 import type { WhatsAppProvider } from '@/lib/whatsapp-api/types'
 
@@ -269,6 +270,23 @@ export async function setGlobalAiPause(paused: boolean, reason?: string): Promis
   if (error) return { error: error.message }
   revalidatePath('/admin/whatsapp')
   return { ok: true }
+}
+
+/**
+ * Dispara o polling Z-API agora (mesma função que o cron `*\/2` usa). Útil
+ * pra Léo forçar a checagem quando suspeitar que a IA está respondendo por
+ * cima sem ter esperado os 2min do cron.
+ */
+export async function pollZApiTakeoversManually(): Promise<
+  { ok: true; phonesProcessed: number; takeoversUpserted: number; errors: number } | { error: string }
+> {
+  await requireSuperAdmin()
+  try {
+    const stats = await pollZApiTakeovers()
+    return { ok: true, ...stats }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erro no polling Z-API.' }
+  }
 }
 
 /**
