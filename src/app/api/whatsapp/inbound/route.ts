@@ -181,17 +181,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Anti-loop: se a IA já respondeu este contato nos últimos 90 segundos, ignora.
-    // Janela GRANDE de propósito — dá tempo do cron /api/cron/zapi-poll-takeovers
-    // (a cada 2min) detectar uma resposta manual do Léo via celular e gravar
-    // manual_takeover. Trade-off: lead que manda 2 msgs em rajada perde a 2ª
-    // resposta — Léo prefere "calar demais" a "falar por cima" da conversa dele.
+    // Anti-loop: 30s pra cortar rajada IA-vê-própria-msg sem perder respostas
+    // legítimas do lead. 90s era largo demais (16/jun: Locador-20 respondeu
+    // "Inflável eu não tenho" 30s após a IA — ficou no vácuo). Pra detectar
+    // takeover manual do Léo, confiamos no cron de polling Z-API + comandos
+    // inline "Nick, ...".
     const { data: recentReply } = await admin
       .from('ai_conversations')
       .select('id')
       .eq('contact_phone', phone)
       .eq('role', 'assistant')
-      .gte('created_at', new Date(Date.now() - 90000).toISOString())
+      .gte('created_at', new Date(Date.now() - 30000).toISOString())
       .limit(1)
       .maybeSingle()
 

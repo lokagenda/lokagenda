@@ -299,7 +299,7 @@ export default function AdminWhatsAppPage() {
               A cada 2min o sistema puxa o histórico recente da Z-API e detecta automaticamente as mensagens que você mandou pelo celular — IA cala nesses contatos.
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              <strong>Comandos no chat (do celular):</strong> mande <code>Nick, eu darei continuidade</code> pra pausar a IA naquele contato; <code>Nick, continue atendimento</code> pra ela voltar. Lag de até 2min.
+              <strong>Comandos no chat (do celular):</strong> pra pausar — <code>Nick, eu atendo</code> · <code>Nick, eu assumo</code> · <code>Nick, pode parar de atender</code> · <code>Nick, eu darei continuidade</code> · <code>Nick, fica quieta</code>. Pra reativar — <code>Nick, continue atendimento</code> · <code>Nick, pode responder</code> · <code>Nick, volta a responder</code>. Lag de até 2min (próximo ciclo do cron).
             </p>
           </div>
           <Button onClick={handlePollZapi} disabled={pollingZapi} variant="secondary">

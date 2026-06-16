@@ -76,11 +76,15 @@ function getMoment(m: ZApiChatMessage): number {
 
 const ADDRESSED_RE = /^\s*(nick|ia|assistente|agente|jess?i)\b[\s,:]/i
 
-// "continuidade" (substantivo) sinaliza pausa. "fica quieta" idem.
-const PAUSE_RE = /(continuidade|encerr|assum(?:o|ir|i)|paro\s+(?:de\s+)?responder|pausa|cala\s|calad|silenci|n[ãa]o\s+respond|desliga|fica\s+(?:quieta|calad)|me\s+deixa\s+cuidar|eu\s+cuido)/i
+// "continuidade" (substantivo) sinaliza pausa. "fica quieta" idem. Cobre as
+// formas que Léo usou nos testes: "eu atendo", "eu assumo", "pode parar de
+// atender", "paro de responder", "fica quieta", "obrigado, eu darei continuidade".
+const PAUSE_RE =
+  /(continuidade|encerr|assum(?:o|ir|i|imos)|para?r?\s+de\s+(?:respond|atend)|pausa|cala\s|calad|silenci|n[ãa]o\s+respond|n[ãa]o\s+atend|desliga|fica\s+(?:quieta|calad)|me\s+deixa\s+cuidar|eu\s+(?:cuido|atendo|respondo|sigo))/i
 
 // "continue" (imperativo) ou variações sinalizam retomada.
-const RESUME_RE = /(continue\s+atend|continua\s+atend|reativ|volta\s+a\s+respond|pode\s+respond|liga\s+(?:de\s+novo|a\s+ia)|retoma\s+atend|responder\s+de\s+novo)/i
+const RESUME_RE =
+  /(continue\s+atend|continua\s+atend|reativ|volta\s+a\s+respond|pode\s+respond|liga\s+(?:de\s+novo|a\s+ia)|retoma\s+atend|responder\s+de\s+novo)/i
 
 type AiCommand = 'pause' | 'resume' | null
 
@@ -88,8 +92,15 @@ function parseAiCommand(text: string): AiCommand {
   if (!text) return null
   if (!ADDRESSED_RE.test(text)) return null
   // Resume tem prioridade (caso a msg contenha ambos: pause RE casa "continue" parcial)
-  if (RESUME_RE.test(text)) return 'resume'
-  if (PAUSE_RE.test(text)) return 'pause'
+  if (RESUME_RE.test(text)) {
+    console.log('[zapi-poll/cmd] match=resume text="' + text.slice(0, 80) + '"')
+    return 'resume'
+  }
+  if (PAUSE_RE.test(text)) {
+    console.log('[zapi-poll/cmd] match=pause text="' + text.slice(0, 80) + '"')
+    return 'pause'
+  }
+  console.log('[zapi-poll/cmd] addressed mas SEM intent text="' + text.slice(0, 80) + '"')
   return null
 }
 
