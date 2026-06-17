@@ -29,8 +29,9 @@ export class UazapiClient implements WhatsAppProviderClient {
     } catch {
       throw new Error('UazAPI api_url inválido')
     }
-    if (url.protocol !== 'https:' || !url.hostname.endsWith('uazapi.com')) {
-      throw new Error('UazAPI api_url precisa ser https://*.uazapi.com')
+    const host = url.hostname.toLowerCase().replace(/\.$/, '')
+    if (url.protocol !== 'https:' || !(host === 'uazapi.com' || host.endsWith('.uazapi.com'))) {
+      throw new Error('UazAPI api_url precisa ser https://uazapi.com ou subdominio')
     }
     this.apiUrl = url.origin
     this.instanceToken = config.api_key

@@ -55,7 +55,8 @@ export async function pollUazapi(): Promise<UazapiPollStats> {
     return stats
   }
 
-  // SSRF: confina a *.uazapi.com
+  // SSRF: confina a uazapi.com ou subdominio *.uazapi.com (exato, nao endsWith
+  // ingenuo que permitiria 'evil-uazapi.com')
   let baseUrl: URL
   try {
     baseUrl = new URL(cfg.api_url)
@@ -63,8 +64,9 @@ export async function pollUazapi(): Promise<UazapiPollStats> {
     console.warn('[uazapi-poll] api_url invalida')
     return stats
   }
-  if (baseUrl.protocol !== 'https:' || !baseUrl.hostname.endsWith('uazapi.com')) {
-    console.warn('[uazapi-poll] api_url nao eh https *.uazapi.com')
+  const host = baseUrl.hostname.toLowerCase().replace(/\.$/, '')
+  if (baseUrl.protocol !== 'https:' || !(host === 'uazapi.com' || host.endsWith('.uazapi.com'))) {
+    console.warn('[uazapi-poll] api_url nao eh https://uazapi.com ou subdominio')
     return stats
   }
 
