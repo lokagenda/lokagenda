@@ -50,12 +50,14 @@ export async function createQuote(input: CreateQuoteInput) {
   const supabase = await createClient()
   const { userId, companyId } = await getCompanyId(supabase)
 
-  // Validate the event date is not within a blocked period (férias/folga)
+  // Validate event date(s) not within blocked period. Cobre intervalo
+  // [event_date..event_end_date] inteiro.
+  const eventEndForBlock = input.event_end_date ?? input.event_date
   const { data: blocked } = await supabase
     .from('blocked_periods')
     .select('id')
     .eq('company_id', companyId)
-    .lte('start_date', input.event_date)
+    .lte('start_date', eventEndForBlock)
     .gte('end_date', input.event_date)
     .limit(1)
 
@@ -324,7 +326,9 @@ export async function convertQuoteToRental(quoteId: string) {
         item.product_id,
         quote.event_date,
         quote.delivery_time,
-        quote.pickup_time
+        quote.pickup_time,
+        undefined,
+        (quote as { event_end_date?: string | null }).event_end_date,
       )
 
       if (available < item.quantity) {

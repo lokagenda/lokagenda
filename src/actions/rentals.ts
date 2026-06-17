@@ -52,12 +52,14 @@ export async function createRental(input: CreateRentalInput) {
   const supabase = await createClient()
   const { userId, companyId } = await getCompanyId(supabase)
 
-  // Validate the event date is not within a blocked period (férias/folga)
+  // Validate event date(s) not within blocked period. Cobre o intervalo
+  // [event_date..event_end_date] inteiro contra blocked_periods.
+  const eventEnd = input.event_end_date ?? input.event_date
   const { data: blocked } = await supabase
     .from('blocked_periods')
     .select('id')
     .eq('company_id', companyId)
-    .lte('start_date', input.event_date)
+    .lte('start_date', eventEnd)
     .gte('end_date', input.event_date)
     .limit(1)
 
@@ -68,7 +70,15 @@ export async function createRental(input: CreateRentalInput) {
   // Validate date-based stock availability before creating the rental
   for (const item of input.items) {
     if (item.product_id) {
-      const available = await getAvailableStock(companyId, item.product_id, input.event_date, input.delivery_time, input.pickup_time)
+      const available = await getAvailableStock(
+        companyId,
+        item.product_id,
+        input.event_date,
+        input.delivery_time,
+        input.pickup_time,
+        undefined,
+        input.event_end_date,
+      )
 
       if (available < item.quantity) {
         const { data: product } = await supabase
@@ -392,7 +402,8 @@ export async function updateRental(id: string, data: UpdateRentalInput) {
           data.event_date,
           data.delivery_time,
           data.pickup_time,
-          id // exclude current rental from availability check
+          id, // exclude current rental from availability check
+          data.event_end_date,
         )
 
         if (available < item.quantity) {

@@ -45,10 +45,16 @@ function timesOverlap(
 }
 
 /**
- * Server-side: Get available stock for a product on a given date and time period.
+ * Server-side: Get available stock for a product on a date or date range.
+ * Considera locações que SOBREPÕEM o intervalo [eventDate..eventEndDate]:
+ *   existing.event_date <= eventEndDate AND
+ *   coalesce(existing.event_end_date, existing.event_date) >= eventDate
+ * Pra mesma data (single-day), checa também sobreposição de horário
+ * (delivery_time/pickup_time). Se qualquer lado é multi-dia, conflito automático
+ * (horário dia-a-dia não importa em períodos longos).
+ *
  * Available = total stock - sum of rental_items.quantity for that product
- * on rentals with matching event_date, overlapping time period,
- * and status NOT in ('cancelled', 'returned').
+ * on overlapping rentals with status NOT in ('cancelled', 'returned').
  */
 export async function getAvailableStock(
   companyId: string,
@@ -56,14 +62,15 @@ export async function getAvailableStock(
   eventDate: string,
   deliveryTime?: string | null,
   pickupTime?: string | null,
-  excludeRentalId?: string
+  excludeRentalId?: string,
+  eventEndDate?: string | null
 ): Promise<number> {
   const supabase = await createClient()
 
-  // Normalize date to YYYY-MM-DD to match Supabase date column format
-  const normalizedDate = normalizeDate(eventDate)
+  const normStart = normalizeDate(eventDate)
+  const normEnd = normalizeDate(eventEndDate ?? eventDate)
+  const newIsMultiDay = normEnd > normStart
 
-  // Get total stock
   const { data: product } = await supabase
     .from('products')
     .select('stock, track_stock')
@@ -71,16 +78,16 @@ export async function getAvailableStock(
     .single()
 
   if (!product) return 0
-
-  // Products without stock control (e.g. pipoca, algodão doce) are unlimited
   if (product.track_stock === false) return 999999
 
-  // Get rentals for this date that are active (not cancelled/returned)
+  // Busca locações que começam ANTES OU IGUAL ao fim do novo intervalo.
+  // Depois filtra pós-query por (event_end_date OR event_date) >= normStart
+  // — Supabase não suporta coalesce em .gte direto.
   let rentalQuery = supabase
     .from('rentals')
-    .select('id, delivery_time, pickup_time')
+    .select('id, event_date, event_end_date, delivery_time, pickup_time')
     .eq('company_id', companyId)
-    .eq('event_date', normalizedDate)
+    .lte('event_date', normEnd)
     .not('status', 'in', '("cancelled","returned")')
 
   if (excludeRentalId) {
@@ -88,19 +95,22 @@ export async function getAvailableStock(
   }
 
   const { data: rentals } = await rentalQuery
-
   if (!rentals || rentals.length === 0) return product.stock
 
-  // Filter rentals that have overlapping time periods
-  const overlappingRentals = rentals.filter(r =>
-    timesOverlap(r.delivery_time, r.pickup_time, deliveryTime, pickupTime)
-  )
+  const overlappingRentals = rentals.filter((r) => {
+    const rEnd = r.event_end_date ?? r.event_date
+    if (rEnd < normStart) return false // nao sobrepoe o intervalo de datas
+    const rIsMultiDay = r.event_end_date != null && r.event_end_date > r.event_date
+    // Multi-dia em qualquer lado: conflito automatico (horario nao importa)
+    if (newIsMultiDay || rIsMultiDay) return true
+    // Ambos same-day: checa sobreposicao de horario
+    return timesOverlap(r.delivery_time, r.pickup_time, deliveryTime, pickupTime)
+  })
 
   if (overlappingRentals.length === 0) return product.stock
 
-  const rentalIds = overlappingRentals.map(r => r.id)
+  const rentalIds = overlappingRentals.map((r) => r.id)
 
-  // Sum quantities for this product across overlapping rentals
   const { data: rentalItems } = await supabase
     .from('rental_items')
     .select('quantity')
@@ -108,24 +118,26 @@ export async function getAvailableStock(
     .in('rental_id', rentalIds)
 
   const reserved = rentalItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
-
   return Math.max(0, product.stock - reserved)
 }
 
 /**
- * Client-side: Get available stock using browser client
+ * Client-side: Get available stock using browser client. Mesma logica de
+ * getAvailableStock com suporte a intervalo eventEndDate.
  */
 export async function getAvailableStockClient(
   productId: string,
   eventDate: string,
   companyId: string,
   deliveryTime?: string | null,
-  pickupTime?: string | null
+  pickupTime?: string | null,
+  eventEndDate?: string | null
 ): Promise<number> {
   const supabase = createBrowserClient()
 
-  // Normalize date to YYYY-MM-DD to match Supabase date column format
-  const normalizedDate = normalizeDate(eventDate)
+  const normStart = normalizeDate(eventDate)
+  const normEnd = normalizeDate(eventEndDate ?? eventDate)
+  const newIsMultiDay = normEnd > normStart
 
   const { data: product } = await supabase
     .from('products')
@@ -134,27 +146,28 @@ export async function getAvailableStockClient(
     .single()
 
   if (!product) return 0
-
-  // Products without stock control are unlimited
   if (product.track_stock === false) return 999999
 
   const { data: rentals } = await supabase
     .from('rentals')
-    .select('id, delivery_time, pickup_time')
+    .select('id, event_date, event_end_date, delivery_time, pickup_time')
     .eq('company_id', companyId)
-    .eq('event_date', normalizedDate)
+    .lte('event_date', normEnd)
     .not('status', 'in', '("cancelled","returned")')
 
   if (!rentals || rentals.length === 0) return product.stock
 
-  // Filter rentals that have overlapping time periods
-  const overlappingRentals = rentals.filter(r =>
-    timesOverlap(r.delivery_time, r.pickup_time, deliveryTime, pickupTime)
-  )
+  const overlappingRentals = rentals.filter((r) => {
+    const rEnd = r.event_end_date ?? r.event_date
+    if (rEnd < normStart) return false
+    const rIsMultiDay = r.event_end_date != null && r.event_end_date > r.event_date
+    if (newIsMultiDay || rIsMultiDay) return true
+    return timesOverlap(r.delivery_time, r.pickup_time, deliveryTime, pickupTime)
+  })
 
   if (overlappingRentals.length === 0) return product.stock
 
-  const rentalIds = overlappingRentals.map(r => r.id)
+  const rentalIds = overlappingRentals.map((r) => r.id)
 
   const { data: rentalItems } = await supabase
     .from('rental_items')
@@ -163,6 +176,5 @@ export async function getAvailableStockClient(
     .in('rental_id', rentalIds)
 
   const reserved = rentalItems?.reduce((sum, item) => sum + item.quantity, 0) || 0
-
   return Math.max(0, product.stock - reserved)
 }
