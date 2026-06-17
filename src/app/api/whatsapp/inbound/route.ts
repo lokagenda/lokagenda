@@ -76,8 +76,11 @@ function normalizeInbound(raw: unknown): NormalizedInbound | null {
   if (p.event && p.data && typeof p.data === 'object') {
     const u = raw as UazapiInboundPayload
     const d = u.data || {}
-    const rawSender = d.sender_pn || d.sender || d.chatid || ''
-    const phoneStr = typeof rawSender === 'string' ? rawSender.split('@')[0] : ''
+    // Quem identifica a CONVERSA é chatid (sempre o "outro lado", em phone real).
+    // Sender pode vir como `@lid` (LID anonimizado em multi-device) — inutil pra
+    // dedup. Fallback ordem: chatid > sender_pn > sender.
+    const rawId = d.chatid || d.sender_pn || d.sender || ''
+    const phoneStr = typeof rawId === 'string' ? rawId.split('@')[0] : ''
     const phone = phoneStr && /^\d+$/.test(phoneStr) ? phoneStr : null
     return {
       phone,
