@@ -180,17 +180,25 @@ export async function POST(request: NextRequest) {
     // marca takeover global. Filtro anti-self-send olha whatsapp_message_log
     // pra não marcar takeover quando foi a IA que acabou de enviar.
     if (norm.fromMe === true) {
-      console.log('[inbound/fromMe] entrou phone=' + phone)
+      console.log('[inbound/fromMe] entrou phone=' + phone + ' text="' + (norm.text ?? '').slice(0, 40) + '"')
       try {
+        // Anti-self-send reforcado: janela 30s + comparacao por texto. Permite
+        // remover dependencia do filtro wasSentByApi do webhook UazAPI (que
+        // estava cortando ate mensagens manuais do celular do Leo).
+        const incTextNorm = (norm.text ?? '').trim().slice(0, 60).toLowerCase()
         const { data: recentSelf } = await admin
           .from('whatsapp_message_log')
-          .select('id, created_at')
+          .select('id, created_at, message')
           .eq('phone', phone)
-          .gte('created_at', new Date(Date.now() - 10000).toISOString())
-          .limit(1)
-          .maybeSingle()
-        if (recentSelf) {
-          console.log('[inbound/fromMe] cortado por self_send phone=' + phone + ' last_log_id=' + recentSelf.id + ' created_at=' + recentSelf.created_at)
+          .gte('created_at', new Date(Date.now() - 30000).toISOString())
+          .order('created_at', { ascending: false })
+          .limit(5)
+        const matchedSelf = (recentSelf ?? []).find((row) => {
+          const logTextNorm = (row.message ?? '').trim().slice(0, 60).toLowerCase()
+          return logTextNorm && logTextNorm === incTextNorm
+        })
+        if (matchedSelf) {
+          console.log('[inbound/fromMe] cortado por self_send phone=' + phone + ' last_log_id=' + matchedSelf.id)
           return NextResponse.json({ received: true, skipped: 'self_send' })
         }
 
