@@ -1115,6 +1115,7 @@ export interface Database {
           notify_sent_by_me_enabled: boolean;
           ai_globally_paused_at: string | null;
           ai_globally_paused_reason: string | null;
+          uazapi_last_poll_ts: number;
           created_at: string;
           updated_at: string;
         };
@@ -1129,6 +1130,7 @@ export interface Database {
           notify_sent_by_me_enabled?: boolean;
           ai_globally_paused_at?: string | null;
           ai_globally_paused_reason?: string | null;
+          uazapi_last_poll_ts?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -1143,6 +1145,7 @@ export interface Database {
           notify_sent_by_me_enabled?: boolean;
           ai_globally_paused_at?: string | null;
           ai_globally_paused_reason?: string | null;
+          uazapi_last_poll_ts?: number;
           created_at?: string;
           updated_at?: string;
         };
