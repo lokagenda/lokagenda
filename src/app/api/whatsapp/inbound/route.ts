@@ -320,8 +320,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, skipped: 'contact_paused' })
       }
 
-      // Gate 2 — Contato fora do funil ativo: já foi qualificado, convertido ou perdido.
-      if (contact.status === 'qualified' || contact.status === 'converted' || contact.status === 'lost') {
+      // Gate 2 — Contato fora do funil ativo: converted ou lost. Qualified
+      // CONTINUA recebendo IA (perfil certo, ainda em dialogo). So pausa
+      // automatico quando a IA classificar como converted ou lost de fato.
+      if (contact.status === 'converted' || contact.status === 'lost') {
         console.log('[inbound/contact] CUT_BY_STATUS phone=' + phone + ' status=' + contact.status)
         await admin
           .from('campaign_contacts')
@@ -404,10 +406,11 @@ export async function POST(request: NextRequest) {
       // mudar o status de volta pra 'contacted' (race condition, edição manual,
       // bug futuro), o ai_paused_until permanece e a IA segue silenciada.
       if (aiResult.status && contactId) {
+        // Qualified deixou de ser off-funnel: cliente "perfil certo + aberto"
+        // ainda merece despedida educada da IA. So pausa em converted ou lost.
         const offFunnel =
           aiResult.status === 'lost' ||
-          aiResult.status === 'converted' ||
-          aiResult.status === 'qualified'
+          aiResult.status === 'converted'
         const update: {
           status: 'lead' | 'contacted' | 'qualified' | 'converted' | 'lost'
           updated_at: string
