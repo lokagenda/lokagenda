@@ -1,6 +1,37 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { isSubscriptionActive } from '@/lib/plans'
+import type { Subscription } from '@/types/database'
 import type { SubscriptionWithPlan } from '@/lib/plans'
+
+/**
+ * Garante que status='active' com current_period_end < now() vire 'expired'.
+ * Sem isso, o SubscriptionGate nao bloqueia o cliente com plano vencido
+ * (continuava usando o sistema como se nada tivesse vencido).
+ *
+ * Retorna o subscription possivelmente com status atualizado.
+ * Usa admin client pra contornar RLS (write).
+ */
+export async function ensureSubscriptionStatusFresh(sub: Subscription): Promise<Subscription> {
+  // Trial e outros estados nao precisam de flip
+  if (sub.status !== 'active') return sub
+  if (!sub.current_period_end) return sub
+  if (new Date(sub.current_period_end) > new Date()) return sub
+
+  // Plano pago vencido: flipa pra 'expired'
+  try {
+    const admin = createAdminClient()
+    await admin
+      .from('subscriptions')
+      .update({ status: 'expired', updated_at: new Date().toISOString() })
+      .eq('id', sub.id)
+      .eq('status', 'active') // idempotente: so flipa se ainda esta active
+    return { ...sub, status: 'expired' }
+  } catch (err) {
+    console.error('[plans-server] flip status expired falhou sub_id=' + sub.id, err)
+    return sub
+  }
+}
 
 /**
  * Busca a assinatura ativa (ou trial) da empresa com dados do plano.

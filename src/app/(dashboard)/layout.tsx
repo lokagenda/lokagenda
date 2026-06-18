@@ -5,6 +5,7 @@ import { Header } from '@/components/header'
 import { DailyPopup } from '@/components/daily-popup'
 import { SubscriptionGate } from '@/components/subscription-gate'
 import { isSubscriptionActive, getTrialDaysRemaining } from '@/lib/plans'
+import { ensureSubscriptionStatusFresh } from '@/lib/plans-server'
 import type { Subscription } from '@/types/database'
 
 export default async function DashboardLayout({
@@ -55,7 +56,9 @@ export default async function DashboardLayout({
       .single()
 
     if (subscription) {
-      const sub = subscription as Subscription
+      // Flipa status='active' com periodo vencido pra 'expired' antes de avaliar.
+      // Sem isso o gate nao bloqueava cliente com plano pago vencido.
+      const sub = await ensureSubscriptionStatusFresh(subscription as Subscription)
       if (isSubscriptionActive(sub)) {
         subscriptionStatus = sub.status as typeof subscriptionStatus
       } else if (sub.status === 'trial') {
