@@ -5,9 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export const maxDuration = 300
 
 /**
- * Processa as mensagens agendadas para grupos de WhatsApp cujo horário já chegou.
- * Usa a Z-API global. No plano Hobby da Vercel o cron roda 1x/dia, então o envio
- * acontece na próxima execução após o horário agendado (aproximação por janela).
+ * Processa mensagens agendadas pra grupos. Suporta tanto Z-API quanto UazAPI.
+ * Detecta o provider em whatsapp_config e roteia pro endpoint correto.
  */
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
@@ -38,8 +37,13 @@ export async function GET(request: NextRequest) {
     .limit(1)
     .single()
 
-  const ready =
-    config && config.provider === 'z_api' && config.api_url && config.api_key && config.instance_id
+  const provider = config?.provider
+  const ready = !!(
+    config &&
+    config.api_url &&
+    config.api_key &&
+    (provider === 'z_api' ? !!config.instance_id : provider === 'uazapi')
+  )
 
   let sent = 0
   let failed = 0
@@ -48,50 +52,90 @@ export async function GET(request: NextRequest) {
     if (!ready) {
       await admin
         .from('group_scheduled_messages')
-        .update({ status: 'failed', error: 'Z-API não configurada' })
+        .update({ status: 'failed', error: 'WhatsApp não configurado (provider z_api ou uazapi com credenciais)' })
         .eq('id', msg.id)
       failed++
       continue
     }
 
     const apiUrl = config!.api_url!.replace(/\/$/, '')
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (config!.phone_number_id) headers['Client-Token'] = config!.phone_number_id
-
-    const base = `${apiUrl}/instances/${config!.instance_id}/token/${config!.api_key}`
 
     try {
       let ok = true
       let errText: string | null = null
 
-      if (msg.media_url) {
-        const endpoint = msg.media_type === 'video' ? 'send-video' : 'send-image'
-        const body =
-          msg.media_type === 'video'
-            ? { phone: msg.group_id, video: msg.media_url, caption: msg.content || '' }
-            : { phone: msg.group_id, image: msg.media_url, caption: msg.content || '' }
-        const res = await fetch(`${base}/${endpoint}`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(20000),
-        })
-        if (!res.ok) {
-          ok = false
-          const d = await res.json().catch(() => null)
-          errText = d?.error || d?.message || `HTTP ${res.status}`
+      // group_id no banco vem como "120363322422182462-group" ou "553599391360-1521882527".
+      // UazAPI quer "120363322422182462@g.us". Z-API aceita o original.
+      const groupIdForUaz = msg.group_id.endsWith('-group')
+        ? msg.group_id.replace(/-group$/, '') + '@g.us'
+        : msg.group_id.includes('@')
+          ? msg.group_id
+          : msg.group_id + '@g.us'
+
+      if (provider === 'z_api') {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (config!.phone_number_id) headers['Client-Token'] = config!.phone_number_id
+        const base = `${apiUrl}/instances/${config!.instance_id}/token/${config!.api_key}`
+
+        if (msg.media_url) {
+          const endpoint = msg.media_type === 'video' ? 'send-video' : 'send-image'
+          const body =
+            msg.media_type === 'video'
+              ? { phone: msg.group_id, video: msg.media_url, caption: msg.content || '' }
+              : { phone: msg.group_id, image: msg.media_url, caption: msg.content || '' }
+          const res = await fetch(`${base}/${endpoint}`, {
+            method: 'POST', headers,
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(20000),
+          })
+          if (!res.ok) {
+            ok = false
+            const d = await res.json().catch(() => null)
+            errText = d?.error || d?.message || `HTTP ${res.status}`
+          }
+        } else if (msg.content) {
+          const res = await fetch(`${base}/send-text`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ phone: msg.group_id, message: msg.content }),
+            signal: AbortSignal.timeout(20000),
+          })
+          if (!res.ok) {
+            ok = false
+            const d = await res.json().catch(() => null)
+            errText = d?.error || d?.message || `HTTP ${res.status}`
+          }
         }
-      } else if (msg.content) {
-        const res = await fetch(`${base}/send-text`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ phone: msg.group_id, message: msg.content }),
-          signal: AbortSignal.timeout(20000),
-        })
-        if (!res.ok) {
-          ok = false
-          const d = await res.json().catch(() => null)
-          errText = d?.error || d?.message || `HTTP ${res.status}`
+      } else if (provider === 'uazapi') {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', token: config!.api_key! }
+
+        if (msg.media_url) {
+          // UazAPI /send/media aceita {number, type, file, text}
+          const res = await fetch(`${apiUrl}/send/media`, {
+            method: 'POST', headers,
+            body: JSON.stringify({
+              number: groupIdForUaz,
+              type: msg.media_type === 'video' ? 'video' : 'image',
+              file: msg.media_url,
+              text: msg.content || '',
+            }),
+            signal: AbortSignal.timeout(20000),
+          })
+          if (!res.ok) {
+            ok = false
+            const d = await res.json().catch(() => null)
+            errText = d?.error || d?.message || `HTTP ${res.status}`
+          }
+        } else if (msg.content) {
+          const res = await fetch(`${apiUrl}/send/text`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ number: groupIdForUaz, text: msg.content }),
+            signal: AbortSignal.timeout(20000),
+          })
+          if (!res.ok) {
+            ok = false
+            const d = await res.json().catch(() => null)
+            errText = d?.error || d?.message || `HTTP ${res.status}`
+          }
         }
       }
 
