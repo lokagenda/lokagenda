@@ -1461,6 +1461,42 @@ export interface Database {
         };
         Relationships: [];
       };
+      pending_inbound: {
+        Row: {
+          id: string;
+          phone: string;
+          text: string;
+          company_id: string | null;
+          contact_id: string | null;
+          campaign_prompt: string | null;
+          created_at: string;
+          processing_at: string | null;
+          processed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          phone: string;
+          text: string;
+          company_id?: string | null;
+          contact_id?: string | null;
+          campaign_prompt?: string | null;
+          created_at?: string;
+          processing_at?: string | null;
+          processed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          phone?: string;
+          text?: string;
+          company_id?: string | null;
+          contact_id?: string | null;
+          campaign_prompt?: string | null;
+          created_at?: string;
+          processing_at?: string | null;
+          processed_at?: string | null;
+        };
+        Relationships: [];
+      };
       reactivation_queue: {
         Row: {
           id: string;

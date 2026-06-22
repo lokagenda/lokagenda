@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { generateAiReply } from '@/lib/ai/agent'
-import { sendWhatsAppMessage, normalizePhone } from '@/lib/whatsapp-api/sender'
+import { normalizePhone } from '@/lib/whatsapp-api/sender'
+import { processWithDebounce } from '@/lib/ai/debounce'
 
 /**
  * Webhook de entrada da Z-API ("on-message-received").
@@ -393,43 +394,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Gerar resposta da IA e enviar de volta (se houver).
-    const aiResult = await generateAiReply(companyId, phone, incomingText, { campaignPrompt })
+    // 3. DEBOUNCE: em vez de chamar IA imediato, salva em pending_inbound
+    // e agenda processWithDebounce(phone) via after() pra 8s depois.
+    // Cliente que dispara 3 msgs em rajada -> processa 1 vez so, abracando todas.
+    await admin.from('pending_inbound').insert({
+      phone,
+      text: incomingText,
+      company_id: companyId,
+      contact_id: contactId,
+      campaign_prompt: campaignPrompt,
+    })
 
-    if (aiResult) {
-      // A IA pode ter reclassificado o lead (modo campanha: qualified/converted/lost).
-      // Grava direto pelo admin client — o webhook não tem sessão de usuário, então
-      // NÃO dá pra usar updateContactStatus (que exige auth/getCompanyId).
-      //
-      // Quando IA classifica como lost/converted/qualified, ADICIONALMENTE seta
-      // ai_paused_until = +30 dias. Defesa em profundidade: se algo mais tarde
-      // mudar o status de volta pra 'contacted' (race condition, edição manual,
-      // bug futuro), o ai_paused_until permanece e a IA segue silenciada.
-      if (aiResult.status && contactId) {
-        // Qualified deixou de ser off-funnel: cliente "perfil certo + aberto"
-        // ainda merece despedida educada da IA. So pausa em converted ou lost.
-        const offFunnel =
-          aiResult.status === 'lost' ||
-          aiResult.status === 'converted'
-        const update: {
-          status: 'lead' | 'contacted' | 'qualified' | 'converted' | 'lost'
-          updated_at: string
-          ai_paused_until?: string
-        } = {
-          status: aiResult.status,
-          updated_at: new Date().toISOString(),
-        }
-        if (offFunnel) {
-          update.ai_paused_until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          console.log('[inbound/classify] phone=' + phone + ' status=' + aiResult.status + ' ai_paused_until=+30d')
-        }
-        await admin.from('campaign_contacts').update(update).eq('id', contactId)
+    after(async () => {
+      try {
+        await processWithDebounce(phone)
+      } catch (err) {
+        console.error('[inbound/debounce] erro phone=' + phone, err)
       }
-
-      if (aiResult.reply) {
-        await sendWhatsAppMessage(phone, aiResult.reply, { companyId })
-      }
-    }
+    })
 
     return NextResponse.json({ received: true })
   } catch (error) {
