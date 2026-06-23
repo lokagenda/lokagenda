@@ -34,49 +34,97 @@ export interface WhatsAppGroup {
   name: string
 }
 
-/**
- * Lista os grupos de WhatsApp da instância Z-API global.
- *
- * Z-API: GET {api_url}/instances/{instance}/token/{token}/groups
- * O header `Client-Token` (armazenado em whatsapp_config.phone_number_id) é
- * exigido pela Z-API quando a conta tem o token de segurança ativado.
- */
-export async function listWhatsAppGroups(): Promise<{
-  groups: WhatsAppGroup[]
-  error?: string
-}> {
-  // Garante que o usuário está autenticado em uma empresa.
-  await getCompanyId()
+/** Config ativa normalizada — funciona com Z-API ou UazAPI. */
+type ActiveCfg =
+  | { provider: 'z_api'; apiUrl: string; apiKey: string; instanceId: string; clientToken: string | null }
+  | { provider: 'uazapi'; apiUrl: string; apiKey: string }
 
+async function getActiveWhatsAppConfig(): Promise<ActiveCfg | null> {
   const admin = createAdminClient()
-  const { data: config, error: configError } = await admin
+  const { data: config } = await admin
     .from('whatsapp_config')
     .select('provider, api_url, api_key, instance_id, phone_number_id')
     .eq('active', true)
     .limit(1)
     .single()
 
-  if (configError || !config) {
-    return { groups: [], error: 'Nenhum provedor WhatsApp configurado.' }
-  }
-
-  if (config.provider !== 'z_api') {
-    return { groups: [], error: 'A listagem de grupos só está disponível para a Z-API.' }
-  }
-
-  if (!config.api_url || !config.api_key || !config.instance_id) {
-    return { groups: [], error: 'Configuração da Z-API incompleta.' }
-  }
-
+  if (!config || !config.api_url || !config.api_key) return null
   const apiUrl = config.api_url.replace(/\/$/, '')
-  const clientToken = config.phone_number_id
 
+  if (config.provider === 'z_api') {
+    if (!config.instance_id) return null
+    return {
+      provider: 'z_api',
+      apiUrl,
+      apiKey: config.api_key,
+      instanceId: config.instance_id,
+      clientToken: (config.phone_number_id as string | null) ?? null,
+    }
+  }
+  if (config.provider === 'uazapi') {
+    return { provider: 'uazapi', apiUrl, apiKey: config.api_key }
+  }
+  return null
+}
+
+/** Converte ID de grupo entre formatos. UazAPI quer "<id>@g.us"; Z-API aceita
+ *  "<id>-group" ou JID puro. */
+function toUazapiGroupJid(groupId: string): string {
+  if (groupId.endsWith('@g.us')) return groupId
+  if (groupId.endsWith('-group')) return groupId.replace(/-group$/, '') + '@g.us'
+  if (groupId.includes('@')) return groupId
+  return groupId + '@g.us'
+}
+
+/**
+ * Lista os grupos de WhatsApp da instância ativa (Z-API ou UazAPI).
+ *
+ * Z-API: GET /groups paginado.
+ * UazAPI: POST /group/list — retorna {groups: [{JID, Name, Participants[], ...}]}
+ * já com participantes inline. Uma única chamada.
+ */
+export async function listWhatsAppGroups(): Promise<{
+  groups: WhatsAppGroup[]
+  error?: string
+}> {
+  await getCompanyId()
+  const cfg = await getActiveWhatsAppConfig()
+  if (!cfg) return { groups: [], error: 'Provedor WhatsApp não configurado (esperado z_api ou uazapi).' }
+
+  if (cfg.provider === 'uazapi') {
+    try {
+      const res = await fetch(`${cfg.apiUrl}/group/list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: cfg.apiKey },
+        body: JSON.stringify({ limit: 500 }),
+        signal: AbortSignal.timeout(20000),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        const msg = data?.error || data?.message || `HTTP ${res.status}`
+        return { groups: [], error: `Erro ao buscar grupos (UazAPI): ${msg}` }
+      }
+      const rawList: Array<Record<string, unknown>> = Array.isArray(data?.groups) ? data.groups : []
+      const all: WhatsAppGroup[] = []
+      const seen = new Set<string>()
+      for (const g of rawList) {
+        const id = String(g.JID || '')
+        if (!id || seen.has(id)) continue
+        seen.add(id)
+        all.push({ id, name: String(g.Name || id) })
+      }
+      // Sort por nome pra UI ficar legivel
+      all.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      return { groups: all }
+    } catch (err) {
+      return { groups: [], error: err instanceof Error ? err.message : 'Erro de conexão UazAPI.' }
+    }
+  }
+
+  // Z-API: paginação obrigatória
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (clientToken) headers['Client-Token'] = clientToken
+  if (cfg.clientToken) headers['Client-Token'] = cfg.clientToken
 
-  // O endpoint /groups da Z-API é PAGINADO (page/pageSize são obrigatórios).
-  // Sem paginar, só vinha a primeira página — por isso "não apareciam todos".
-  // Aqui percorremos todas as páginas até esvaziar.
   const pageSize = 100
   const all: WhatsAppGroup[] = []
   const seen = new Set<string>()
@@ -84,7 +132,7 @@ export async function listWhatsAppGroups(): Promise<{
   try {
     for (let page = 1; page <= 50; page++) {
       const response = await fetch(
-        `${apiUrl}/instances/${config.instance_id}/token/${config.api_key}/groups?page=${page}&pageSize=${pageSize}`,
+        `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/groups?page=${page}&pageSize=${pageSize}`,
         { method: 'GET', headers, signal: AbortSignal.timeout(15000) }
       )
 
@@ -105,7 +153,6 @@ export async function listWhatsAppGroups(): Promise<{
       if (rawList.length === 0) break
 
       for (const g of rawList) {
-        // Aceita tudo que for grupo (isGroup) ou cujo id tenha o sufixo -group.
         const id = String(g?.phone || g?.id || g?.group_id || g?.wid || '')
         const isGroup = g?.isGroup === true || id.includes('-group') || id.includes('-')
         if (!id || seen.has(id) || !isGroup) continue
@@ -120,27 +167,6 @@ export async function listWhatsAppGroups(): Promise<{
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro de conexão ao buscar grupos.'
     return { groups: all.length ? all : [], error: all.length ? undefined : message }
-  }
-}
-
-/** Carrega a config ativa da Z-API (helper interno). */
-async function getZApiConfig() {
-  const admin = createAdminClient()
-  const { data: config } = await admin
-    .from('whatsapp_config')
-    .select('provider, api_url, api_key, instance_id, phone_number_id')
-    .eq('active', true)
-    .limit(1)
-    .single()
-
-  if (!config || config.provider !== 'z_api' || !config.api_url || !config.api_key || !config.instance_id) {
-    return null
-  }
-  return {
-    apiUrl: config.api_url.replace(/\/$/, ''),
-    apiKey: config.api_key,
-    instanceId: config.instance_id,
-    clientToken: config.phone_number_id as string | null,
   }
 }
 
@@ -169,25 +195,10 @@ export async function sendToGroup(
     return { success: false, error: 'A mensagem não pode estar vazia.' }
   }
 
+  const cfg = await getActiveWhatsAppConfig()
+  if (!cfg) return { success: false, error: 'Provedor WhatsApp não configurado.' }
+
   const admin = createAdminClient()
-  const { data: config, error: configError } = await admin
-    .from('whatsapp_config')
-    .select('provider, api_url, api_key, instance_id, phone_number_id')
-    .eq('active', true)
-    .limit(1)
-    .single()
-
-  if (configError || !config) {
-    return { success: false, error: 'Nenhum provedor WhatsApp configurado.' }
-  }
-
-  if (config.provider !== 'z_api' || !config.api_url || !config.api_key || !config.instance_id) {
-    return { success: false, error: 'Envio para grupos só está disponível para a Z-API configurada.' }
-  }
-
-  const apiUrl = config.api_url.replace(/\/$/, '')
-  const clientToken = config.phone_number_id
-
   // Registro de log (pending)
   const { data: logEntry } = await admin
     .from('whatsapp_message_log')
@@ -196,20 +207,28 @@ export async function sendToGroup(
     .single()
 
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (clientToken) {
-      headers['Client-Token'] = clientToken
-    }
-
-    const response = await fetch(
-      `${apiUrl}/instances/${config.instance_id}/token/${config.api_key}/send-text`,
-      {
+    let response: Response
+    if (cfg.provider === 'uazapi') {
+      const number = toUazapiGroupJid(id)
+      response = await fetch(`${cfg.apiUrl}/send/text`, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ phone: id, message: text }),
+        headers: { 'Content-Type': 'application/json', token: cfg.apiKey },
+        body: JSON.stringify({ number, text }),
         signal: AbortSignal.timeout(15000),
-      }
-    )
+      })
+    } else {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (cfg.clientToken) headers['Client-Token'] = cfg.clientToken
+      response = await fetch(
+        `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/send-text`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ phone: id, message: text }),
+          signal: AbortSignal.timeout(15000),
+        }
+      )
+    }
 
     const data = await response.json().catch(() => null)
 
@@ -257,17 +276,8 @@ export async function sendMediaToGroup(
   if (!id) return { success: false, error: 'Grupo inválido.' }
   if (!mediaUrl) return { success: false, error: 'Mídia inválida.' }
 
-  const cfg = await getZApiConfig()
-  if (!cfg) return { success: false, error: 'Envio só está disponível para a Z-API configurada.' }
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (cfg.clientToken) headers['Client-Token'] = cfg.clientToken
-
-  const endpoint = mediaType === 'video' ? 'send-video' : 'send-image'
-  const body =
-    mediaType === 'video'
-      ? { phone: id, video: mediaUrl, caption: caption || '' }
-      : { phone: id, image: mediaUrl, caption: caption || '' }
+  const cfg = await getActiveWhatsAppConfig()
+  if (!cfg) return { success: false, error: 'Provedor WhatsApp não configurado.' }
 
   const admin = createAdminClient()
   const { data: logEntry } = await admin
@@ -277,10 +287,32 @@ export async function sendMediaToGroup(
     .single()
 
   try {
-    const response = await fetch(
-      `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/${endpoint}`,
-      { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) }
-    )
+    let response: Response
+    if (cfg.provider === 'uazapi') {
+      response = await fetch(`${cfg.apiUrl}/send/media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: cfg.apiKey },
+        body: JSON.stringify({
+          number: toUazapiGroupJid(id),
+          type: mediaType,
+          file: mediaUrl,
+          text: caption || '',
+        }),
+        signal: AbortSignal.timeout(20000),
+      })
+    } else {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (cfg.clientToken) headers['Client-Token'] = cfg.clientToken
+      const endpoint = mediaType === 'video' ? 'send-video' : 'send-image'
+      const body =
+        mediaType === 'video'
+          ? { phone: id, video: mediaUrl, caption: caption || '' }
+          : { phone: id, image: mediaUrl, caption: caption || '' }
+      response = await fetch(
+        `${cfg.apiUrl}/instances/${cfg.instanceId}/token/${cfg.apiKey}/${endpoint}`,
+        { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) }
+      )
+    }
     const data = await response.json().catch(() => null)
     if (logEntry) {
       await admin
@@ -484,9 +516,53 @@ export async function updateScheduledGroupMessage(
  * export CSV.
  */
 async function fetchGroupParticipantsWithNames(
-  cfg: NonNullable<Awaited<ReturnType<typeof getZApiConfig>>>,
+  cfg: ActiveCfg,
   groupId: string
 ): Promise<{ phones: string[]; nameMap: Map<string, string>; rawCount: number; metaKeys: string[]; error?: string }> {
+  if (cfg.provider === 'uazapi') {
+    // UazAPI: /group/list ja retorna Participants[] inline. Busca todos
+    // grupos e filtra o JID alvo. Mais barato que pedir info de 1 grupo.
+    const targetJid = toUazapiGroupJid(groupId)
+    try {
+      const res = await fetch(`${cfg.apiUrl}/group/list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: cfg.apiKey },
+        body: JSON.stringify({ limit: 500 }),
+        signal: AbortSignal.timeout(20000),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        return { phones: [], nameMap: new Map(), rawCount: 0, metaKeys: [], error: data?.error || data?.message || `HTTP ${res.status}` }
+      }
+      type UazParticipant = { JID?: string; PhoneNumber?: string; LID?: string; DisplayName?: string; IsAdmin?: boolean }
+      type UazGroup = { JID?: string; Name?: string; Participants?: UazParticipant[] }
+      const groups: UazGroup[] = Array.isArray(data?.groups) ? data.groups : []
+      const target = groups.find((g) => g.JID === targetJid)
+      if (!target) {
+        return { phones: [], nameMap: new Map(), rawCount: 0, metaKeys: ['Participants','Name','JID'], error: 'Grupo não encontrado na instância UazAPI.' }
+      }
+      const participants: UazParticipant[] = Array.isArray(target.Participants) ? target.Participants : []
+      const rawCount = participants.length
+      const phones = Array.from(
+        new Set(
+          participants
+            .map((p) => String(p.PhoneNumber || '').split('@')[0].replace(/\D/g, ''))
+            .filter((p) => p.length >= 10),
+        ),
+      )
+      const nameMap = new Map<string, string>()
+      for (const p of participants) {
+        const ph = String(p.PhoneNumber || '').split('@')[0].replace(/\D/g, '')
+        if (ph && p.DisplayName) nameMap.set(ph, String(p.DisplayName))
+      }
+      console.log('[captureGroup/uazapi]', { groupId, targetJid, rawCount, uniquePhones: phones.length })
+      return { phones, nameMap, rawCount, metaKeys: ['Participants','Name','JID'] }
+    } catch (err) {
+      return { phones: [], nameMap: new Map(), rawCount: 0, metaKeys: [], error: err instanceof Error ? err.message : 'Erro UazAPI ao buscar participantes.' }
+    }
+  }
+
+  // Z-API: group-metadata + contacts (lógica original)
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (cfg.clientToken) headers['Client-Token'] = cfg.clientToken
 
@@ -504,18 +580,7 @@ async function fetchGroupParticipantsWithNames(
     }
     metaKeys = data && typeof data === 'object' ? Object.keys(data) : []
     participants = Array.isArray(data?.participants) ? data.participants : []
-    console.log('[captureGroup] group-metadata response', {
-      status: response.status,
-      groupId,
-      metaKeys,
-      participantsCount: participants.length,
-      sampleParticipants: participants.slice(0, 3),
-      // tamanho do grupo segundo a própria Z-API (alguns retornam `size`/`subject` etc.)
-      reportedSize: (data as Record<string, unknown> | null)?.size,
-      reportedParticipantsCount: (data as Record<string, unknown> | null)?.participantsCount,
-    })
   } catch (err) {
-    console.error('[captureGroup] exceção ao buscar group-metadata', err)
     return { phones: [], nameMap: new Map(), rawCount: 0, metaKeys: [], error: err instanceof Error ? err.message : 'Erro ao buscar participantes.' }
   }
 
@@ -524,14 +589,10 @@ async function fetchGroupParticipantsWithNames(
     new Set(
       participants
         .map((p) => String(p.phone || '').replace(/\D/g, ''))
-        .filter((p) => p.length >= 10)
-    )
+        .filter((p) => p.length >= 10),
+    ),
   )
-  console.log('[captureGroup] após dedup', { rawCount, uniquePhones: phones.length })
 
-  // Best-effort: busca a agenda de contatos do número (Z-API /contacts) para
-  // mapear telefone -> nome. Só vem nome de quem está salvo na agenda; os demais
-  // ficam sem nome (limitação da Z-API). Não bloqueia a captação se falhar.
   const nameMap = new Map<string, string>()
   try {
     for (let page = 1; page <= 30; page++) {
@@ -564,8 +625,8 @@ export async function captureGroupContacts(
   const id = groupId?.trim()
   if (!id) return { error: 'Grupo inválido.' }
 
-  const cfg = await getZApiConfig()
-  if (!cfg) return { error: 'Captação só está disponível para a Z-API configurada.' }
+  const cfg = await getActiveWhatsAppConfig()
+  if (!cfg) return { error: 'Provedor WhatsApp não configurado.' }
 
   const { phones, nameMap, rawCount, error: fetchError } = await fetchGroupParticipantsWithNames(cfg, id)
   if (fetchError) return { error: fetchError }
@@ -643,8 +704,8 @@ export async function exportGroupContactsCsv(
   const id = groupId?.trim()
   if (!id) return { error: 'Grupo inválido.' }
 
-  const cfg = await getZApiConfig()
-  if (!cfg) return { error: 'Captação só está disponível para a Z-API configurada.' }
+  const cfg = await getActiveWhatsAppConfig()
+  if (!cfg) return { error: 'Provedor WhatsApp não configurado.' }
 
   const { phones, nameMap, error: fetchError } = await fetchGroupParticipantsWithNames(cfg, id)
   if (fetchError) return { error: fetchError }
