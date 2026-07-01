@@ -126,6 +126,13 @@ export async function POST(request: NextRequest) {
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`
 
+    // Parcelamento: plano anual em ate 12x, semestral em ate 6x, mensal a vista.
+    // Se voce habilitou "Parcelamento sem juros ao comprador" no painel do MP
+    // (Configuracoes -> Cobrancas -> Parcelamento), o custo dos juros eh
+    // absorvido no seu recebimento e o comprador ve "12x sem juros".
+    const maxInstallments =
+      billingCycle === 'annual' ? 12 : billingCycle === 'semiannual' ? 6 : 1
+
     const preference = await preferenceClient.create({
       body: {
         items: [
@@ -138,6 +145,10 @@ export async function POST(request: NextRequest) {
             currency_id: 'BRL',
           },
         ],
+        payment_methods: {
+          installments: maxInstallments,
+          default_installments: maxInstallments,
+        },
         external_reference: JSON.stringify({
           companyId,
           planId,
