@@ -50,6 +50,27 @@ async function getAuthenticatedProfile() {
   return { supabase, userId: user.id, companyId: profile.company_id }
 }
 
+/**
+ * Salva CPF ou CNPJ da empresa. Chamada pelo modal de assinatura Asaas quando
+ * o cliente clica Assinar sem ter document cadastrado (Asaas exige cpfCnpj no
+ * customer). Aceita 11 digitos (CPF) ou 14 (CNPJ), salva sem formatacao.
+ */
+export async function updateCompanyDocument(document: string): Promise<{ success: true } | { error: string }> {
+  const clean = document.replace(/\D/g, '')
+  if (clean.length !== 11 && clean.length !== 14) {
+    return { error: 'CPF (11 digitos) ou CNPJ (14 digitos) invalido' }
+  }
+  const { supabase, companyId } = await getAuthenticatedProfile().catch(() => ({ supabase: null, companyId: null }))
+  if (!supabase || !companyId) return { error: 'Nao autorizado' }
+  const { error } = await supabase
+    .from('companies')
+    .update({ document: clean, updated_at: new Date().toISOString() })
+    .eq('id', companyId)
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/assinatura')
+  return { success: true }
+}
+
 export async function updateCompany(formData: FormData) {
   const { supabase, companyId } = await getAuthenticatedProfile()
 

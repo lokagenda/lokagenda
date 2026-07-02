@@ -59,7 +59,7 @@ export async function runWhatsappLifecycle(): Promise<{ messages_sent: number; m
 
   // Auto-expira trials vencidos: sem isto o status fica 'trial' pra sempre e as
   // mensagens de pós-trial ("não renovou") e os filtros de reativação nunca casam.
-  // Só toca trials (planos pagos são gerenciados pelo webhook do MercadoPago).
+  // Só toca trials (planos pagos são gerenciados pelo webhook do Asaas).
   await admin
     .from('subscriptions')
     .update({ status: 'expired', updated_at: new Date().toISOString() })

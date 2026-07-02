@@ -793,6 +793,9 @@ export interface Database {
           current_price: number;
           mercadopago_subscription_id: string | null;
           mercadopago_payer_id: string | null;
+          asaas_customer_id: string | null;
+          asaas_subscription_id: string | null;
+          asaas_checkout_id: string | null;
           trial_ends_at: string | null;
           current_period_start: string | null;
           current_period_end: string | null;
@@ -811,6 +814,9 @@ export interface Database {
           current_price?: number;
           mercadopago_subscription_id?: string | null;
           mercadopago_payer_id?: string | null;
+          asaas_customer_id?: string | null;
+          asaas_subscription_id?: string | null;
+          asaas_checkout_id?: string | null;
           trial_ends_at?: string | null;
           current_period_start?: string | null;
           current_period_end?: string | null;
@@ -829,6 +835,9 @@ export interface Database {
           current_price?: number;
           mercadopago_subscription_id?: string | null;
           mercadopago_payer_id?: string | null;
+          asaas_customer_id?: string | null;
+          asaas_subscription_id?: string | null;
+          asaas_checkout_id?: string | null;
           trial_ends_at?: string | null;
           current_period_start?: string | null;
           current_period_end?: string | null;
@@ -854,6 +863,24 @@ export interface Database {
             referencedColumns: ["id"];
           },
         ];
+      };
+      webhook_events_asaas: {
+        Row: {
+          event_id: string;
+          event_type: string;
+          processed_at: string | null;
+        };
+        Insert: {
+          event_id: string;
+          event_type: string;
+          processed_at?: string | null;
+        };
+        Update: {
+          event_id?: string;
+          event_type?: string;
+          processed_at?: string | null;
+        };
+        Relationships: [];
       };
       demo_products: {
         Row: {

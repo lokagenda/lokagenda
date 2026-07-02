@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { getSubscription, getPlans, cancelSubscription } from '@/actions/subscriptions'
 import { validateCoupon } from '@/actions/coupons'
+import { updateCompanyDocument } from '@/actions/company'
 import type { Plan, Subscription } from '@/types/database'
 import { isSubscriptionActive, getTrialDaysRemaining } from '@/lib/plans'
 
@@ -100,6 +101,10 @@ export default function AssinaturaPage() {
     discountValue: number
     durationMonths: number
   } | null>(null)
+  const [documentModal, setDocumentModal] = useState<{ cycle: BillingCycle } | null>(null)
+  const [documentInput, setDocumentInput] = useState('')
+  const [documentError, setDocumentError] = useState<string | null>(null)
+  const [savingDocument, setSavingDocument] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -209,7 +214,7 @@ export default function AssinaturaPage() {
         return
       }
 
-      const response = await fetch('/api/mercadopago/create-preference', {
+      const response = await fetch('/api/asaas/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -239,13 +244,20 @@ export default function AssinaturaPage() {
         return
       }
 
+      // Asaas exige CPF/CNPJ. Abre modal.
+      if (data.requiresDocument) {
+        setDocumentModal({ cycle })
+        setSubscribing(null)
+        return
+      }
+
       // Cupom de 100%: assinatura ativada gratuitamente, sem passar pelo checkout
       if (data.free && data.redirect) {
         window.location.href = data.redirect
         return
       }
 
-      const checkoutUrl = data.init_point || data.sandbox_init_point
+      const checkoutUrl = data.init_point
       if (checkoutUrl) {
         window.location.href = checkoutUrl
       } else {
@@ -256,6 +268,50 @@ export default function AssinaturaPage() {
     } finally {
       setSubscribing(null)
     }
+  }
+
+  const handleSaveDocument = async () => {
+    if (!documentModal) return
+    const clean = documentInput.replace(/\D/g, '')
+    if (clean.length !== 11 && clean.length !== 14) {
+      setDocumentError('Informe CPF (11 digitos) ou CNPJ (14 digitos).')
+      return
+    }
+    setSavingDocument(true)
+    setDocumentError(null)
+    try {
+      const result = await updateCompanyDocument(clean)
+      if ('error' in result) {
+        setDocumentError(result.error)
+        setSavingDocument(false)
+        return
+      }
+      const savedCycle = documentModal.cycle
+      setDocumentModal(null)
+      setDocumentInput('')
+      setSavingDocument(false)
+      await handleSubscribe(savedCycle)
+    } catch {
+      setDocumentError('Erro ao salvar. Tente novamente.')
+      setSavingDocument(false)
+    }
+  }
+
+  const formatDocumentInput = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '').slice(0, 14)
+    if (digits.length <= 11) {
+      // CPF: 000.000.000-00
+      return digits
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+    }
+    // CNPJ: 00.000.000/0000-00
+    return digits
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d{1,2})$/, '$1-$2')
   }
 
   const handleCancel = async () => {
@@ -396,6 +452,64 @@ export default function AssinaturaPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal CPF/CNPJ obrigatorio pro Asaas */}
+      {documentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10">
+                <CreditCard className="h-5 w-5 text-blue-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
+                CPF ou CNPJ
+              </h3>
+            </div>
+            <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+              Nossa plataforma de pagamento (Asaas) exige o CPF ou CNPJ do titular da conta pra emitir a cobranca. Informe abaixo para continuar.
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              value={documentInput}
+              onChange={(e) => {
+                setDocumentInput(formatDocumentInput(e.target.value))
+                if (documentError) setDocumentError(null)
+              }}
+              placeholder="000.000.000-00 ou 00.000.000/0000-00"
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            />
+            {documentError && (
+              <p className="mt-2 flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
+                <XCircle className="h-4 w-4 shrink-0" />
+                {documentError}
+              </p>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setDocumentModal(null)
+                  setDocumentInput('')
+                  setDocumentError(null)
+                }}
+                disabled={savingDocument}
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveDocument}
+                disabled={savingDocument}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingDocument && <Loader2 className="h-4 w-4 animate-spin" />}
+                Continuar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
