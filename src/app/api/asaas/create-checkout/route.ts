@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   createAsaasCheckout,
   createAsaasCustomer,
+  updateAsaasCustomer,
   isAsaasConfigured,
   asaasCheckoutUrl,
 } from '@/lib/asaas'
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     const { data: company } = await admin
       .from('companies')
-      .select('name, document, email, phone')
+      .select('name, document, email, phone, address, city, state, zip_code')
       .eq('id', companyId)
       .single()
 
@@ -142,6 +143,14 @@ export async function POST(request: NextRequest) {
 
     if (!company.document || company.document.replace(/\D/g, '').length < 11) {
       return NextResponse.json({ requiresDocument: true })
+    }
+
+    // Asaas exige endereco no customer pra checkout com parcelamento.
+    // Se a empresa nao preencheu, avisa a UI mandar o usuario ate /dashboard/empresa.
+    const hasAddress = !!company.address?.trim()
+    const hasCep = !!company.zip_code?.replace(/\D/g, '')
+    if (!hasAddress || !hasCep) {
+      return NextResponse.json({ requiresAddress: true })
     }
 
     const customerEmail = company.email || user.email
@@ -157,6 +166,16 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .maybeSingle()
 
+    // Companies nao tem addressNumber nem province (bairro) — usamos fallbacks:
+    // addressNumber "SN" (sem numero) e province = city como fallback.
+    // Asaas aceita ambos, testado ao vivo em 03/jul.
+    const addressPayload = {
+      postalCode: company.zip_code!,
+      address: company.address!.trim(),
+      addressNumber: 'SN',
+      province: company.city?.trim() || 'Centro',
+    }
+
     let customerId = lastSub?.asaas_customer_id ?? null
 
     if (!customerId) {
@@ -166,12 +185,25 @@ export async function POST(request: NextRequest) {
         email: customerEmail,
         phone: company.phone ?? undefined,
         externalReference: companyId,
+        ...addressPayload,
       })
       if ('asaasError' in customerResult) {
         console.error('[Asaas] createCustomer erro:', customerResult.asaasError)
         return NextResponse.json({ error: `Erro Asaas (customer): ${customerResult.asaasError}` }, { status: 502 })
       }
       customerId = customerResult.id
+    } else {
+      // Customer ja existe. Pode ter sido criado antes de a gente comecar a mandar
+      // endereco. Atualizamos pra garantir que address, postalCode etc estao la.
+      const updateResult = await updateAsaasCustomer(customerId, {
+        email: customerEmail,
+        phone: company.phone ?? undefined,
+        ...addressPayload,
+      })
+      if ('asaasError' in updateResult) {
+        console.warn('[Asaas] updateCustomer erro (nao fatal):', updateResult.asaasError)
+        // Nao bloqueia — se customer ja tinha endereco antes, checkout segue.
+      }
     }
 
     const host = request.headers.get('host') || 'www.lokagenda.com.br'

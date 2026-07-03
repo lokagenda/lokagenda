@@ -59,13 +59,24 @@ export interface CreateCustomerInput {
   email?: string
   phone?: string
   externalReference?: string
+  postalCode?: string
+  address?: string
+  addressNumber?: string
+  complement?: string
+  province?: string
 }
 
-/** Cria customer novo no Asaas. cpfCnpj obrigatorio (11 CPF ou 14 CNPJ). */
+/**
+ * Cria customer novo no Asaas. cpfCnpj obrigatorio (11 CPF ou 14 CNPJ).
+ * Address fields opcionais na criacao MAS obrigatorios pra checkout com
+ * parcelamento (Asaas retorna "O campo address deve existir para o customer
+ * informado" se ausente). Passar sempre que disponivel.
+ */
 export async function createAsaasCustomer(
   input: CreateCustomerInput,
 ): Promise<AsaasFetchResult<AsaasCustomer>> {
   const cleanDoc = input.cpfCnpj.replace(/\D/g, '')
+  const cleanCep = input.postalCode?.replace(/\D/g, '')
   return asaasFetch<AsaasCustomer>('/customers', {
     method: 'POST',
     body: JSON.stringify({
@@ -74,6 +85,37 @@ export async function createAsaasCustomer(
       email: input.email,
       phone: input.phone,
       externalReference: input.externalReference,
+      postalCode: cleanCep,
+      address: input.address,
+      addressNumber: input.addressNumber,
+      complement: input.complement,
+      province: input.province,
+    }),
+  })
+}
+
+/**
+ * Atualiza um customer Asaas existente. Usado quando o asaas_customer_id ja
+ * esta gravado na subscription mas o customer foi criado antes de a gente
+ * mandar endereco. Garante que address, postalCode, addressNumber e province
+ * estao presentes antes de tentar checkout com parcelamento.
+ */
+export async function updateAsaasCustomer(
+  customerId: string,
+  input: Partial<CreateCustomerInput>,
+): Promise<AsaasFetchResult<AsaasCustomer>> {
+  const cleanCep = input.postalCode?.replace(/\D/g, '')
+  return asaasFetch<AsaasCustomer>(`/customers/${encodeURIComponent(customerId)}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: input.name,
+      email: input.email,
+      phone: input.phone,
+      postalCode: cleanCep,
+      address: input.address,
+      addressNumber: input.addressNumber,
+      complement: input.complement,
+      province: input.province,
     }),
   })
 }

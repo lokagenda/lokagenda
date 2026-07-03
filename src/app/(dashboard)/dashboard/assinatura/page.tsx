@@ -251,6 +251,17 @@ export default function AssinaturaPage() {
         return
       }
 
+      // Asaas exige endereco no customer pra checkout com parcelamento.
+      // Se empresa nao preencheu, aponta pro cadastro.
+      if (data.requiresAddress) {
+        setMessage({
+          type: 'error',
+          text: 'Preencha o endereço completo da empresa (CEP, endereço, cidade) em Empresa antes de assinar. Isso é exigência do processador de pagamento.',
+        })
+        setSubscribing(null)
+        return
+      }
+
       // Cupom de 100%: assinatura ativada gratuitamente, sem passar pelo checkout
       if (data.free && data.redirect) {
         window.location.href = data.redirect
