@@ -89,7 +89,6 @@ export interface CreateCheckoutInput {
   value: number
   planTitle: string
   planDescription: string
-  cycle: 'MONTHLY' | 'SEMIANNUALLY' | 'YEARLY'
   maxInstallments: number
   externalReference: string
   successUrl: string
@@ -98,9 +97,24 @@ export interface CreateCheckoutInput {
 }
 
 /**
- * POST /v3/checkouts com chargeTypes RECURRENT. Cartao renova sozinho no
- * ciclo (MONTHLY/SEMIANNUALLY/YEARLY). Cliente escolhe cartao ou PIX na tela
- * hospedada do Asaas.
+ * POST /v3/checkouts com chargeTypes ["DETACHED","INSTALLMENT"] + installment.maxInstallmentCount.
+ *
+ * Formato validado ao vivo em 02/jul via curl+Playwright:
+ *   - Payload exato aceito pela API
+ *   - Checkout hosted apresenta seletor com "Pagar em 1x/2x/.../12x"
+ *   - 12x fica SEM JUROS porque Leo ativou "Parcelamento sem juros ao
+ *     comprador" no painel Asaas (Configuracoes -> Cobrancas)
+ *
+ * Modelo: cobranca unica parcelada. Igual ao MP anterior. Renovacao do
+ * proximo ciclo eh MANUAL (cliente volta em /dashboard/assinatura e clica
+ * Renovar) — mesma UX de antes.
+ *
+ * PIX temporariamente OFF: Leo precisa criar chave PIX no painel Asaas.
+ * Enquanto isso, so cartao.
+ *
+ * NAO usar chargeTypes RECURRENT: RECURRENT so aceita CREDIT_CARD sem
+ * parcelamento (installment eh proibido). Quebraria o "12x sem juros"
+ * que eh o valor comercial do plano anual.
  */
 export async function createAsaasCheckout(
   input: CreateCheckoutInput,
@@ -108,8 +122,8 @@ export async function createAsaasCheckout(
   return asaasFetch<AsaasCheckout>('/checkouts', {
     method: 'POST',
     body: JSON.stringify({
-      billingTypes: ['CREDIT_CARD', 'PIX'],
-      chargeTypes: ['RECURRENT'],
+      billingTypes: ['CREDIT_CARD'],
+      chargeTypes: ['DETACHED', 'INSTALLMENT'],
       minutesToExpire: 60,
       callback: {
         successUrl: input.successUrl,
@@ -125,9 +139,6 @@ export async function createAsaasCheckout(
           value: input.value,
         },
       ],
-      subscription: {
-        cycle: input.cycle,
-      },
       installment: {
         maxInstallmentCount: input.maxInstallments,
       },
@@ -149,7 +160,7 @@ export function asaasCheckoutUrl(checkout: AsaasCheckout | string): string {
   return `https://www.asaas.com/checkoutSession/show/${encodeURIComponent(checkout.id)}`
 }
 
-/** Mapeia billing_cycle interno pro cycle do Asaas. */
+/** Mapeia billing_cycle interno pro cycle do Asaas (nao usado no modelo DETACHED atual — mantido pra fallback futuro se voltar pra RECURRENT). */
 export function toAsaasCycle(billingCycle: 'monthly' | 'semiannual' | 'annual'): 'MONTHLY' | 'SEMIANNUALLY' | 'YEARLY' {
   switch (billingCycle) {
     case 'monthly':

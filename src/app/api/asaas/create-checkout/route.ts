@@ -5,7 +5,6 @@ import {
   createAsaasCheckout,
   createAsaasCustomer,
   isAsaasConfigured,
-  toAsaasCycle,
   asaasCheckoutUrl,
 } from '@/lib/asaas'
 import { getPlanPrice, getCycleLabel } from '@/lib/plans'
@@ -189,7 +188,6 @@ export async function POST(request: NextRequest) {
       value: price,
       planTitle: `${typedPlan.name} - ${cycleLabel}`,
       planDescription: typedPlan.description || `Plano ${typedPlan.name}`,
-      cycle: toAsaasCycle(billingCycle),
       maxInstallments,
       externalReference: externalRef,
       successUrl: `${appUrl}/dashboard/assinatura?status=success`,

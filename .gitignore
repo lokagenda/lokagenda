@@ -53,3 +53,6 @@ AGENTS.md
 
 # OS
 Thumbs.db
+
+# Playwright MCP session artifacts (temp)
+.playwright-mcp/
