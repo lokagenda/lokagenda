@@ -136,9 +136,17 @@ export async function createAsaasCheckout(
   })
 }
 
-/** URL do checkout hosted a partir do checkoutId. */
-export function asaasCheckoutUrl(checkoutId: string): string {
-  return `https://asaas.com/checkoutSession/show?id=${encodeURIComponent(checkoutId)}`
+/**
+ * URL do checkout hosted a partir de um AsaasCheckout ou checkoutId.
+ * Prefere o `link` retornado pelo Asaas (formato definitivo). Fallback pro
+ * path builder correto (`/show/{id}`), testado empiricamente em 02/jul.
+ */
+export function asaasCheckoutUrl(checkout: AsaasCheckout | string): string {
+  if (typeof checkout === 'string') {
+    return `https://www.asaas.com/checkoutSession/show/${encodeURIComponent(checkout)}`
+  }
+  if (checkout.link) return checkout.link
+  return `https://www.asaas.com/checkoutSession/show/${encodeURIComponent(checkout.id)}`
 }
 
 /** Mapeia billing_cycle interno pro cycle do Asaas. */

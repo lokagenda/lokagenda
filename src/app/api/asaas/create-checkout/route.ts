@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      init_point: asaasCheckoutUrl(checkoutResult.id),
+      init_point: asaasCheckoutUrl(checkoutResult),
     })
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error)
