@@ -796,6 +796,7 @@ export interface Database {
           asaas_customer_id: string | null;
           asaas_subscription_id: string | null;
           asaas_checkout_id: string | null;
+          asaas_installment_id: string | null;
           trial_ends_at: string | null;
           current_period_start: string | null;
           current_period_end: string | null;
@@ -817,6 +818,7 @@ export interface Database {
           asaas_customer_id?: string | null;
           asaas_subscription_id?: string | null;
           asaas_checkout_id?: string | null;
+          asaas_installment_id?: string | null;
           trial_ends_at?: string | null;
           current_period_start?: string | null;
           current_period_end?: string | null;
@@ -838,6 +840,7 @@ export interface Database {
           asaas_customer_id?: string | null;
           asaas_subscription_id?: string | null;
           asaas_checkout_id?: string | null;
+          asaas_installment_id?: string | null;
           trial_ends_at?: string | null;
           current_period_start?: string | null;
           current_period_end?: string | null;

@@ -234,9 +234,18 @@ export async function POST(request: NextRequest) {
 
     const now = new Date()
     if (lastSub?.id) {
+      // Atualiza billing_cycle + plan + current_price esperado da sub. Sem isso,
+      // sub existente (ex: trial mensal padrao) fica com billing_cycle="monthly"
+      // mesmo se cliente escolheu anual — e o webhook aciona resolveRef que le
+      // esses campos da sub como fonte de verdade quando externalReference vem
+      // null (parcelamento).
       await admin
         .from('subscriptions')
         .update({
+          plan_id: planId,
+          billing_cycle: billingCycle,
+          current_price: price,
+          coupon_code: appliedCouponCode,
           asaas_customer_id: customerId,
           asaas_checkout_id: checkoutResult.id,
           updated_at: now.toISOString(),

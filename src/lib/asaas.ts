@@ -151,8 +151,7 @@ export interface CreateCheckoutInput {
  * proximo ciclo eh MANUAL (cliente volta em /dashboard/assinatura e clica
  * Renovar) — mesma UX de antes.
  *
- * PIX temporariamente OFF: Leo precisa criar chave PIX no painel Asaas.
- * Enquanto isso, so cartao.
+ * PIX ligado desde 03/jul (Leo cadastrou chave aleatoria no painel Asaas).
  *
  * NAO usar chargeTypes RECURRENT: RECURRENT so aceita CREDIT_CARD sem
  * parcelamento (installment eh proibido). Quebraria o "12x sem juros"
@@ -164,7 +163,7 @@ export async function createAsaasCheckout(
   return asaasFetch<AsaasCheckout>('/checkouts', {
     method: 'POST',
     body: JSON.stringify({
-      billingTypes: ['CREDIT_CARD'],
+      billingTypes: ['CREDIT_CARD', 'PIX'],
       chargeTypes: ['DETACHED', 'INSTALLMENT'],
       minutesToExpire: 60,
       callback: {
