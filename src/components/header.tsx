@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { updateMyProfileName } from '@/actions/company'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationBell } from '@/components/notification-bell'
+import { PWAInstallButton } from '@/components/pwa-install-button'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 
@@ -160,6 +161,7 @@ export function Header({ userName, avatarUrl }: HeaderProps) {
 
       {/* Right: theme toggle + user dropdown */}
       <div className="flex items-center gap-2">
+        <PWAInstallButton />
         <NotificationBell />
         <ThemeToggle />
         <div className="relative" ref={dropdownRef}>
