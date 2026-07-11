@@ -359,11 +359,13 @@ export async function listCampaigns() {
 
 // Garante janela de horário coerente (0-23, início < fim). Default 8h-20h.
 function sanitizeWindow(start?: number, end?: number): { start: number; end: number } {
-  let s = Number.isFinite(start) ? Math.min(23, Math.max(0, Math.round(start as number))) : 8
-  let e = Number.isFinite(end) ? Math.min(23, Math.max(1, Math.round(end as number))) : 20
+  // Janela padrao 10h-18h (anti-ban): evita horas comerciais borderline e
+  // parece mais humano que 8h-20h. Ajustado apos incidente de bloqueio 10/jul.
+  let s = Number.isFinite(start) ? Math.min(23, Math.max(0, Math.round(start as number))) : 10
+  let e = Number.isFinite(end) ? Math.min(23, Math.max(1, Math.round(end as number))) : 18
   if (e <= s) {
-    s = 8
-    e = 20
+    s = 10
+    e = 18
   }
   return { start: s, end: e }
 }
@@ -384,7 +386,7 @@ export async function createCampaign(data: {
   if (!data.message_template?.trim()) return { error: 'Mensagem é obrigatória' }
 
   const dailyLimit =
-    data.daily_limit && data.daily_limit > 0 ? Math.min(data.daily_limit, 1000) : 50
+    data.daily_limit && data.daily_limit > 0 ? Math.min(data.daily_limit, 50) : 20
   const win = sanitizeWindow(data.send_window_start, data.send_window_end)
 
   const { data: campaign, error } = await supabase
@@ -435,7 +437,7 @@ export async function updateCampaign(
   if (data.ai_enabled !== undefined) update.ai_enabled = data.ai_enabled
   if (data.ai_prompt !== undefined) update.ai_prompt = data.ai_prompt?.trim() || null
   if (data.daily_limit !== undefined) {
-    update.daily_limit = data.daily_limit > 0 ? Math.min(data.daily_limit, 1000) : 50
+    update.daily_limit = data.daily_limit > 0 ? Math.min(data.daily_limit, 50) : 20
   }
   if (data.send_window_start !== undefined || data.send_window_end !== undefined) {
     const win = sanitizeWindow(data.send_window_start, data.send_window_end)
@@ -592,6 +594,57 @@ export async function startCampaign(
 
   revalidatePath('/dashboard/marketing')
   return { success: true, queued: queueRows.length }
+}
+
+/**
+ * Reenvia SO pros contatos que falharam nessa campanha.
+ * UPDATE campaign_queue SET status='pending' WHERE campaign_id=? AND status='failed'.
+ * NAO toca em quem ja foi entregue (status='sent'). NAO insere linhas novas
+ * — reaproveita as mesmas linhas de queue. O cron pega os pending naturalmente.
+ *
+ * Contexto: quando o WhatsApp bloqueia mid-campanha, muitos contatos falham
+ * e nao sao retentados automaticamente. Antes desta acao, a unica forma era
+ * UPDATE direto no banco.
+ */
+export async function resendFailedCampaign(campaignId: string) {
+  const supabase = await createClient()
+  const { companyId } = await getCompanyId(supabase)
+
+  const { data: campaign } = await supabase
+    .from('campaigns')
+    .select('id, status')
+    .eq('id', campaignId)
+    .eq('company_id', companyId)
+    .single()
+
+  if (!campaign) return { error: 'Campanha nao encontrada' }
+
+  const { data: reset, error: resetErr } = await supabase
+    .from('campaign_queue')
+    .update({ status: 'pending', error_message: null, sent_at: null })
+    .eq('campaign_id', campaignId)
+    .eq('company_id', companyId)
+    .eq('status', 'failed')
+    .select('id')
+
+  if (resetErr) return { error: resetErr.message }
+
+  const requeued = reset?.length ?? 0
+  if (requeued === 0) {
+    return { success: true, requeued: 0, message: 'Nenhuma falha pra reenviar.' }
+  }
+
+  const { error: statusErr } = await supabase
+    .from('campaigns')
+    .update({ status: 'running' })
+    .eq('id', campaignId)
+    .eq('company_id', companyId)
+
+  if (statusErr) return { error: statusErr.message }
+
+  revalidatePath('/dashboard/marketing')
+  revalidatePath('/admin/marketing')
+  return { success: true, requeued }
 }
 
 export async function pauseCampaign(id: string) {

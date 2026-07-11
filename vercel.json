@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/campaigns",
-      "schedule": "*/3 * * * *"
+      "schedule": "0 5 30 2 *"
     },
     {
       "path": "/api/cron/group-messages",
@@ -22,11 +22,11 @@
     },
     {
       "path": "/api/cron/reactivate-leads",
-      "schedule": "0 * * * *"
+      "schedule": "0 5 30 2 *"
     },
     {
       "path": "/api/cron/reactivate-queue",
-      "schedule": "*/3 * * * *"
+      "schedule": "0 5 30 2 *"
     },
     {
       "path": "/api/cron/zapi-poll-takeovers",

@@ -19,6 +19,7 @@ import {
   Copy,
   Pencil,
   Check,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +41,7 @@ import {
   duplicateCampaign,
   deleteCampaign,
   startCampaign,
+  resendFailedCampaign,
   pauseCampaign,
   resumeCampaign,
   getCampaignStats,
@@ -917,6 +919,21 @@ function CampanhasTab() {
     })
   }
 
+  const handleResendFailed = (id: string, failedCount: number) => {
+    if (!confirm(`Reenviar mensagem pra ${failedCount} contatos que falharam? Nao vai reenviar pra quem ja recebeu.`)) return
+    startTransition(async () => {
+      const res = await resendFailedCampaign(id)
+      if (res.error) {
+        toast.error(res.error)
+      } else if (res.requeued === 0) {
+        toast(res.message || 'Nenhuma falha pra reenviar.')
+      } else {
+        toast.success(`${res.requeued} falhas voltaram pra fila. O cron vai enviar respeitando o limite diario.`)
+        load()
+      }
+    })
+  }
+
   const handleDelete = (id: string) => {
     if (!confirm('Excluir esta campanha e sua fila de envio?')) return
     startTransition(async () => {
@@ -1055,6 +1072,19 @@ function CampanhasTab() {
                       <Button size="sm" onClick={() => handleResume(c.id)} disabled={isPending}>
                         <Send className="h-4 w-4" />
                         Retomar
+                      </Button>
+                    )}
+                    {s && s.failed > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleResendFailed(c.id, s.failed)}
+                        disabled={isPending}
+                        title="Reenviar mensagem so pros contatos que falharam. Nao reenvia pra quem ja recebeu."
+                        className="border-amber-500/30 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        Reenviar falhas ({s.failed})
                       </Button>
                     )}
                     <Button size="sm" variant="outline" onClick={() => openCampaignEdit(c)} disabled={isPending} title="Editar nome, mensagem, IA, janela e limite">

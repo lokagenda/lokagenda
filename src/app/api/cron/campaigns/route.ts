@@ -7,13 +7,15 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp-api/sender'
 export const maxDuration = 300
 
 // Anti-ban tuning -----------------------------------------------------------
-// Os disparos são DISTRIBUÍDOS ao longo da janela diária da campanha (ex.: 8h-20h),
+// Os disparos são DISTRIBUÍDOS ao longo da janela diária da campanha (ex.: 10h-18h),
 // não em rajada. A cada execução o robô calcula quantos "deveriam" já ter saído
 // até agora e manda só a diferença, respeitando o limite diário.
+//
+// Delays aumentados em 10/jul/2026 apos incidente de bloqueio do WhatsApp
+// do Leo (mandava a cada 8-20s = padrao de rajada suspeito).
 const MAX_PER_RUN = 12 // teto global por execução (todas as campanhas)
-const MAX_PER_CAMPAIGN_PER_RUN = 4 // teto por campanha por execução (catch-up suave)
-const MIN_DELAY_MS = 8000
-const MAX_DELAY_MS = 20000
+const MIN_DELAY_MS = 30000 // 30s minimo
+const MAX_DELAY_MS = 60000 // 60s maximo
 const BRT_OFFSET_MS = 3 * 60 * 60 * 1000 // Brasília = UTC-3
 
 function sleep(ms: number) {
