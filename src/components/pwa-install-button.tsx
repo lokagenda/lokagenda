@@ -61,13 +61,26 @@ export function PWAInstallButton() {
     setPlatform(detectPlatform())
 
     const standaloneMedia = window.matchMedia('(display-mode: standalone)')
-    setInPWA(standaloneMedia.matches)
+    setInPWA(standaloneMedia.matches || !!window.__pwaInstalled)
     const onChange = (e: MediaQueryListEvent) => setInPWA(e.matches)
     standaloneMedia.addEventListener('change', onChange)
+
+    // Le o cache global setado pelo PWARegister — o evento
+    // `beforeinstallprompt` provavelmente ja foi capturado em /login antes
+    // deste componente montar. Sem esse lookup, prompt nativo eh perdido.
+    if (window.__pwaInstallPrompt) {
+      setDeferredPrompt(window.__pwaInstallPrompt)
+    }
 
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)
+    }
+    // CustomEvent do PWARegister — dispara depois que ele captura o evento.
+    const handleInstallReady = () => {
+      if (window.__pwaInstallPrompt) {
+        setDeferredPrompt(window.__pwaInstallPrompt)
+      }
     }
     const handleInstalled = () => {
       setDeferredPrompt(null)
@@ -75,12 +88,16 @@ export function PWAInstallButton() {
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall)
+    window.addEventListener('pwa:install-ready', handleInstallReady)
     window.addEventListener('appinstalled', handleInstalled)
+    window.addEventListener('pwa:installed', handleInstalled)
 
     return () => {
       standaloneMedia.removeEventListener('change', onChange)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
+      window.removeEventListener('pwa:install-ready', handleInstallReady)
       window.removeEventListener('appinstalled', handleInstalled)
+      window.removeEventListener('pwa:installed', handleInstalled)
     }
   }, [])
 
@@ -163,17 +180,26 @@ export function PWAInstallButton() {
             )}
 
             {platform === 'desktop-chromium' && (
-              <ol className="mb-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-                <li>
-                  1. Na barra de endereco, clique no icone de <strong>Instalar</strong> (parece um monitor
-                  com seta pra baixo).
-                </li>
-                <li>
-                  2. Se nao aparecer, va no menu (3 pontinhos) &gt; <strong>Salvar e compartilhar</strong>
-                  {' '}&gt; <strong>Instalar LokAgenda</strong>.
-                </li>
-                <li>3. Confirma. O app abre em janela propria e cria atalho.</li>
-              </ol>
+              <>
+                <ol className="mb-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+                  <li>
+                    1. Na barra de endereco, clique no icone de <strong>Instalar</strong> (parece um monitor
+                    com seta pra baixo).
+                  </li>
+                  <li>
+                    2. Se nao aparecer, va no menu (3 pontinhos) &gt; <strong>Salvar e compartilhar</strong>
+                    {' '}&gt; <strong>Instalar LokAgenda</strong>.
+                  </li>
+                  <li>3. Confirma. O app abre em janela propria e cria atalho.</li>
+                </ol>
+                <p className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-400">
+                  <strong>Ja instalou antes?</strong> Se o prompt automatico nao voltou, cola{' '}
+                  <code className="rounded bg-zinc-200 px-1 dark:bg-zinc-700">chrome://apps</code> (ou{' '}
+                  <code className="rounded bg-zinc-200 px-1 dark:bg-zinc-700">edge://apps</code>) na barra
+                  de endereco, clica com botao direito no LokAgenda &gt; <strong>Remover</strong>, e
+                  recarrega esta pagina.
+                </p>
+              </>
             )}
 
             {platform === 'desktop-safari' && (
