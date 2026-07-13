@@ -2,6 +2,7 @@
 
 import { Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Portal } from '@/components/ui/portal'
 
 /**
  * Botao "Instalar app" pro header do dashboard.
@@ -122,14 +123,15 @@ export function PWAInstallButton() {
       </button>
 
       {showHint && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
-          onClick={() => setShowHint(false)}
-        >
+        <Portal>
           <div
-            className="mx-4 mb-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 sm:mb-0"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+            onClick={() => setShowHint(false)}
           >
+            <div
+              className="mx-4 mb-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 sm:mb-0"
+              onClick={(e) => e.stopPropagation()}
+            >
             <h3 className="mb-3 text-base font-semibold text-zinc-900 dark:text-white">
               {hintTitle}
             </h3>
@@ -196,8 +198,9 @@ export function PWAInstallButton() {
             >
               Entendi
             </button>
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
     </>
   )
