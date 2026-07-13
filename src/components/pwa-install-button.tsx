@@ -36,7 +36,9 @@ type Platform = 'ios' | 'android' | 'desktop-chromium' | 'desktop-safari' | 'oth
 function detectPlatform(): Platform {
   if (typeof window === 'undefined') return 'other'
   const ua = window.navigator.userAgent.toLowerCase()
-  const isIOS = /iphone|ipad|ipod/.test(ua) && !/crios|fxios|edgios/.test(ua)
+  // iOS eh iOS pra qualquer browser (Safari, Chrome, Firefox, Edge — todos
+  // usam o mesmo Add to Home Screen do WebKit, ninguem tem beforeinstallprompt).
+  const isIOS = /iphone|ipad|ipod/.test(ua) || (ua.includes('mac') && 'ontouchend' in document)
   if (isIOS) return 'ios'
   const isAndroid = /android/.test(ua)
   if (isAndroid) return 'android'

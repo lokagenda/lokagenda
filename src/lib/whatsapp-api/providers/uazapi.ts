@@ -54,10 +54,19 @@ export class UazapiClient implements WhatsAppProviderClient {
       if (res.ok) {
         return { success: true, provider_response: data }
       }
+      // UazAPI as vezes retorna { error: true, message: "..." } — pegar boolean
+      // aqui salvava a string "true" no banco (bug encontrado 13/jul). Extrai
+      // texto do error so se for string, senao cai pra message ou HTTP.
+      const errorText =
+        typeof data?.error === 'string' && data.error.length > 0
+          ? data.error
+          : typeof data?.message === 'string' && data.message.length > 0
+            ? data.message
+            : `HTTP ${res.status}`
       return {
         success: false,
         provider_response: data,
-        error: data?.error || data?.message || `HTTP ${res.status}`,
+        error: errorText,
       }
     } catch (err) {
       return {
