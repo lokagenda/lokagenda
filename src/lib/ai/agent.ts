@@ -221,8 +221,14 @@ Diretrizes:
 
 /**
  * Gera UMA mensagem proativa de follow-up para um lead de campanha que ficou em
- * silêncio (robô de reativação 24h). Não há mensagem de entrada do lead — a IA
- * retoma a conversa com base no histórico e no script da campanha.
+ * silêncio. Não há mensagem de entrada do lead — a IA retoma a conversa com
+ * base no histórico e no script da campanha.
+ *
+ * Stages:
+ *   1 (default) = primeiro toque, ~2 dias de silêncio. Tom leve, curioso,
+ *     sem pressão. Pergunta se ficou dúvida ou se pode ajustar algo.
+ *   2 = segundo (e ÚLTIMO) toque, ~5 dias total. Tom respeitoso de despedida
+ *     — dá saída elegante. Não volta mais depois desse.
  *
  * Retorna o texto, ou `null` quando: sem API key, erro, ou a IA decidir que não
  * vale insistir (responde "PULAR").
@@ -230,12 +236,14 @@ Diretrizes:
 export async function generateReengagementMessage(
   companyId: string,
   contactPhone: string,
-  campaignPrompt: string
+  campaignPrompt: string,
+  options: { stage?: 1 | 2 } = {}
 ): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
 
   const admin = createAdminClient()
+  const stage = options.stage ?? 1
 
   try {
     // Histórico recente (pode estar vazio se o lead nunca respondeu à campanha).
@@ -251,7 +259,12 @@ export async function generateReengagementMessage(
       .reverse()
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
-    const systemPrompt = `${CAMPAIGN_BASE_SALES}\n\nScript e instruções desta campanha (siga à risca):\n${campaignPrompt.trim()}\n\n[CONTROLE INTERNO — NUNCA mostre isto ao lead] O lead não respondeu sua última mensagem há mais de 24 horas. Escreva UMA única mensagem curta, leve e educada para retomar a conversa de forma natural — sem cobrar, sem soar automático e sem repetir o que já foi dito. Se claramente não fizer sentido insistir (ex.: o lead já recusou ou pediu para parar), responda APENAS com a palavra PULAR.`
+    const stageInstruction =
+      stage === 1
+        ? '[CONTROLE INTERNO — NUNCA mostre isto ao lead] O lead nao respondeu sua ultima mensagem ha ~2 dias. Este eh o PRIMEIRO toque de follow-up. Escreva UMA unica mensagem curta e leve pra retomar de forma natural — sem cobrar, sem soar automatico, sem repetir o que ja foi dito. Pergunta aberta se ficou duvida ou se pode ajustar algo. Se claramente nao fizer sentido insistir (lead ja recusou/pediu pra parar), responda APENAS PULAR.'
+        : '[CONTROLE INTERNO — NUNCA mostre isto ao lead] O lead segue em silencio ha ~5 dias no total. Este eh o SEGUNDO e ULTIMO toque — nao volta mais depois desse. Escreva UMA unica mensagem curta com tom respeitoso de despedida: pergunta se ainda faz sentido conversar ou se pode encerrar por aqui. De uma saida elegante pra ele responder sim/nao sem pressao. Se ja fica obvio que nao vai voltar, responda APENAS PULAR.'
+
+    const systemPrompt = `${CAMPAIGN_BASE_SALES}\n\nScript e instruções desta campanha (siga à risca):\n${campaignPrompt.trim()}\n\n${stageInstruction}`
 
     // Sem mensagem de entrada: um cue interno fecha o turno para a IA gerar o
     // follow-up. Esse cue NÃO é salvo na memória.

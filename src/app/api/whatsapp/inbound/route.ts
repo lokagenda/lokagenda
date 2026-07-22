@@ -3,6 +3,8 @@ import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizePhone } from '@/lib/whatsapp-api/sender'
 import { processWithDebounce } from '@/lib/ai/debounce'
+import { transcribeAudio, isTranscribeConfigured } from '@/lib/ai/transcribe'
+import { UazapiClient } from '@/lib/whatsapp-api/providers/uazapi'
 
 /**
  * Webhook de entrada da Z-API ("on-message-received").
@@ -63,6 +65,9 @@ interface NormalizedInbound {
   isNewsletter: boolean
   wasSentByApi: boolean
   source: 'z_api' | 'uazapi' | 'unknown'
+  // Media (audio) — populado apenas quando payload eh audio/ptt do UazAPI.
+  messageType: string | null
+  messageId: string | null
 }
 
 /**
@@ -92,6 +97,8 @@ function normalizeInbound(raw: unknown): NormalizedInbound | null {
       isNewsletter: false,
       wasSentByApi: d.wasSentByApi === true,
       source: 'uazapi',
+      messageType: typeof d.messageType === 'string' ? d.messageType : null,
+      messageId: typeof d.messageid === 'string' ? d.messageid : null,
     }
   }
 
@@ -108,6 +115,8 @@ function normalizeInbound(raw: unknown): NormalizedInbound | null {
       isNewsletter: z.isNewsletter === true,
       wasSentByApi: false,
       source: 'z_api',
+      messageType: null,
+      messageId: null,
     }
   }
 
@@ -233,9 +242,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, skipped: 'globally_paused' })
     }
 
-    const incomingText = norm.text
+    let incomingText = norm.text
+
+    // Suporte a áudio (voice note): UazAPI entrega messageType='audio'/'ptt'
+    // sem texto. Baixamos o binário e transcrevemos via Groq Whisper — texto
+    // resultante entra no fluxo normal. Feature ativa apenas quando
+    // GROQ_API_KEY está setada e provider é uazapi.
+    if (
+      !incomingText &&
+      norm.source === 'uazapi' &&
+      norm.messageId &&
+      norm.messageType &&
+      /audio|ptt|voice/i.test(norm.messageType) &&
+      isTranscribeConfigured()
+    ) {
+      try {
+        const { data: waCfg } = await admin
+          .from('whatsapp_config')
+          .select('provider, api_url, api_key, instance_id, phone_number_id, active')
+          .eq('active', true)
+          .eq('provider', 'uazapi')
+          .limit(1)
+          .maybeSingle()
+        if (waCfg?.api_url && waCfg?.api_key) {
+          const uaz = new UazapiClient({
+            provider: 'uazapi',
+            api_url: waCfg.api_url,
+            api_key: waCfg.api_key,
+            instance_id: waCfg.instance_id ?? null,
+            phone_number_id: waCfg.phone_number_id ?? null,
+          })
+          const media = await uaz.downloadMedia(norm.messageId)
+          const stt = await transcribeAudio(media.buffer, media.mimeType, media.filename)
+          if (stt.ok) {
+            incomingText = stt.text
+            console.log('[inbound/audio] transcrito phone=' + phone + ' chars=' + stt.text.length)
+          } else {
+            console.warn('[inbound/audio] falha transcricao phone=' + phone + ' err=' + stt.error)
+            // Nao trava o fluxo — segue sem texto e cai no gate abaixo.
+          }
+        }
+      } catch (err) {
+        console.error('[inbound/audio] excecao phone=' + phone, err)
+      }
+    }
+
     if (!incomingText) {
-      // Sem texto (ex.: mídia, status): ignorar.
+      // Sem texto (ex.: mídia sem transcrição, status): ignorar.
       return NextResponse.json({ received: true })
     }
 
@@ -307,6 +360,11 @@ export async function POST(request: NextRequest) {
       const pausedActive = pausedUntilMs > nowMs
       console.log('[inbound/contact] phone=' + phone + ' status=' + contact.status + ' ai_paused_until=' + (contact.ai_paused_until ?? 'null') + ' pausedActive=' + pausedActive + ' diffMs=' + (pausedUntilMs - nowMs))
 
+      // last_inbound_at = "cliente respondeu agora" (autoritativo pra
+      // follow-up 2d/5d, ao contrario de last_message_at que soma inbound
+      // e outbound).
+      const nowIsoInbound = new Date().toISOString()
+
       // Gate 1 — Léo pausou a IA pra esse contato manualmente (botão "Pausar IA"
       // ou via comando inline "Nick, eu respondo").
       if (pausedActive) {
@@ -314,8 +372,9 @@ export async function POST(request: NextRequest) {
         await admin
           .from('campaign_contacts')
           .update({
-            last_message_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            last_message_at: nowIsoInbound,
+            last_inbound_at: nowIsoInbound,
+            updated_at: nowIsoInbound,
           })
           .eq('id', contact.id)
         return NextResponse.json({ received: true, skipped: 'contact_paused' })
@@ -329,8 +388,9 @@ export async function POST(request: NextRequest) {
         await admin
           .from('campaign_contacts')
           .update({
-            last_message_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            last_message_at: nowIsoInbound,
+            last_inbound_at: nowIsoInbound,
+            updated_at: nowIsoInbound,
           })
           .eq('id', contact.id)
         return NextResponse.json({ received: true, skipped: `status_${contact.status}` })
@@ -342,8 +402,9 @@ export async function POST(request: NextRequest) {
         .from('campaign_contacts')
         .update({
           status: 'contacted',
-          last_message_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          last_message_at: nowIsoInbound,
+          last_inbound_at: nowIsoInbound,
+          updated_at: nowIsoInbound,
         })
         .eq('id', contact.id)
     }
