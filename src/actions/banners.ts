@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 async function getAuthenticatedProfile() {
@@ -52,7 +53,9 @@ export async function createBanner(formData: FormData) {
   const fileExt = imageFile.name.split('.').pop()
   const fileName = `${companyId}/${crypto.randomUUID()}.${fileExt}`
 
-  const { error: uploadError } = await supabase.storage
+  // Admin client pra upload — ver src/actions/contracts.ts uploadContractPdf.
+  const admin = createAdminClient()
+  const { error: uploadError } = await admin.storage
     .from('banners')
     .upload(fileName, imageFile, {
       cacheControl: '3600',
@@ -106,11 +109,12 @@ export async function updateBanner(id: string, formData: FormData) {
   let imageUrl: string | null = existing.image_url
 
   if (imageFile && imageFile.size > 0) {
-    // Upload new image
+    // Upload new image (admin client — bypassa RLS)
     const fileExt = imageFile.name.split('.').pop()
     const fileName = `${companyId}/${crypto.randomUUID()}.${fileExt}`
 
-    const { error: uploadError } = await supabase.storage
+    const admin = createAdminClient()
+    const { error: uploadError } = await admin.storage
       .from('banners')
       .upload(fileName, imageFile, {
         cacheControl: '3600',
@@ -123,7 +127,7 @@ export async function updateBanner(id: string, formData: FormData) {
 
     const {
       data: { publicUrl },
-    } = supabase.storage.from('banners').getPublicUrl(fileName)
+    } = admin.storage.from('banners').getPublicUrl(fileName)
 
     // Remove old image
     if (existing.image_url) {

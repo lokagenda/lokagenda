@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -103,7 +104,11 @@ export async function updateCompany(formData: FormData) {
     const fileExt = logoFile.name.split('.').pop()
     const fileName = `${companyId}/logo.${fileExt}`
 
-    const { error: uploadError } = await supabase.storage
+    // Admin client pra upload — bypassa RLS (auth ja validada em
+    // getAuthenticatedProfile). Ver src/actions/contracts.ts uploadContractPdf
+    // pra contexto do bug de refresh de sessao que motivou esta mudanca.
+    const admin = createAdminClient()
+    const { error: uploadError } = await admin.storage
       .from('logos')
       .upload(fileName, logoFile, {
         cacheControl: '3600',
@@ -116,7 +121,7 @@ export async function updateCompany(formData: FormData) {
 
     const {
       data: { publicUrl },
-    } = supabase.storage.from('logos').getPublicUrl(fileName)
+    } = admin.storage.from('logos').getPublicUrl(fileName)
 
     logoUrl = publicUrl
   }

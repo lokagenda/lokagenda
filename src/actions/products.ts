@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -53,7 +54,13 @@ export async function createProduct(formData: FormData) {
     const fileExt = imageFile.name.split('.').pop()
     const fileName = `${companyId}/${crypto.randomUUID()}.${fileExt}`
 
-    const { error: uploadError } = await supabase.storage
+    // Usa admin client pra upload (bypassa RLS). Auth ja foi validada em
+    // getAuthenticatedProfile — antes o upload direto pelo user client
+    // falhava quando sessao Supabase estava sendo refreshed no meio do
+    // request (auth.role virava 'anon', RLS bloqueava). Bug reportado
+    // por Mundo Kids 012 em 27/jul.
+    const admin = createAdminClient()
+    const { error: uploadError } = await admin.storage
       .from('products')
       .upload(fileName, imageFile, {
         cacheControl: '3600',
@@ -66,7 +73,7 @@ export async function createProduct(formData: FormData) {
 
     const {
       data: { publicUrl },
-    } = supabase.storage.from('products').getPublicUrl(fileName)
+    } = admin.storage.from('products').getPublicUrl(fileName)
 
     imageUrl = publicUrl
   }
@@ -131,7 +138,9 @@ export async function updateProduct(id: string, formData: FormData) {
     const fileExt = imageFile.name.split('.').pop()
     const fileName = `${companyId}/${crypto.randomUUID()}.${fileExt}`
 
-    const { error: uploadError } = await supabase.storage
+    // Admin client pra upload — ver comentario em createProduct.
+    const admin = createAdminClient()
+    const { error: uploadError } = await admin.storage
       .from('products')
       .upload(fileName, imageFile, {
         cacheControl: '3600',
@@ -144,7 +153,7 @@ export async function updateProduct(id: string, formData: FormData) {
 
     const {
       data: { publicUrl },
-    } = supabase.storage.from('products').getPublicUrl(fileName)
+    } = admin.storage.from('products').getPublicUrl(fileName)
 
     imageUrl = publicUrl
   }

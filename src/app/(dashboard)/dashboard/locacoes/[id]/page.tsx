@@ -7,7 +7,7 @@ import { use } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { updateRentalStatus, cancelRental, deleteRental, recordPayment } from '@/actions/rentals'
-import { generateContract, saveSignatures, saveContractPdf } from '@/actions/contracts'
+import { generateContract, saveSignatures, saveContractPdf, uploadContractPdf } from '@/actions/contracts'
 import { getCompanySignature } from '@/actions/company'
 import { buildFullAddress, getGoogleMapsUrl, getWazeUrl } from '@/lib/maps'
 import { getWhatsAppUrl } from '@/lib/whatsapp'
@@ -389,27 +389,24 @@ export default function LocacaoDetailPage({
   async function uploadPdfAndSaveUrl(blob: Blob): Promise<string | null> {
     if (!rental) return null
     try {
-      const supabase = createClient()
-      const filePath = `${rental.company_id}/${rental.id}.pdf`
+      // Converte Blob pra base64 pra enviar via server action (admin client
+      // bypassa RLS — antes o upload direto do browser falhava quando sessao
+      // Supabase estava sendo refreshed, ver src/actions/contracts.ts).
+      const arrayBuffer = await blob.arrayBuffer()
+      let binary = ''
+      const bytes = new Uint8Array(arrayBuffer)
+      const chunkSize = 8192
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)))
+      }
+      const pdfBase64 = btoa(binary)
 
-      const { error: uploadError } = await supabase.storage
-        .from('contracts')
-        .upload(filePath, blob, {
-          contentType: 'application/pdf',
-          upsert: true,
-        })
-
-      if (uploadError) {
-        console.error('Erro ao fazer upload do PDF:', uploadError)
+      const result = await uploadContractPdf(rental.id, pdfBase64)
+      if ('error' in result) {
+        console.error('Erro ao fazer upload do PDF:', result.error)
         return null
       }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('contracts')
-        .getPublicUrl(filePath)
-
-      const pdfUrl = publicUrlData.publicUrl
-      await saveContractPdf(rental.id, pdfUrl)
+      const pdfUrl = result.pdfUrl!
       setRental((prev) => prev ? { ...prev, contract_pdf_url: pdfUrl } : prev)
       return pdfUrl
     } catch (err) {

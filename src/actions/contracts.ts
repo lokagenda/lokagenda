@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { replaceVariables } from '@/lib/contract'
@@ -264,6 +265,84 @@ export async function generateContract(rentalId: string) {
 
   revalidatePath(`/dashboard/locacoes/${rentalId}`)
   return { success: true, html: contractHtml }
+}
+
+/**
+ * Faz upload do PDF do contrato pro bucket 'contracts' e salva a URL no rental.
+ *
+ * Substitui o upload feito antes direto pelo browser (createBrowserClient).
+ * Problema anterior: quando a sessao Supabase estava sendo refreshed no
+ * momento do upload, auth.role() ficava 'anon' momentaneamente e a policy
+ * RLS de storage.objects bloqueava o INSERT com "new row violates row-level
+ * security policy". Cliente via erro generico "Server Components render" sem
+ * saber a causa (2 clientes reportaram em 27/jul).
+ *
+ * Fix: recebe o PDF como base64, valida auth (getAuthenticatedProfile),
+ * confirma que o rental pertence a empresa, e faz o upload via admin client
+ * (service role) que bypassa RLS. Como a auth ja foi validada antes, o
+ * acesso continua seguro — usuario so consegue subir PDF pra rental que
+ * pertence a company dele.
+ */
+export async function uploadContractPdf(rentalId: string, pdfBase64: string) {
+  const { supabase, companyId } = await getAuthenticatedProfile()
+
+  const { data: rental, error: fetchError } = await supabase
+    .from('rentals')
+    .select('id, company_id')
+    .eq('id', rentalId)
+    .eq('company_id', companyId)
+    .single()
+
+  if (fetchError || !rental) {
+    return { error: 'Locação não encontrada.' }
+  }
+
+  const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '')
+  let pdfBuffer: Buffer
+  try {
+    pdfBuffer = Buffer.from(cleanBase64, 'base64')
+  } catch {
+    return { error: 'PDF inválido.' }
+  }
+  if (pdfBuffer.length === 0) {
+    return { error: 'PDF vazio.' }
+  }
+  if (pdfBuffer.length > 20 * 1024 * 1024) {
+    return { error: 'PDF muito grande (max 20MB).' }
+  }
+
+  const admin = createAdminClient()
+  const filePath = `${companyId}/${rentalId}.pdf`
+
+  const { error: uploadError } = await admin.storage
+    .from('contracts')
+    .upload(filePath, pdfBuffer, {
+      contentType: 'application/pdf',
+      upsert: true,
+    })
+
+  if (uploadError) {
+    return { error: `Erro ao subir PDF: ${uploadError.message}` }
+  }
+
+  const { data: publicUrlData } = admin.storage.from('contracts').getPublicUrl(filePath)
+  const pdfUrl = publicUrlData.publicUrl
+
+  const { error: updateError } = await admin
+    .from('rentals')
+    .update({
+      contract_pdf_url: pdfUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', rentalId)
+    .eq('company_id', companyId)
+
+  if (updateError) {
+    return { error: `Erro ao salvar URL do PDF: ${updateError.message}` }
+  }
+
+  revalidatePath(`/dashboard/locacoes/${rentalId}`)
+  return { success: true, pdfUrl }
 }
 
 export async function saveContractPdf(rentalId: string, pdfUrl: string) {
