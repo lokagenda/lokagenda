@@ -32,6 +32,7 @@ const AVAILABLE_VARIABLES = [
   { var: '{{telefone_empresa}}', desc: 'Telefone da empresa' },
   { var: '{{cnpj_empresa}}', desc: 'CNPJ/CPF da empresa' },
   { var: '{{data_atual}}', desc: 'Data atual' },
+  { var: '{{observacoes}}', desc: 'Observações da locação (campo notas)' },
 ]
 
 export default function NovoContratoPage() {

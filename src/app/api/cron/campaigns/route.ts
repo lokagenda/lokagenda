@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
   const { data: campaigns } = await admin
     .from('campaigns')
-    .select('id, company_id, message_template, daily_limit, sent_count, send_window_start, send_window_end, last_sent_at')
+    .select('id, company_id, message_template, daily_limit, sent_count, send_window_start, send_window_end, send_days, last_sent_at')
     .eq('status', 'running')
 
   if (!campaigns || campaigns.length === 0) {
@@ -68,6 +68,15 @@ export async function GET(request: NextRequest) {
     const startMin = winStart * 60
     const endMin = winEnd * 60
     if (brtMinutes < startMin || brtMinutes >= endMin) continue
+
+    // Dias da semana permitidos (0=Dom..6=Sab, padrao seg-sex). Locadora
+    // que trabalha finais de semana (montagem) nao responde msg — Leo pediu
+    // pra bloquear disparo em dias improdutivos.
+    const brtDay = brt.getUTCDay() // 0..6 (Date UTC porque ja subtraimos offset BRT)
+    const allowedDays: number[] = Array.isArray(campaign.send_days)
+      ? campaign.send_days
+      : [1, 2, 3, 4, 5]
+    if (!allowedDays.includes(brtDay)) continue
 
     // Quantos já saíram hoje (dia BRT)?
     const { count: sentTodayCount } = await admin

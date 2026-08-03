@@ -358,6 +358,24 @@ export async function listCampaigns() {
 }
 
 // Garante janela de horário coerente (0-23, início < fim). Default 8h-20h.
+/**
+ * Sanitiza array de dias da semana pra send_days.
+ * 0=Dom, 1=Seg, ..., 6=Sab. Padrao [1,2,3,4,5] (seg-sex).
+ * Se input eh invalido ou vazio, retorna padrao. Deduplica + ordena.
+ */
+function sanitizeSendDays(days?: number[]): number[] {
+  const DEFAULT = [1, 2, 3, 4, 5]
+  if (!Array.isArray(days) || days.length === 0) return DEFAULT
+  const valid = Array.from(
+    new Set(
+      days
+        .map((d) => Math.round(Number(d)))
+        .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6),
+    ),
+  ).sort((a, b) => a - b)
+  return valid.length > 0 ? valid : DEFAULT
+}
+
 function sanitizeWindow(start?: number, end?: number): { start: number; end: number } {
   // Janela padrao 10h-18h (anti-ban): evita horas comerciais borderline e
   // parece mais humano que 8h-20h. Ajustado apos incidente de bloqueio 10/jul.
@@ -378,6 +396,7 @@ export async function createCampaign(data: {
   daily_limit?: number
   send_window_start?: number
   send_window_end?: number
+  send_days?: number[]
 }) {
   const supabase = await createClient()
   const { companyId } = await getCompanyId(supabase)
@@ -388,6 +407,7 @@ export async function createCampaign(data: {
   const dailyLimit =
     data.daily_limit && data.daily_limit > 0 ? Math.min(data.daily_limit, 50) : 20
   const win = sanitizeWindow(data.send_window_start, data.send_window_end)
+  const sendDays = sanitizeSendDays(data.send_days)
 
   const { data: campaign, error } = await supabase
     .from('campaigns')
@@ -400,6 +420,7 @@ export async function createCampaign(data: {
       daily_limit: dailyLimit,
       send_window_start: win.start,
       send_window_end: win.end,
+      send_days: sendDays,
       status: 'draft',
     })
     .select('*')
@@ -420,6 +441,7 @@ export async function updateCampaign(
     daily_limit?: number
     send_window_start?: number
     send_window_end?: number
+    send_days?: number[]
   }
 ) {
   const supabase = await createClient()
@@ -443,6 +465,9 @@ export async function updateCampaign(
     const win = sanitizeWindow(data.send_window_start, data.send_window_end)
     update.send_window_start = win.start
     update.send_window_end = win.end
+  }
+  if (data.send_days !== undefined) {
+    update.send_days = sanitizeSendDays(data.send_days)
   }
 
   const { error } = await supabase

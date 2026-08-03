@@ -783,6 +783,7 @@ function CampanhasTab() {
   const [dailyLimit, setDailyLimit] = useState('50')
   const [windowStart, setWindowStart] = useState('8')
   const [windowEnd, setWindowEnd] = useState('20')
+  const [sendDays, setSendDays] = useState<number[]>([1, 2, 3, 4, 5]) // padrao seg-sex
   const [aiEnabled, setAiEnabled] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
 
@@ -793,6 +794,7 @@ function CampanhasTab() {
   const [editDailyLimit, setEditDailyLimit] = useState('50')
   const [editWindowStart, setEditWindowStart] = useState('8')
   const [editWindowEnd, setEditWindowEnd] = useState('20')
+  const [editSendDays, setEditSendDays] = useState<number[]>([1, 2, 3, 4, 5])
   const [editAiEnabled, setEditAiEnabled] = useState(false)
   const [editAiPrompt, setEditAiPrompt] = useState('')
 
@@ -854,6 +856,7 @@ function CampanhasTab() {
         daily_limit: parseInt(dailyLimit, 10) || 50,
         send_window_start: parseInt(windowStart, 10),
         send_window_end: parseInt(windowEnd, 10),
+        send_days: sendDays,
         ai_enabled: aiEnabled,
         ai_prompt: aiEnabled ? aiPrompt : null,
       })
@@ -866,6 +869,7 @@ function CampanhasTab() {
         setDailyLimit('50')
         setWindowStart('8')
         setWindowEnd('20')
+        setSendDays([1, 2, 3, 4, 5])
         setAiEnabled(false)
         setAiPrompt('')
         setCreateOpen(false)
@@ -964,6 +968,7 @@ function CampanhasTab() {
     setEditDailyLimit(String(c.daily_limit ?? 50))
     setEditWindowStart(String(c.send_window_start ?? 8))
     setEditWindowEnd(String(c.send_window_end ?? 20))
+    setEditSendDays(Array.isArray(c.send_days) && c.send_days.length > 0 ? c.send_days : [1, 2, 3, 4, 5])
     setEditAiEnabled(!!c.ai_enabled)
     setEditAiPrompt(c.ai_prompt || '')
   }
@@ -985,6 +990,7 @@ function CampanhasTab() {
         daily_limit: parseInt(editDailyLimit, 10) || 50,
         send_window_start: parseInt(editWindowStart, 10),
         send_window_end: parseInt(editWindowEnd, 10),
+        send_days: editSendDays,
         ai_enabled: editAiEnabled,
         ai_prompt: editAiEnabled ? editAiPrompt : null,
       })
@@ -1166,6 +1172,45 @@ function CampanhasTab() {
               O robô divide o limite diário nessa faixa (horário de Brasília). Ex.: 50 entre 8h e 20h ≈ 1 a cada ~14 min.
             </p>
           </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Dias da semana em que dispara
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { d: 0, l: 'Dom' },
+                { d: 1, l: 'Seg' },
+                { d: 2, l: 'Ter' },
+                { d: 3, l: 'Qua' },
+                { d: 4, l: 'Qui' },
+                { d: 5, l: 'Sex' },
+                { d: 6, l: 'Sáb' },
+              ].map(({ d, l }) => {
+                const active = sendDays.includes(d)
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() =>
+                      setSendDays((prev) =>
+                        prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort((a, b) => a - b),
+                      )
+                    }
+                    className={`min-w-[52px] rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                        : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+              Padrão seg-sex. Locadora que trabalha final de semana não responde no sábado/domingo.
+            </p>
+          </div>
           <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
             <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
               <input
@@ -1313,6 +1358,42 @@ function CampanhasTab() {
                 className="w-24"
               />
               <span className="text-sm text-zinc-500 dark:text-zinc-400">horas</span>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Dias da semana em que dispara
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { d: 0, l: 'Dom' },
+                { d: 1, l: 'Seg' },
+                { d: 2, l: 'Ter' },
+                { d: 3, l: 'Qua' },
+                { d: 4, l: 'Qui' },
+                { d: 5, l: 'Sex' },
+                { d: 6, l: 'Sáb' },
+              ].map(({ d, l }) => {
+                const active = editSendDays.includes(d)
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() =>
+                      setEditSendDays((prev) =>
+                        prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort((a, b) => a - b),
+                      )
+                    }
+                    className={`min-w-[52px] rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                        : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
