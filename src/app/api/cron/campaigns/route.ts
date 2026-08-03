@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
       let ok = false
       let errorMessage: string | null = null
       try {
-        ok = await sendWhatsAppMessage(item.phone, message, { companyId: campaign.company_id })
+        ok = await sendWhatsAppMessage(item.phone, message, { companyId: campaign.company_id, purpose: 'marketing' })
         if (!ok) errorMessage = 'Falha no envio pelo provedor WhatsApp'
       } catch (err: unknown) {
         ok = false

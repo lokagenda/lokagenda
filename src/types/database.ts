@@ -1146,6 +1146,7 @@ export interface Database {
           ai_globally_paused_at: string | null;
           ai_globally_paused_reason: string | null;
           uazapi_last_poll_ts: number;
+          purpose: "marketing" | "transactional";
           created_at: string;
           updated_at: string;
         };
@@ -1161,6 +1162,7 @@ export interface Database {
           ai_globally_paused_at?: string | null;
           ai_globally_paused_reason?: string | null;
           uazapi_last_poll_ts?: number;
+          purpose?: "marketing" | "transactional";
           created_at?: string;
           updated_at?: string;
         };
@@ -1176,6 +1178,7 @@ export interface Database {
           ai_globally_paused_at?: string | null;
           ai_globally_paused_reason?: string | null;
           uazapi_last_poll_ts?: number;
+          purpose?: "marketing" | "transactional";
           created_at?: string;
           updated_at?: string;
         };
@@ -1508,6 +1511,7 @@ export interface Database {
           company_id: string | null;
           contact_id: string | null;
           campaign_prompt: string | null;
+          purpose: "marketing" | "transactional" | null;
           created_at: string;
           processing_at: string | null;
           processed_at: string | null;
@@ -1519,6 +1523,7 @@ export interface Database {
           company_id?: string | null;
           contact_id?: string | null;
           campaign_prompt?: string | null;
+          purpose?: "marketing" | "transactional" | null;
           created_at?: string;
           processing_at?: string | null;
           processed_at?: string | null;
@@ -1530,6 +1535,7 @@ export interface Database {
           company_id?: string | null;
           contact_id?: string | null;
           campaign_prompt?: string | null;
+          purpose?: "marketing" | "transactional" | null;
           created_at?: string;
           processing_at?: string | null;
           processed_at?: string | null;

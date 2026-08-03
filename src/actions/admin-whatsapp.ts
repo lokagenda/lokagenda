@@ -24,7 +24,7 @@ async function requireSuperAdmin() {
 
 // ── WhatsApp Config ───────────────────────────────────────
 
-export async function getWhatsAppConfig() {
+export async function getWhatsAppConfig(purpose: 'marketing' | 'transactional' = 'transactional') {
   await requireSuperAdmin()
   const admin = createAdminClient()
 
@@ -32,11 +32,25 @@ export async function getWhatsAppConfig() {
     .from('whatsapp_config')
     .select('*')
     .eq('active', true)
+    .eq('purpose', purpose)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (error && error.code !== 'PGRST116') throw new Error(error.message)
   return data || null
+}
+
+/** Lista as 2 configs (marketing + transactional). Uso: admin UI 2 cards. */
+export async function listWhatsAppConfigs() {
+  await requireSuperAdmin()
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('whatsapp_config')
+    .select('*')
+    .eq('active', true)
+    .order('purpose', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data || []
 }
 
 export async function saveWhatsAppConfig(configData: {
@@ -45,23 +59,29 @@ export async function saveWhatsAppConfig(configData: {
   api_key: string | null
   instance_id: string | null
   phone_number_id: string | null
+  purpose?: 'marketing' | 'transactional'
 }) {
   await requireSuperAdmin()
   const admin = createAdminClient()
+  const purpose = configData.purpose ?? 'transactional'
 
-  // Check if config already exists
+  // Check if config already exists for this purpose
   const { data: existing } = await admin
     .from('whatsapp_config')
     .select('id')
     .eq('active', true)
+    .eq('purpose', purpose)
     .limit(1)
-    .single()
+    .maybeSingle()
+
+  const { purpose: _p, ...rest } = configData
 
   if (existing) {
     const { error } = await admin
       .from('whatsapp_config')
       .update({
-        ...configData,
+        ...rest,
+        purpose,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
@@ -71,7 +91,8 @@ export async function saveWhatsAppConfig(configData: {
     const { error } = await admin
       .from('whatsapp_config')
       .insert({
-        ...configData,
+        ...rest,
+        purpose,
         active: true,
       })
 

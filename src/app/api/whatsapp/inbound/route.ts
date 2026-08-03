@@ -455,6 +455,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Descobre por qual instancia UazAPI o inbound chegou (marketing vs
+    // transactional). Nick vai responder pela MESMA instancia — se cliente
+    // escreveu no numero de campanha, resposta sai pelo mesmo numero.
+    // Payload UazAPI tem `instance` no envelope (name da instancia).
+    let inboundPurpose: 'marketing' | 'transactional' = 'transactional'
+    try {
+      const rawInstance = (norm.source === 'uazapi' && (raw as { instance?: string })?.instance) || null
+      if (rawInstance) {
+        const { data: cfg } = await admin
+          .from('whatsapp_config')
+          .select('purpose')
+          .eq('instance_id', rawInstance)
+          .eq('active', true)
+          .maybeSingle()
+        if (cfg?.purpose === 'marketing' || cfg?.purpose === 'transactional') {
+          inboundPurpose = cfg.purpose
+        }
+      }
+    } catch {
+      // fallback silencioso pra 'transactional'
+    }
+
     // 3. DEBOUNCE: em vez de chamar IA imediato, salva em pending_inbound
     // e agenda processWithDebounce(phone) via after() pra 8s depois.
     // Cliente que dispara 3 msgs em rajada -> processa 1 vez so, abracando todas.
@@ -464,6 +486,7 @@ export async function POST(request: NextRequest) {
       company_id: companyId,
       contact_id: contactId,
       campaign_prompt: campaignPrompt,
+      purpose: inboundPurpose,
     })
 
     after(async () => {

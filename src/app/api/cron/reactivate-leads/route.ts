@@ -198,7 +198,7 @@ export async function GET(request: NextRequest) {
 
     let ok = false
     try {
-      ok = await sendWhatsAppMessage(lead.phone, message, { companyId: lead.company_id })
+      ok = await sendWhatsAppMessage(lead.phone, message, { companyId: lead.company_id, purpose: 'marketing' })
     } catch (err) {
       console.error('[Follow-up] Falha envio:', err)
       ok = false

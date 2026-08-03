@@ -117,9 +117,18 @@ export async function processNow(phone: string): Promise<void> {
     await admin.from('campaign_contacts').update(update).eq('id', first.contact_id)
   }
 
-  // 6. Envia mensagem
+  // 6. Envia mensagem — usa purpose gravado no inbound (marketing se veio
+  // pelo numero de campanha, transactional se veio pelo numero principal).
+  // Fallback transactional pra rows antigas sem coluna preenchida.
   if (aiResult?.reply) {
-    await sendWhatsAppMessage(phone, aiResult.reply, { companyId: first.company_id })
+    const replyPurpose: 'marketing' | 'transactional' =
+      (first as { purpose?: string }).purpose === 'marketing'
+        ? 'marketing'
+        : 'transactional'
+    await sendWhatsAppMessage(phone, aiResult.reply, {
+      companyId: first.company_id,
+      purpose: replyPurpose,
+    })
   }
 
   // 7. Marca todas como processed

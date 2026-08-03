@@ -28,20 +28,51 @@ function createProviderClient(config: WhatsAppConfig): WhatsAppProviderClient {
   }
 }
 
-export async function getWhatsAppClient(): Promise<WhatsAppProviderClient | null> {
+export type WhatsAppPurpose = 'marketing' | 'transactional'
+
+/**
+ * Busca o client da instancia WhatsApp certa por proposito.
+ * - 'marketing': campanhas, follow-up, reactivate-leads/queue (numero novo, chip separado)
+ * - 'transactional' (default): lembretes de vencimento, plan_activated, Nick
+ *   atendendo cliente, notificacoes institucionais (numero principal do Leo)
+ *
+ * Fallback: se nao acha config pro purpose pedido, tenta a outra (defensivo
+ * pra sistemas em transicao ou config recem-criada). Isso permite que uma
+ * feature nova nao caia se so uma das duas instancias estiver configurada.
+ */
+export async function getWhatsAppClient(
+  purpose: WhatsAppPurpose = 'transactional',
+): Promise<WhatsAppProviderClient | null> {
   const admin = createAdminClient()
 
-  const { data, error } = await admin
+  const { data } = await admin
+    .from('whatsapp_config')
+    .select('provider, api_url, api_key, instance_id, phone_number_id')
+    .eq('active', true)
+    .eq('purpose', purpose)
+    .limit(1)
+    .maybeSingle()
+
+  if (data) {
+    try {
+      return createProviderClient(data as WhatsAppConfig)
+    } catch {
+      return null
+    }
+  }
+
+  // Fallback: pega qualquer config ativa se a especifica nao existe
+  const { data: fallback } = await admin
     .from('whatsapp_config')
     .select('provider, api_url, api_key, instance_id, phone_number_id')
     .eq('active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) return null
+  if (!fallback) return null
 
   try {
-    return createProviderClient(data as WhatsAppConfig)
+    return createProviderClient(fallback as WhatsAppConfig)
   } catch {
     return null
   }
@@ -50,7 +81,7 @@ export async function getWhatsAppClient(): Promise<WhatsAppProviderClient | null
 export async function sendWhatsAppMessage(
   phone: string,
   message: string,
-  options?: { companyId?: string; templateSlug?: string }
+  options?: { companyId?: string; templateSlug?: string; purpose?: WhatsAppPurpose }
 ): Promise<boolean> {
   const admin = createAdminClient()
   const normalizedPhone = normalizePhone(phone)
@@ -69,7 +100,7 @@ export async function sendWhatsAppMessage(
     .single()
 
   try {
-    const client = await getWhatsAppClient()
+    const client = await getWhatsAppClient(options?.purpose ?? 'transactional')
     if (!client) {
       if (logEntry) {
         await admin
@@ -112,7 +143,8 @@ export async function sendTemplateMessage(
   templateSlug: string,
   phone: string,
   variables: Record<string, string>,
-  companyId?: string
+  companyId?: string,
+  purpose: WhatsAppPurpose = 'transactional'
 ): Promise<boolean> {
   const admin = createAdminClient()
 
@@ -129,5 +161,5 @@ export async function sendTemplateMessage(
     message = message.replaceAll(`{{${key}}}`, value)
   }
 
-  return sendWhatsAppMessage(phone, message, { companyId, templateSlug })
+  return sendWhatsAppMessage(phone, message, { companyId, templateSlug, purpose })
 }
