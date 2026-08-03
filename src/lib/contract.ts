@@ -67,7 +67,12 @@ export function getDefaultTemplate(): string {
     Em caso de cancelamento por parte do(a) LOCATÁRIO(A), deverá ser comunicado com antecedência mínima de 48 horas. Cancelamentos fora deste prazo estarão sujeitos a cobrança de 50% do valor total.
   </p>
 
-  <h3 style="margin-top: 25px; font-size: 16px;">CLÁUSULA 6 - DO FORO</h3>
+  <h3 style="margin-top: 25px; font-size: 16px;">CLÁUSULA 6 - DAS OBSERVAÇÕES</h3>
+  <p style="line-height: 1.8;">
+    {{observacoes}}
+  </p>
+
+  <h3 style="margin-top: 25px; font-size: 16px;">CLÁUSULA 7 - DO FORO</h3>
   <p style="line-height: 1.8;">
     Para dirimir quaisquer controversias oriundas deste contrato, as partes elegem o foro da comarca onde se situa a LOCADORA.
   </p>
@@ -120,5 +125,6 @@ export function getSampleData(): Record<string, string> {
     telefone_empresa: '(11) 3333-4444',
     cnpj_empresa: '12.345.678/0001-99',
     data_atual: '21/03/2026',
+    observacoes: 'Entrega deve ser feita pela lateral do salão. Cliente solicitou instalação até as 14h. Recolhimento pode ser feito no dia seguinte pela manhã.',
   }
 }

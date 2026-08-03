@@ -217,6 +217,11 @@ export async function generateContract(rentalId: string) {
     telefone_empresa: company.phone || '-',
     cnpj_empresa: company.document || '-',
     data_atual: formatDate(new Date()),
+    // rental.notes eh o campo "Observacoes" da locacao (input livre no form).
+    // Escapa \n pra <br/> pra manter quebras de linha no HTML/PDF do contrato.
+    observacoes: rental.notes
+      ? String(rental.notes).replace(/\n/g, '<br/>')
+      : '-',
   }
 
   let contractHtml = replaceVariables(template.content, data)
