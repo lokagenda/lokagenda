@@ -183,26 +183,43 @@ export async function generateContract(rentalId: string) {
     return { error: 'Nenhum modelo de contrato padrão definido. Crie um modelo e marque como padrão.' }
   }
 
-  // Build items list HTML
+  // Build items list HTML. product_name eh copiado de products.name na criacao
+  // da locacao e vai crua aqui — precisa escape pra prevenir XSS.
+  const escItem = (s: string): string =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const itemsHtml = items && items.length > 0
     ? items.map(item =>
-        `${item.quantity}x ${item.product_name} - ${formatCurrency(item.subtotal)}`
+        `${item.quantity}x ${escItem(String(item.product_name || ''))} - ${formatCurrency(item.subtotal)}`
       ).join('<br/>')
     : 'Nenhum item'
 
+  // Escape HTML pra prevenir XSS via campos user-input livres (nome, endereco,
+  // observacoes, etc). O template do contrato eh HTML e algumas variaveis
+  // contem HTML intencional (logo, itens formatados). Aplicamos escape SO nos
+  // campos que sao texto puro do usuario — os campos gerados internamente
+  // continuam sem escape.
+  const esc = (s: string): string =>
+    s.replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+
   // Build the data map
   const data: Record<string, string> = {
-    nome_cliente: rental.customer_name,
-    cpf_cliente: rental.customer_document || '-',
-    telefone_cliente: rental.customer_phone || '-',
-    email_cliente: rental.customer_email || '-',
-    endereco_evento: [rental.event_address, rental.event_city, rental.event_state].filter(Boolean).join(', ') || '-',
+    nome_cliente: esc(rental.customer_name || ''),
+    cpf_cliente: esc(rental.customer_document || '-'),
+    telefone_cliente: esc(rental.customer_phone || '-'),
+    email_cliente: esc(rental.customer_email || '-'),
+    endereco_evento: esc([rental.event_address, rental.event_city, rental.event_state].filter(Boolean).join(', ') || '-'),
     data_evento: rental.event_date ? formatDate(rental.event_date) : '-',
     data_retirada: (rental as any).event_end_date ? formatDate((rental as any).event_end_date) : (rental.event_date ? formatDate(rental.event_date) : '-'),
-    horario_entrega: rental.delivery_time || '-',
-    horario_retirada: rental.pickup_time || '-',
+    horario_entrega: esc(rental.delivery_time || '-'),
+    horario_retirada: esc(rental.pickup_time || '-'),
     data_pagamento_sinal: (rental as any).payment_date_signal ? formatDate((rental as any).payment_date_signal) : '-',
     data_pagamento_total: (rental as any).payment_date_total ? formatDate((rental as any).payment_date_total) : '-',
+    // itens_locacao eh HTML controlado (nos geramos o markup com formatCurrency).
+    // Escape apenas do product_name que vem do usuario.
     itens_locacao: itemsHtml,
     valor_total: formatCurrency(rental.total),
     valor_desconto: formatCurrency(rental.discount),
@@ -210,17 +227,20 @@ export async function generateContract(rentalId: string) {
     valor_pago: formatCurrency(rental.amount_paid || 0),
     valor_restante: formatCurrency((rental.total || 0) - (rental.amount_paid || 0)),
     status_pagamento: rental.payment_status === 'paid' ? 'Pago' : rental.payment_status === 'partial' ? 'Parcial' : 'Pendente',
+    // logo_empresa e HTML intencional (nos montamos a tag <img>). URL passa
+    // por new URL() no supabase — nao ha injection possivel via image URL.
     logo_empresa: company.logo_url
       ? `<img src="${company.logo_url}" style="max-height: 80px; display: block; margin: 0 auto;" />`
       : '',
-    nome_empresa: company.name,
-    telefone_empresa: company.phone || '-',
-    cnpj_empresa: company.document || '-',
+    nome_empresa: esc(company.name || ''),
+    telefone_empresa: esc(company.phone || '-'),
+    cnpj_empresa: esc(company.document || '-'),
     data_atual: formatDate(new Date()),
-    // rental.notes eh o campo "Observacoes" da locacao (input livre no form).
-    // Escapa \n pra <br/> pra manter quebras de linha no HTML/PDF do contrato.
+    // Observacoes: escape primeiro, DEPOIS converte \n em <br/> pra preservar
+    // quebras de linha do textarea (ordem importa — se trocasse antes de
+    // escapar, o <br/> viraria &lt;br/&gt;).
     observacoes: rental.notes
-      ? String(rental.notes).replace(/\n/g, '<br/>')
+      ? esc(String(rental.notes)).replace(/\n/g, '<br/>')
       : '-',
   }
 
