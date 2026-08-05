@@ -1,0 +1,4 @@
+# Hooks e scripts shell PRECISAM de LF — com CRLF o sh falha com
+# "bad interpreter: /bin/sh^M" e o hook vira no-op silencioso.
+.githooks/* text eol=lf
+*.sh text eol=lf
