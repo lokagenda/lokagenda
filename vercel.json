@@ -17,10 +17,6 @@
       "schedule": "*/3 * * * *"
     },
     {
-      "path": "/api/cron/zapi-poll-takeovers",
-      "schedule": "*/2 * * * *"
-    },
-    {
       "path": "/api/cron/uazapi-poll",
       "schedule": "* * * * *"
     },

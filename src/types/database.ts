@@ -1512,6 +1512,7 @@ export interface Database {
           contact_id: string | null;
           campaign_prompt: string | null;
           purpose: "marketing" | "transactional" | null;
+          message_id: string | null;
           created_at: string;
           processing_at: string | null;
           processed_at: string | null;
@@ -1524,6 +1525,7 @@ export interface Database {
           contact_id?: string | null;
           campaign_prompt?: string | null;
           purpose?: "marketing" | "transactional" | null;
+          message_id?: string | null;
           created_at?: string;
           processing_at?: string | null;
           processed_at?: string | null;
@@ -1536,6 +1538,7 @@ export interface Database {
           contact_id?: string | null;
           campaign_prompt?: string | null;
           purpose?: "marketing" | "transactional" | null;
+          message_id?: string | null;
           created_at?: string;
           processing_at?: string | null;
           processed_at?: string | null;

@@ -41,8 +41,12 @@ interface ZApiInboundPayload {
 interface UazapiInboundPayload {
   event?: string // 'message' | 'connection' | ...
   instance?: string
+  // Carimbado pelo nosso poller (uazapi-poll.ts), autenticado via CRON_SECRET.
+  // Nao existe no webhook direto da UazAPI.
+  purpose?: string
   data?: {
     chatid?: string
+    chatid_lid?: string // LID original, quando o poller resolveu chatid -> phone
     sender?: string
     sender_pn?: string // phone resolvido se sender veio como @lid
     sender_lid?: string
@@ -82,12 +86,38 @@ function normalizeInbound(raw: unknown): NormalizedInbound | null {
   if (p.event && p.data && typeof p.data === 'object') {
     const u = raw as UazapiInboundPayload
     const d = u.data || {}
-    // Quem identifica a CONVERSA é chatid (sempre o "outro lado", em phone real).
-    // Sender pode vir como `@lid` (LID anonimizado em multi-device) — inutil pra
-    // dedup. Fallback ordem: chatid > sender_pn > sender.
-    const rawId = d.chatid || d.sender_pn || d.sender || ''
-    const phoneStr = typeof rawId === 'string' ? rawId.split('@')[0] : ''
-    const phone = phoneStr && /^\d+$/.test(phoneStr) ? phoneStr : null
+    // Quem identifica a CONVERSA e o chatid — MAS ele nem sempre vem em phone
+    // real: o chip de marketing entrega "<lid>@lid" em 38 de 40 conversas 1:1.
+    // O poller resolve o LID antes de encaminhar; aqui fica a guarda de ultima
+    // linha, porque um LID e so digitos e passaria por /^\d+$/, virando telefone
+    // fantasma de 16 digitos depois do normalizePhone.
+    //
+    // `sender_pn`/`sender` so entram quando NAO e fromMe: em mensagem fromMe o
+    // sender e o LID do proprio aparelho do Leo, e aceita-lo gravaria o takeover
+    // manual no numero dele em vez do numero do cliente.
+    const pick = (v: unknown) => (typeof v === 'string' ? v : '')
+    const chatid = pick(d.chatid)
+    const senderRaw = pick(d.sender)
+    const isFromMe = d.fromMe === true
+    const candidatos = [
+      chatid.endsWith('@s.whatsapp.net') ? chatid : '',
+      isFromMe ? '' : pick(d.sender_pn),
+      isFromMe ? '' : senderRaw.endsWith('@s.whatsapp.net') ? senderRaw : '',
+    ]
+    // /^\d{12,13}$/ = 55 + DDD + 8/9 digitos. LID tem 14+ e e rejeitado.
+    const phoneStr =
+      candidatos
+        .map((v) => v.split('@')[0].replace(/\D/g, ''))
+        .find((v) => /^\d{12,13}$/.test(v)) ?? ''
+    if (!phoneStr) {
+      console.error('[inbound] telefone nao resolvivel — descartando', {
+        chatid,
+        sender: senderRaw,
+        isFromMe,
+        messageid: d.messageid,
+      })
+    }
+    const phone = phoneStr || null
     return {
       phone,
       fromMe: d.fromMe === true,
@@ -189,6 +219,55 @@ export async function POST(request: NextRequest) {
     const phone = normalizePhone(norm.phone)
     const admin = createAdminClient()
 
+    // Purpose = por qual instancia UazAPI o inbound chegou. A Nick responde pela
+    // MESMA instancia (via pending_inbound.purpose -> debounce -> sender).
+    //
+    // Resolvido AQUI NO TOPO porque o download de audio, mais abaixo, precisa do
+    // token da instancia certa.
+    //
+    // Fonte primaria: campo `purpose` do envelope, carimbado pelo nosso poller e
+    // autenticado por CRON_SECRET. A versao anterior resolvia por
+    // .eq('instance_id', rawInstance).maybeSingle() — mas as DUAS linhas de
+    // whatsapp_config tem instance_id='lokagenda' (as duas instancias UazAPI se
+    // chamam assim), entao casavam 2 linhas, o PostgREST devolvia erro no campo
+    // `error` (nao desestruturado), cfg vinha null e o purpose ficava travado em
+    // 'transactional' pra sempre.
+    let inboundPurpose: 'marketing' | 'transactional' = 'transactional'
+    {
+      const cronSecret = process.env.CRON_SECRET
+      const authOk =
+        !!cronSecret && request.headers.get('authorization') === `Bearer ${cronSecret}`
+      const envPurpose = (raw as { purpose?: string } | null)?.purpose
+
+      if (authOk && (envPurpose === 'marketing' || envPurpose === 'transactional')) {
+        inboundPurpose = envPurpose
+      } else {
+        // Fallback (webhook direto da UazAPI, sem auth): resolve SO se houver
+        // exatamente 1 match. Nunca .limit(1) aqui — trocaria um erro
+        // deterministico por um sorteio entre as instancias.
+        const rawInstance =
+          (norm.source === 'uazapi' && (raw as { instance?: string })?.instance) || null
+        if (rawInstance) {
+          const { data: rows, error: cfgErr } = await admin
+            .from('whatsapp_config')
+            .select('purpose')
+            .eq('id', rawInstance)
+            .eq('active', true)
+          if (cfgErr) {
+            console.error('[inbound] lookup de purpose falhou', cfgErr)
+          } else if (rows && rows.length === 1 && rows[0].purpose) {
+            inboundPurpose = rows[0].purpose
+          } else {
+            console.error(
+              `[inbound] instancia ambigua rawInstance=${rawInstance} n=${rows?.length ?? 0} — usando transactional`,
+            )
+          }
+        } else if (envPurpose && !authOk) {
+          console.error('[inbound] envelope trouxe purpose sem Authorization valido — ignorado')
+        }
+      }
+    }
+
     // Mensagem do próprio assinante (Léo respondendo manualmente pelo celular):
     // marca takeover global. Filtro anti-self-send olha whatsapp_message_log
     // pra não marcar takeover quando foi a IA que acabou de enviar.
@@ -232,10 +311,13 @@ export async function POST(request: NextRequest) {
 
     // Gate global "modo silencioso" (panic button do admin). Quando ativo,
     // a IA não responde NADA — Léo cuida 100% manual. Independente da Z-API.
+    // Semantica: pausado se QUALQUER linha ativa estiver pausada. Com 2 linhas,
+    // .limit(1) sem ORDER BY viraria sorteio caso elas divergissem.
     const { data: cfg } = await admin
       .from('whatsapp_config')
       .select('ai_globally_paused_at')
       .eq('active', true)
+      .not('ai_globally_paused_at', 'is', null)
       .limit(1)
       .maybeSingle()
     if (cfg?.ai_globally_paused_at) {
@@ -257,13 +339,21 @@ export async function POST(request: NextRequest) {
       isTranscribeConfigured()
     ) {
       try {
+        // Token TEM que ser o da instancia que recebeu o audio: o messageId nao
+        // existe na outra, e downloadMedia falharia 100% das vezes em silencio
+        // (o catch abaixo so loga, o fluxo cai no `if (!incomingText)` e devolve
+        // 200 sem resposta nenhuma).
         const { data: waCfg } = await admin
           .from('whatsapp_config')
           .select('provider, api_url, api_key, instance_id, phone_number_id, active')
           .eq('active', true)
           .eq('provider', 'uazapi')
+          .eq('purpose', inboundPurpose)
           .limit(1)
           .maybeSingle()
+        if (!waCfg?.api_key) {
+          console.error(`[inbound/audio] sem config uazapi para purpose=${inboundPurpose}`)
+        }
         if (waCfg?.api_url && waCfg?.api_key) {
           const uaz = new UazapiClient({
             provider: 'uazapi',
@@ -455,39 +545,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Descobre por qual instancia UazAPI o inbound chegou (marketing vs
-    // transactional). Nick vai responder pela MESMA instancia — se cliente
-    // escreveu no numero de campanha, resposta sai pelo mesmo numero.
-    // Payload UazAPI tem `instance` no envelope (name da instancia).
-    let inboundPurpose: 'marketing' | 'transactional' = 'transactional'
-    try {
-      const rawInstance = (norm.source === 'uazapi' && (raw as { instance?: string })?.instance) || null
-      if (rawInstance) {
-        const { data: cfg } = await admin
-          .from('whatsapp_config')
-          .select('purpose')
-          .eq('instance_id', rawInstance)
-          .eq('active', true)
-          .maybeSingle()
-        if (cfg?.purpose === 'marketing' || cfg?.purpose === 'transactional') {
-          inboundPurpose = cfg.purpose
-        }
-      }
-    } catch {
-      // fallback silencioso pra 'transactional'
-    }
-
     // 3. DEBOUNCE: em vez de chamar IA imediato, salva em pending_inbound
     // e agenda processWithDebounce(phone) via after() pra 8s depois.
     // Cliente que dispara 3 msgs em rajada -> processa 1 vez so, abracando todas.
-    await admin.from('pending_inbound').insert({
-      phone,
-      text: incomingText,
-      company_id: companyId,
-      contact_id: contactId,
-      campaign_prompt: campaignPrompt,
-      purpose: inboundPurpose,
-    })
+    //
+    // upsert por message_id: o poller retenta forwards que falharam e execucoes
+    // do cron (*/1min) podem se sobrepor. Sem idempotencia a Nick responde duas
+    // vezes. message_id null (caminho Z-API) nunca conflita — NULL nao conflita
+    // com NULL em Postgres.
+    const { data: inserted, error: insErr } = await admin
+      .from('pending_inbound')
+      .upsert(
+        {
+          phone,
+          text: incomingText,
+          company_id: companyId,
+          contact_id: contactId,
+          campaign_prompt: campaignPrompt,
+          purpose: inboundPurpose,
+          message_id: norm.messageId,
+        },
+        { onConflict: 'message_id', ignoreDuplicates: true },
+      )
+      .select('id')
+
+    if (insErr) {
+      // fail-open: em duvida, perder lead e pior que duplicar.
+      console.error('[inbound] upsert pending_inbound falhou', insErr)
+    } else if (!inserted || inserted.length === 0) {
+      console.log('[inbound] duplicata ignorada messageid=' + norm.messageId)
+      return NextResponse.json({ received: true, skipped: 'duplicate' })
+    }
 
     after(async () => {
       try {
