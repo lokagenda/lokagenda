@@ -285,8 +285,30 @@ export default function LocacaoDetailPage({
     container.style.left = '-9999px'
     container.style.top = '0'
 
+    // CSS defensivo: nome de empresa longo estava quebrando o layout (Leo 04/ago).
+    // word-wrap forca quebra em qualquer caractere, font-size responsivo diminui
+    // titulos longos. Aplica no container pra afetar TODO html injetado.
+    const style = document.createElement('style')
+    style.textContent = `
+      * { word-wrap: break-word; overflow-wrap: break-word; box-sizing: border-box; max-width: 100%; }
+      h1 { font-size: clamp(16px, 2.4vw, 24px) !important; line-height: 1.3 !important; word-break: break-word; }
+      h2 { font-size: clamp(15px, 2vw, 20px) !important; line-height: 1.3 !important; word-break: break-word; }
+      h3 { line-height: 1.4 !important; page-break-after: avoid; }
+      p, div { orphans: 3; widows: 3; }
+      img { max-width: 100% !important; height: auto !important; }
+    `
+    container.appendChild(style)
+
+    // Sanitiza contract_html antes de injetar. Fonte eh o template do dono
+    // da empresa (que pode ter script malicioso se editar direto o HTML) +
+    // dados de rental/company escapados no server. Defense-in-depth aqui
+    // pra evitar XSS ao gerar PDF, mesmo que campo tenha sido corrompido.
+    const DOMPurify = (await import('dompurify')).default
     const contractDiv = document.createElement('div')
-    contractDiv.innerHTML = rental.contract_html || ''
+    contractDiv.innerHTML = DOMPurify.sanitize(rental.contract_html || '', {
+      USE_PROFILES: { html: true },
+      ADD_ATTR: ['style'],
+    })
     container.appendChild(contractDiv)
 
     const clientSig = rental.signature_client
@@ -356,14 +378,17 @@ export default function LocacaoDetailPage({
       )
     )
 
+    // PDF otimizado pra assinatura no gov.br (limite 20MB): JPEG q=0.82 +
+    // scale 1.5 + compress interno. Antes gerava 20+MB com PNG lossless,
+    // agora fica ~1-2MB pra contrato de 4-6 paginas. Leo relatou 05/ago.
     const canvas = await html2canvas(container, {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
       backgroundColor: '#ffffff',
     })
 
-    const imgData = canvas.toDataURL('image/png')
-    const pdf = new jsPDF('p', 'mm', 'a4')
+    const imgData = canvas.toDataURL('image/jpeg', 0.82)
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
     const pdfWidth = pdf.internal.pageSize.getWidth()
     const pdfHeight = pdf.internal.pageSize.getHeight()
     const imgWidth = pdfWidth
@@ -372,13 +397,13 @@ export default function LocacaoDetailPage({
     let heightLeft = imgHeight
     let position = 0
 
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
     heightLeft -= pdfHeight
 
     while (heightLeft > 0) {
       position = position - pdfHeight
       pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
       heightLeft -= pdfHeight
     }
 
@@ -543,7 +568,12 @@ export default function LocacaoDetailPage({
       container.style.position = 'absolute'
       container.style.left = '-9999px'
       container.style.top = '0'
-      container.innerHTML = reciboHtml
+      // Sanitiza pra evitar XSS via company.name/document/phone user-input.
+      const DOMPurify = (await import('dompurify')).default
+      container.innerHTML = DOMPurify.sanitize(reciboHtml, {
+        USE_PROFILES: { html: true },
+        ADD_ATTR: ['style'],
+      })
 
       const images = container.querySelectorAll('img')
       await Promise.all(
@@ -560,14 +590,15 @@ export default function LocacaoDetailPage({
         )
       )
 
+      // Mesmo padrao do gerar contrato PDF — ver comentario em generatePdfBlob.
       const canvas = await html2canvas(container, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         backgroundColor: '#ffffff',
       })
 
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgData = canvas.toDataURL('image/jpeg', 0.82)
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
       const pdfWidth = pdf.internal.pageSize.getWidth()
       const pdfHeight = pdf.internal.pageSize.getHeight()
       const imgWidth = pdfWidth
@@ -576,13 +607,13 @@ export default function LocacaoDetailPage({
       let heightLeft = imgHeight
       let position = 0
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
       heightLeft -= pdfHeight
 
       while (heightLeft > 0) {
         position = position - pdfHeight
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
         heightLeft -= pdfHeight
       }
 
