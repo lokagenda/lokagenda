@@ -199,7 +199,9 @@ export async function runWhatsappLifecycle(): Promise<{ messages_sent: number; m
             dias_restantes: dateField ? daysUntil(dateField, today) : '0',
           }
 
-          const sent = await sendTemplateMessage(slug, company.phone, variables, row.company_id)
+          // 'transactional' explicito: lembrete de vencimento tem que sair pelo
+          // numero principal mesmo se o default do sender mudar um dia.
+          const sent = await sendTemplateMessage(slug, company.phone, variables, row.company_id, 'transactional')
           if (sent) messagesSent++
           else messagesFailed++
           // Anti-ban: intervalo aleatório entre cada envio (8-20s) pra não dar

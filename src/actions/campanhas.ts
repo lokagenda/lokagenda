@@ -659,13 +659,19 @@ export async function resendFailedCampaign(campaignId: string) {
     return { success: true, requeued: 0, message: 'Nenhuma falha pra reenviar.' }
   }
 
-  const { error: statusErr } = await supabase
-    .from('campaigns')
-    .update({ status: 'running' })
-    .eq('id', campaignId)
-    .eq('company_id', companyId)
+  // So religa se a campanha estava 'completed' (a fila tinha acabado e as
+  // falhas voltaram). Se o operador PAUSOU de proposito — durante um bloqueio
+  // de numero, por exemplo — recuperar as falhas nao pode religar o disparo
+  // pelas costas dele.
+  if (campaign.status === 'completed') {
+    const { error: statusErr } = await supabase
+      .from('campaigns')
+      .update({ status: 'running' })
+      .eq('id', campaignId)
+      .eq('company_id', companyId)
 
-  if (statusErr) return { error: statusErr.message }
+    if (statusErr) return { error: statusErr.message }
+  }
 
   revalidatePath('/dashboard/marketing')
   revalidatePath('/admin/marketing')

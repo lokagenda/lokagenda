@@ -271,6 +271,7 @@ export async function POST(request: NextRequest) {
             company.phone,
             { nome_empresa: company.name, data_validade: dataValidade },
             companyId,
+            'transactional',
           ).catch(() => {})
         }
       }).catch(() => {})

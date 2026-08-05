@@ -4,6 +4,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 // Roda com frequência no Pro; janela maior pra processar a fila com folga.
 export const maxDuration = 300
 
+// Anti-ban: o loop abaixo fazia ate 50 POSTs back-to-back SEM nenhuma pausa —
+// exatamente o padrao de rajada que derrubou o numero em 10/jul e 23/jul.
+const MIN_DELAY_MS = 8000
+const MAX_DELAY_MS = 20000
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const randomDelay = () => Math.floor(MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS))
+
 /**
  * Processa mensagens agendadas pra grupos. Suporta tanto Z-API quanto UazAPI.
  * Detecta o provider em whatsapp_config e roteia pro endpoint correto.
@@ -24,18 +31,23 @@ export async function GET(request: NextRequest) {
     .eq('status', 'pending')
     .lte('scheduled_at', nowIso)
     .order('scheduled_at', { ascending: true })
-    .limit(50)
+    .limit(10)
 
   if (!due || due.length === 0) {
     return NextResponse.json({ success: true, sent: 0 })
   }
 
+  // Envio em grupo e divulgacao -> chip de MARKETING. Sem o filtro de purpose
+  // isso pegava uma das duas instancias ativas de forma arbitraria.
+  // .maybeSingle() (nao .single()) porque .single() estoura se nao houver
+  // linha de marketing ativa.
   const { data: config } = await admin
     .from('whatsapp_config')
     .select('provider, api_url, api_key, instance_id, phone_number_id')
     .eq('active', true)
+    .eq('purpose', 'marketing')
     .limit(1)
-    .single()
+    .maybeSingle()
 
   const provider = config?.provider
   const ready = !!(
@@ -182,6 +194,9 @@ export async function GET(request: NextRequest) {
         .eq('id', msg.id)
       failed++
     }
+
+    // Anti-ban: intervalo entre envios. Pula no ultimo pra encerrar o run logo.
+    if (msg !== due[due.length - 1]) await sleep(randomDelay())
   }
 
   return NextResponse.json({ success: true, sent, failed })

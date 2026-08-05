@@ -135,7 +135,7 @@ export async function signUp(formData: FormData) {
       await new Promise((r) => setTimeout(r, delayMs))
       try {
         const { sendTemplateMessage } = await import('@/lib/whatsapp-api/sender')
-        await sendTemplateMessage('welcome', welcomePhone, { nome_empresa: welcomeCompanyName }, welcomeCompanyId)
+        await sendTemplateMessage('welcome', welcomePhone, { nome_empresa: welcomeCompanyName }, welcomeCompanyId, 'transactional')
       } catch {
         /* welcome falha silenciosamente — não afeta cadastro */
       }

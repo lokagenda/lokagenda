@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { WhatsAppProviderClient, WhatsAppConfig } from './types'
+import type { WhatsAppProviderClient, WhatsAppConfig, WhatsAppPurpose } from './types'
 import { EvolutionApiClient } from './providers/evolution-api'
 import { ZApiClient } from './providers/z-api'
 import { TwilioClient } from './providers/twilio'
@@ -28,7 +28,8 @@ function createProviderClient(config: WhatsAppConfig): WhatsAppProviderClient {
   }
 }
 
-export type WhatsAppPurpose = 'marketing' | 'transactional'
+// Re-export: o tipo mora em ./types (modulo puro) pra UI client poder importar.
+export type { WhatsAppPurpose } from './types'
 
 /**
  * Busca o client da instancia WhatsApp certa por proposito.
@@ -61,15 +62,29 @@ export async function getWhatsAppClient(
     }
   }
 
-  // Fallback: pega qualquer config ativa se a especifica nao existe
+  // Fallback: pega qualquer config ativa se a especifica nao existe.
+  //
+  // Fica RUIDOSO de proposito. Este fallback silencioso mascarou por 2 dias o
+  // marketing saindo pelo numero transacional (05/ago). Nao vira erro duro
+  // porque campaigns/route.ts marca campaign_queue.status='failed' PERMANENTE
+  // quando o envio retorna false — falhar aqui trocaria "manda pelo numero
+  // errado" por "destroi a fila em silencio".
   const { data: fallback } = await admin
     .from('whatsapp_config')
-    .select('provider, api_url, api_key, instance_id, phone_number_id')
+    .select('provider, api_url, api_key, instance_id, phone_number_id, purpose')
     .eq('active', true)
     .limit(1)
     .maybeSingle()
 
-  if (!fallback) return null
+  if (!fallback) {
+    console.error(`[whatsapp] nenhuma config ativa — purpose=${purpose} nao pode ser atendido`)
+    return null
+  }
+
+  console.error(
+    `[whatsapp] FALLBACK: purpose=${purpose} nao configurado, usando purpose=` +
+      `${(fallback as { purpose?: string }).purpose ?? 'desconhecido'}`,
+  )
 
   try {
     return createProviderClient(fallback as WhatsAppConfig)

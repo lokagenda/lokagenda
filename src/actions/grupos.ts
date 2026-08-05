@@ -41,12 +41,15 @@ type ActiveCfg =
 
 async function getActiveWhatsAppConfig(): Promise<ActiveCfg | null> {
   const admin = createAdminClient()
+  // Grupo e canal de divulgacao -> chip de MARKETING. Sem o filtro de purpose
+  // isso pegava uma das duas instancias ativas de forma arbitraria (sem ORDER BY).
   const { data: config } = await admin
     .from('whatsapp_config')
     .select('provider, api_url, api_key, instance_id, phone_number_id')
     .eq('active', true)
+    .eq('purpose', 'marketing')
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!config || !config.api_url || !config.api_key) return null
   const apiUrl = config.api_url.replace(/\/$/, '')

@@ -31,7 +31,7 @@ import {
   pollZApiTakeoversManually,
 } from '@/actions/admin-whatsapp'
 import { runWhatsappLifecycleCron } from '@/actions/admin'
-import type { WhatsAppProvider } from '@/lib/whatsapp-api/types'
+import type { WhatsAppProvider, WhatsAppPurpose } from '@/lib/whatsapp-api/types'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -421,11 +421,28 @@ export default function AdminWhatsAppPage() {
 
 // ── Section 1: Provider Configuration ─────────────────────
 
+// As 2 instancias sao linhas separadas em whatsapp_config, discriminadas por
+// `purpose`. Sem esse seletor a UI so enxergava a transacional (default das
+// actions) e o chip de marketing ficava inconfiguravel e intestavel — so por SQL.
+const PURPOSE_OPCOES: { value: WhatsAppPurpose; label: string; hint: string }[] = [
+  {
+    value: 'transactional',
+    label: 'Transacional',
+    hint: 'Lembrete de vencimento, plano ativado, boas-vindas, Nick atendendo cliente pagante.',
+  },
+  {
+    value: 'marketing',
+    label: 'Marketing',
+    hint: 'Campanhas em massa, follow-up, reativacao e grupos. Chip separado: se banir, o transacional continua vivo.',
+  },
+]
+
 function ConfigSection() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testPhone, setTestPhone] = useState('')
+  const [purpose, setPurpose] = useState<WhatsAppPurpose>('transactional')
   const [config, setConfig] = useState<ConfigData>({
     provider: 'evolution_api',
     api_url: '',
@@ -434,22 +451,27 @@ function ConfigSection() {
     phone_number_id: '',
   })
 
+  // Recarrega ao trocar de instancia. Se a linha daquele purpose nao existe
+  // ainda, limpa o form pra nao salvar as credenciais da outra por engano.
   useEffect(() => {
-    getWhatsAppConfig()
+    setLoading(true)
+    getWhatsAppConfig(purpose)
       .then((data) => {
-        if (data) {
-          setConfig({
-            provider: data.provider as WhatsAppProvider,
-            api_url: data.api_url || '',
-            api_key: data.api_key || '',
-            instance_id: data.instance_id || '',
-            phone_number_id: data.phone_number_id || '',
-          })
-        }
+        setConfig(
+          data
+            ? {
+                provider: data.provider as WhatsAppProvider,
+                api_url: data.api_url || '',
+                api_key: data.api_key || '',
+                instance_id: data.instance_id || '',
+                phone_number_id: data.phone_number_id || '',
+              }
+            : { provider: 'uazapi', api_url: '', api_key: '', instance_id: '', phone_number_id: '' },
+        )
       })
       .catch(() => toast.error('Erro ao carregar configuracao'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [purpose])
 
   async function handleSave() {
     setSaving(true)
@@ -460,8 +482,9 @@ function ConfigSection() {
         api_key: config.api_key || null,
         instance_id: config.instance_id || null,
         phone_number_id: config.phone_number_id || null,
+        purpose,
       })
-      toast.success('Configuracao salva com sucesso!')
+      toast.success(`Configuracao ${purpose} salva com sucesso!`)
     } catch (err: any) {
       toast.error(err.message || 'Erro ao salvar')
     } finally {
@@ -476,9 +499,9 @@ function ConfigSection() {
     }
     setTesting(true)
     try {
-      const result = await testWhatsAppConnection(testPhone)
+      const result = await testWhatsAppConnection(testPhone, purpose)
       if (result.success) {
-        toast.success('Mensagem de teste enviada!')
+        toast.success(`Teste enviado pela instancia ${purpose}! Confere por qual numero chegou.`)
       } else {
         toast.error('Falha ao enviar mensagem de teste')
       }
@@ -508,6 +531,32 @@ function ConfigSection() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Seletor de instancia (purpose) */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Instância
+          </label>
+          <div className="flex gap-2">
+            {PURPOSE_OPCOES.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setPurpose(opt.value)}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  purpose === opt.value
+                    ? 'border-blue-600 bg-blue-50 text-blue-800 dark:border-blue-500 dark:bg-blue-950 dark:text-blue-300'
+                    : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+            {PURPOSE_OPCOES.find((o) => o.value === purpose)?.hint}
+          </p>
+        </div>
+
         {/* Provider Select */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">

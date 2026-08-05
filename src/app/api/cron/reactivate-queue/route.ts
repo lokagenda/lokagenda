@@ -7,9 +7,13 @@ import { sendTemplateMessage } from '@/lib/whatsapp-api/sender'
 // estourar o `maxDuration`. A cada rodada do cron, mais um lote é drenado.
 export const maxDuration = 300
 
-const MAX_PER_RUN = 12 // 12 envios * ~14s = ~168s, dentro de maxDuration
+// 8 envios * ate 20s = ~160s, abaixo do periodo de 180s do cron */3. Com 12 o
+// pior caso era 240s: duas execucoes se sobrepunham, reliam as mesmas linhas
+// ainda 'pending' e mandavam duas vezes pro mesmo telefone.
+const MAX_PER_RUN = 8
 const MIN_DELAY_MS = 8000
 const MAX_DELAY_MS = 20000
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const randomDelay = () => Math.floor(MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS))
@@ -19,6 +23,13 @@ export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Janela BRT: este cron era o unico dos irmaos sem nenhuma, entao podia
+  // disparar cupom de reativacao as 3h da manha.
+  const horaBrt = new Date(Date.now() - BRT_OFFSET_MS).getUTCHours()
+  if (horaBrt < 9 || horaBrt >= 19) {
+    return NextResponse.json({ processed: 0, sent: 0, failed: 0, skipped: 'fora_da_janela' })
   }
 
   const admin = createAdminClient()
@@ -43,11 +54,14 @@ export async function GET(request: NextRequest) {
     let ok = false
     let errMsg: string | null = null
     try {
+      // Cupom de win-back e conteudo de MARKETING — tem que sair pelo chip de
+      // marketing, nao pelo numero principal (ja bloqueado 2x: 10/jul e 23/jul).
       ok = await sendTemplateMessage(
         item.template_slug,
         item.phone,
         { nome: item.company_name || '', cupom: 'VOLTAR50' },
-        item.company_id
+        item.company_id,
+        'marketing'
       )
       if (!ok) errMsg = 'Falha no envio pelo provedor WhatsApp'
     } catch (err) {

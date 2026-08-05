@@ -102,12 +102,22 @@ export async function saveWhatsAppConfig(configData: {
   revalidatePath('/admin/whatsapp')
 }
 
-export async function testWhatsAppConnection(phone: string) {
+/**
+ * Manda uma msg de teste pela instancia escolhida. Sem o parametro `purpose`
+ * so dava pra testar a transacional — era impossivel validar o chip novo de
+ * marketing pela UI. O purpose vai no texto de proposito: quem recebe ve no
+ * celular por qual numero chegou.
+ */
+export async function testWhatsAppConnection(
+  phone: string,
+  purpose: 'marketing' | 'transactional' = 'transactional'
+) {
   await requireSuperAdmin()
 
   const success = await sendWhatsAppMessage(
     phone,
-    'Teste de conexão LokAgenda ✅'
+    `Teste de conexão LokAgenda [${purpose}] ✅`,
+    { purpose }
   )
 
   return { success }
@@ -220,17 +230,20 @@ function resolveAppBaseUrl(): { url: string } | { error: string } {
   }
 }
 
-type ZApiCtx = { base: string; headers: Record<string, string> }
+type ZApiCtx = { base: string; headers: Record<string, string>; configId: string }
 
 async function getActiveZApi(): Promise<ZApiCtx | { error: string }> {
   const admin = createAdminClient()
+  // Filtra por provider: sem isso, com 2 linhas ativas, o .limit(1) sem ORDER BY
+  // podia sortear uma linha uazapi e cair no erro generico abaixo.
   const { data: cfg } = await admin
     .from('whatsapp_config')
-    .select('provider, api_url, api_key, instance_id, phone_number_id')
+    .select('id, provider, api_url, api_key, instance_id, phone_number_id')
     .eq('active', true)
+    .eq('provider', 'z_api')
     .limit(1)
     .maybeSingle()
-  if (!cfg) return { error: 'WhatsApp não está configurado.' }
+  if (!cfg) return { error: 'Nenhuma config Z-API ativa.' }
   if (cfg.provider !== 'z_api') return { error: 'Esta função é específica da Z-API.' }
   if (!cfg.api_url || !cfg.api_key || !cfg.instance_id) {
     return { error: 'Config Z-API incompleta (api_url/api_key/instance_id).' }
@@ -248,7 +261,7 @@ async function getActiveZApi(): Promise<ZApiCtx | { error: string }> {
   const base = `${apiUrl.origin}/instances/${cfg.instance_id}/token/${cfg.api_key}`
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (cfg.phone_number_id) headers['Client-Token'] = cfg.phone_number_id
-  return { base, headers }
+  return { base, headers, configId: cfg.id }
 }
 
 // ── Modo silencioso global ─────────────────────────────────
@@ -260,10 +273,13 @@ export async function getGlobalAiPauseStatus(): Promise<
 > {
   await requireSuperAdmin()
   const admin = createAdminClient()
+  // Semantica: pausado se QUALQUER linha ativa estiver pausada. Com 2 linhas,
+  // um .limit(1) sem ORDER BY viraria sorteio caso elas divergissem.
   const { data, error } = await admin
     .from('whatsapp_config')
     .select('ai_globally_paused_at, ai_globally_paused_reason')
     .eq('active', true)
+    .not('ai_globally_paused_at', 'is', null)
     .limit(1)
     .maybeSingle()
   if (error) return { error: error.message }
@@ -287,6 +303,8 @@ export async function setGlobalAiPause(paused: boolean, reason?: string): Promis
       ai_globally_paused_reason: paused ? (reason?.trim() || null) : null,
       updated_at: nowIso,
     })
+    // INTENCIONAL: pause global carimba TODAS as instancias ativas. E panic
+    // button — pausar so metade da IA seria pior que nao pausar.
     .eq('active', true)
   if (error) return { error: error.message }
   revalidatePath('/admin/whatsapp')
@@ -321,10 +339,12 @@ export async function getZApiNotifyOnSendStatus(): Promise<
 > {
   await requireSuperAdmin()
   const admin = createAdminClient()
+  // Flag e POR INSTANCIA Z-API — filtra por provider pra nao ler uma linha uazapi.
   const { data, error } = await admin
     .from('whatsapp_config')
     .select('notify_sent_by_me_enabled')
     .eq('active', true)
+    .eq('provider', 'z_api')
     .limit(1)
     .maybeSingle()
   if (error) {
@@ -371,7 +391,8 @@ export async function setupZApiNotifyOnSend(): Promise<
     const { error: updErr } = await admin
       .from('whatsapp_config')
       .update({ notify_sent_by_me_enabled: true, updated_at: new Date().toISOString() })
-      .eq('active', true)
+      // Flag POR INSTANCIA: com .eq('active', true) marcava as 2 linhas.
+      .eq('id', zapi.configId)
     if (updErr) {
       console.error('[zapi-onsend] persist flag', updErr)
       // A Z-API já foi configurada — só perdemos o snapshot local. Não bloqueia.
