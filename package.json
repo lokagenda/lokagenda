@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:crons": "node scripts/check-vercel-crons.mjs",
+    "postinstall": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks')}catch(e){}\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

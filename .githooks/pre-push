@@ -1,0 +1,21 @@
+#!/bin/sh
+# Valida o vercel.json do COMMIT SENDO PUSHADO (nao a working tree).
+# Um cron invalido faz a Vercel rejeitar o deploy inteiro em silencio —
+# ja custou 14 dias de producao congelada em 2026.
+
+falhou=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+  tmp="$(mktemp)"
+  if git show "$local_sha:vercel.json" > "$tmp" 2>/dev/null; then
+    node scripts/check-vercel-crons.mjs "$tmp" || falhou=1
+  fi
+  rm -f "$tmp"
+done
+
+if [ "$falhou" -ne 0 ]; then
+  echo ""
+  echo "pre-push ABORTADO: vercel.json invalido no commit sendo pushado."
+  exit 1
+fi
+exit 0
