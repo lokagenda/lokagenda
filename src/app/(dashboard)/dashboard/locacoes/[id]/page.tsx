@@ -274,6 +274,7 @@ export default function LocacaoDetailPage({
     if (!container) return null
 
     container.innerHTML = ''
+    container.className = 'lk-pdf-root'
     container.style.width = '794px'
     container.style.padding = '40px'
     container.style.background = 'white'
@@ -285,17 +286,30 @@ export default function LocacaoDetailPage({
     container.style.left = '-9999px'
     container.style.top = '0'
 
-    // CSS defensivo: nome de empresa longo estava quebrando o layout (Leo 04/ago).
-    // word-wrap forca quebra em qualquer caractere, font-size responsivo diminui
-    // titulos longos. Aplica no container pra afetar TODO html injetado.
+    // CSS defensivo, ESCOPADO no container (.lk-pdf-root).
+    //
+    // A versao anterior usava seletor universal `* { max-width: 100% }`, que
+    // atingia o PROPRIO container. Como ele e position:absolute, esse 100%
+    // resolvia contra a viewport e grampeava a largura fixa de 794px na largura
+    // da janela. Em tela estreita (celular) o contrato renderizava com ~340px de
+    // texto util em vez de 634px. Como o numero de paginas e proporcional a
+    // altura/largura do canvas, isso quase DOBRAVA a contagem: um contrato de 5
+    // paginas saiu com 11 pro cliente da Mundo Kids (05/ago).
+    // Medido no Chrome: container 794 -> 500px, paragrafo 634 -> 340px, x1.92
+    // paginas. Com o escopo abaixo: 794px e x0.97 do baseline.
+    //
+    // Pelo mesmo motivo nao se usa `vw` aqui. O container tem largura FIXA de
+    // 794px (A4 a 96dpi), entao tipografia responsiva a viewport nao so e
+    // inutil como encolhia o h1 pra 16px no celular.
     const style = document.createElement('style')
     style.textContent = `
-      * { word-wrap: break-word; overflow-wrap: break-word; box-sizing: border-box; max-width: 100%; }
-      h1 { font-size: clamp(16px, 2.4vw, 24px) !important; line-height: 1.3 !important; word-break: break-word; }
-      h2 { font-size: clamp(15px, 2vw, 20px) !important; line-height: 1.3 !important; word-break: break-word; }
-      h3 { line-height: 1.4 !important; page-break-after: avoid; }
-      p, div { orphans: 3; widows: 3; }
-      img { max-width: 100% !important; height: auto !important; }
+      .lk-pdf-root { width: 794px !important; max-width: none !important; }
+      .lk-pdf-root * { word-wrap: break-word; overflow-wrap: break-word; box-sizing: border-box; max-width: 100%; }
+      .lk-pdf-root h1 { font-size: 24px !important; line-height: 1.3 !important; word-break: break-word; }
+      .lk-pdf-root h2 { font-size: 20px !important; line-height: 1.3 !important; word-break: break-word; }
+      .lk-pdf-root h3 { line-height: 1.4 !important; page-break-after: avoid; }
+      .lk-pdf-root p, .lk-pdf-root div { orphans: 3; widows: 3; }
+      .lk-pdf-root img { max-width: 100% !important; height: auto !important; }
     `
     container.appendChild(style)
 
@@ -558,6 +572,9 @@ export default function LocacaoDetailPage({
       `
 
       container.innerHTML = ''
+      // O container e compartilhado com o export de contrato, que marca
+      // .lk-pdf-root. Zera pra o recibo nunca herdar aquele escopo.
+      container.className = ''
       container.style.width = '794px'
       container.style.padding = '40px'
       container.style.background = 'white'
