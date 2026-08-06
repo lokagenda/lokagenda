@@ -72,10 +72,14 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
     return pathname.startsWith(href)
   }
 
+  // min-w-0 nos flex items: sem isso o `min-width: auto` padrao do flexbox
+  // impede que encolham abaixo do conteudo. Com um nome de empresa longo o
+  // painel inteiro estourava a largura do <aside> (256px) e pintava por cima
+  // do conteudo da pagina — medido: 342px, 86px de invasao (Leo 06/ago).
   const sidebarContent = (
-    <div className="flex h-full flex-col bg-gradient-to-b from-zinc-900 to-zinc-950">
+    <div className="flex h-full w-full min-w-0 flex-col bg-gradient-to-b from-zinc-900 to-zinc-950">
       {/* Brand header */}
-      <div className="relative flex flex-col items-center border-b border-white/5 px-4 pb-3 pt-5">
+      <div className="relative flex w-full min-w-0 flex-col items-center border-b border-white/5 px-4 pb-3 pt-5">
         <button
           onClick={() => setMobileOpen(false)}
           className="absolute right-3 top-3 text-zinc-500 hover:text-white lg:hidden"
@@ -90,7 +94,11 @@ export function Sidebar({ companyName, companyLogoUrl, role }: SidebarProps) {
           height={120}
           className="h-20 w-20 object-contain"
         />
-        <span className="mt-1 text-[12px] font-medium text-zinc-500 truncate max-w-full text-center">{companyName}</span>
+        {/* Sem `truncate`: ele aplica white-space:nowrap, e era ISSO que fazia a
+            largura minima do texto virar o nome inteiro e empurrar o painel.
+            Quebrando em linha, a largura minima passa a ser so a maior palavra,
+            e o nome aparece completo em vez de cortado com reticencias. */}
+        <span className="mt-1 w-full break-words text-center text-[12px] font-medium text-zinc-500">{companyName}</span>
       </div>
 
       {/* Navigation */}
