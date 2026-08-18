@@ -326,18 +326,22 @@ export async function POST(request: NextRequest) {
 
     let incomingText = norm.text
 
+    // "Isto e um audio?" é avaliado SEPARADO de "consigo transcrever?". Se a
+    // deteccao ficasse acoplada ao isTranscribeConfigured(), uma GROQ_API_KEY
+    // ausente faria o audio voltar a sumir sem deixar rastro.
+    const ehAudio =
+      !incomingText &&
+      norm.source === 'uazapi' &&
+      !!norm.messageType &&
+      /audio|ptt|voice/i.test(norm.messageType)
+    // Comeca pessimista: so vira false quando a transcricao der certo.
+    let audioNaoTranscrito = ehAudio
+
     // Suporte a áudio (voice note): UazAPI entrega messageType='audio'/'ptt'
     // sem texto. Baixamos o binário e transcrevemos via Groq Whisper — texto
     // resultante entra no fluxo normal. Feature ativa apenas quando
     // GROQ_API_KEY está setada e provider é uazapi.
-    if (
-      !incomingText &&
-      norm.source === 'uazapi' &&
-      norm.messageId &&
-      norm.messageType &&
-      /audio|ptt|voice/i.test(norm.messageType) &&
-      isTranscribeConfigured()
-    ) {
+    if (ehAudio && norm.messageId && isTranscribeConfigured()) {
       try {
         // Token TEM que ser o da instancia que recebeu o audio: o messageId nao
         // existe na outra, e downloadMedia falharia 100% das vezes em silencio
@@ -353,6 +357,7 @@ export async function POST(request: NextRequest) {
           .maybeSingle()
         if (!waCfg?.api_key) {
           console.error(`[inbound/audio] sem config uazapi para purpose=${inboundPurpose}`)
+          audioNaoTranscrito = true
         }
         if (waCfg?.api_url && waCfg?.api_key) {
           const uaz = new UazapiClient({
@@ -366,15 +371,31 @@ export async function POST(request: NextRequest) {
           const stt = await transcribeAudio(media.buffer, media.mimeType, media.filename)
           if (stt.ok) {
             incomingText = stt.text
+            audioNaoTranscrito = false
             console.log('[inbound/audio] transcrito phone=' + phone + ' chars=' + stt.text.length)
           } else {
             console.warn('[inbound/audio] falha transcricao phone=' + phone + ' err=' + stt.error)
-            // Nao trava o fluxo — segue sem texto e cai no gate abaixo.
+            audioNaoTranscrito = true
           }
         }
       } catch (err) {
         console.error('[inbound/audio] excecao phone=' + phone, err)
+        audioNaoTranscrito = true
       }
+    }
+
+    // Audio recebido mas nao transcrito: em vez de sumir, entrega um marcador
+    // pra IA. Ela segue por TODOS os gates normais (takeover, pause, status) e
+    // responde dentro do script — na pratica, pedindo pra pessoa escrever.
+    //
+    // Sem isto, qualquer falha de transcricao vira silencio absoluto: foi assim
+    // que o formato novo do /message/download passou ~1 mes sem ninguem notar,
+    // com o lead mandando audio e a Nick nunca respondendo (Leo, 18/ago).
+    if (!incomingText && audioNaoTranscrito) {
+      incomingText =
+        '(o cliente enviou uma mensagem de áudio que não foi possível ouvir — ' +
+        'peça com educação para ele escrever por texto)'
+      console.log('[inbound/audio] fallback de audio nao transcrito phone=' + phone)
     }
 
     if (!incomingText) {

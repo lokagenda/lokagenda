@@ -39,8 +39,18 @@ export class UazapiClient implements WhatsAppProviderClient {
 
   /**
    * Baixa uma midia (audio, imagem, etc) do WhatsApp via UazAPI.
-   * UazAPI endpoint: POST /message/download com header `token` e body
-   * `{ id: messageid }`. Retorna base64 + mimetype no JSON.
+   * POST /message/download com header `token` e body `{ id: messageid }`.
+   *
+   * A UazAPI tem DOIS formatos de resposta e trocou o padrao sem aviso:
+   *   1) { base64, mimetype, fileName }   <- formato antigo
+   *   2) { cached, fileURL, mimetype }    <- formato ATUAL (verificado 18/ago)
+   *
+   * O codigo so aceitava base64 e lancava "sem base64 na resposta". O erro era
+   * engolido pelo catch do inbound, incomingText ficava vazio e o audio do lead
+   * era descartado em silencio — a Nick nao respondia quem mandava audio.
+   * Confirmado ao vivo: /message/download devolve
+   * { cached: true, fileURL: ".../files/<hash>.mp3", mimetype: "audio/mpeg" }
+   * e nenhum parametro (base64 / returnBase64) traz o base64 de volta.
    *
    * Retorna { buffer, mimeType, filename } ou lanca erro.
    */
@@ -57,6 +67,7 @@ export class UazapiClient implements WhatsAppProviderClient {
     })
     const data = (await res.json().catch(() => null)) as {
       base64?: string
+      fileURL?: string
       mimetype?: string
       fileName?: string
       error?: string | boolean
@@ -69,15 +80,57 @@ export class UazapiClient implements WhatsAppProviderClient {
           `UazAPI download HTTP ${res.status}`,
       )
     }
-    if (!data.base64) {
-      throw new Error('UazAPI download: sem base64 na resposta')
-    }
-    // UazAPI as vezes retorna com prefixo "data:audio/ogg;base64,..." — remove.
-    const cleanBase64 = data.base64.replace(/^data:[^;]+;base64,/, '')
-    const buffer = Buffer.from(cleanBase64, 'base64')
+
     const mimeType = data.mimetype || 'audio/ogg'
-    const filename = data.fileName || 'media.ogg'
-    return { buffer, mimeType, filename }
+
+    // Formato 1 (legado): base64 inline.
+    if (data.base64) {
+      // As vezes vem com prefixo "data:audio/ogg;base64,..." — remove.
+      const cleanBase64 = data.base64.replace(/^data:[^;]+;base64,/, '')
+      return {
+        buffer: Buffer.from(cleanBase64, 'base64'),
+        mimeType,
+        filename: data.fileName || 'media.ogg',
+      }
+    }
+
+    // Formato 2 (atual): URL do arquivo ja decodificado no servidor da UazAPI.
+    if (data.fileURL) {
+      // SSRF: a URL vem do provedor, mas confinamos ao MESMO host da instancia
+      // pra um api_url adulterado no banco nao virar leitura arbitraria.
+      let fileUrl: URL
+      try {
+        fileUrl = new URL(data.fileURL)
+      } catch {
+        throw new Error('UazAPI download: fileURL invalido')
+      }
+      if (fileUrl.protocol !== 'https:' || fileUrl.origin !== this.apiUrl) {
+        throw new Error(`UazAPI download: fileURL fora do host da instancia (${fileUrl.origin})`)
+      }
+
+      const fileRes = await fetch(fileUrl.toString(), {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(30000),
+      })
+      if (!fileRes.ok) {
+        throw new Error(`UazAPI download: fileURL HTTP ${fileRes.status}`)
+      }
+      const buffer = Buffer.from(await fileRes.arrayBuffer())
+      if (buffer.length === 0) {
+        throw new Error('UazAPI download: fileURL devolveu arquivo vazio')
+      }
+      // Preserva a extensao real (.mp3, .ogg...) — o Whisper usa isso.
+      const nomeDaUrl = fileUrl.pathname.split('/').pop() || ''
+      return {
+        buffer,
+        mimeType,
+        filename: data.fileName || (nomeDaUrl.includes('.') ? nomeDaUrl : 'media.ogg'),
+      }
+    }
+
+    throw new Error(
+      `UazAPI download: resposta sem base64 nem fileURL (chaves: ${Object.keys(data).join(',')})`,
+    )
   }
 
   async sendMessage(phone: string, message: string): Promise<SendMessageResult> {
