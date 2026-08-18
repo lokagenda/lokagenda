@@ -6,19 +6,29 @@ const AI_MODEL = 'claude-haiku-4-5-20251001'
 const MAX_HISTORY_MESSAGES = 10
 const MAX_PRODUCTS = 30
 
-// Base do modo CAMPANHA (venda do LokAgenda para donos de locadoras). Compartilhada
-// entre a resposta normal e a mensagem de reativação de 24h.
-const CAMPAIGN_BASE_SALES = `Você é um assistente de vendas da LokAgenda — um aplicativo/sistema de gestão para empresas que alugam brinquedos e equipamentos para festas. Você conversa pelo WhatsApp com o DONO de uma locadora, para apresentar o sistema e despertar interesse.
+// Regras de FORMA do modo CAMPANHA. De proposito NAO contem conteudo comercial:
+// quem o agente e, o que ele oferece e o objetivo da conversa vem
+// EXCLUSIVAMENTE do prompt da campanha.
+//
+// Antes isto era CAMPAIGN_BASE_SALES, um script de venda do LokAgenda fixo no
+// codigo ("Voce e um assistente de vendas da LokAgenda", "pergunte se ja usa
+// algum app/sistema pra controlar agenda, locacoes, contratos e financeiro").
+// O prompt da campanha era so ANEXADO depois, entao o base mandava. Leo criou a
+// campanha "Contatos mundo divertido" — cujo unico objetivo e convidar pro grupo
+// de locadores — e a Nick seguiu oferecendo o LokAgenda, repetindo ao pe da
+// letra a frase do base (17/ago).
+const CAMPAIGN_BASE_RULES = `Você conversa pelo WhatsApp, em português do Brasil.
 
-Diretrizes:
-- Português do Brasil, tom amigável e consultivo. Mensagens CURTAS (WhatsApp), uma ideia por vez.
-- Vá apresentando aos poucos, de forma natural — nunca despeje tudo numa mensagem só. Faça perguntas pra manter o papo.
-- Primeiro entenda a realidade dele: pergunte se já usa algum app/sistema pra controlar agenda, locações, contratos e financeiro.
-- Mesmo que ele já use algo, apresente os diferenciais do LokAgenda com leveza (agenda visual, contratos automáticos, controle de disponibilidade por data, financeiro, orçamento e disparo pelo WhatsApp).
-- No máximo 1 emoji por mensagem. Nada de robótico ou texto de vendas agressivo.
-- Quando o lead demonstrar interesse, ofereça um teste gratuito e siga as instruções da campanha (incluindo enviar o link do vídeo, se houver).
-- Se ele não tiver interesse, agradeça com educação e encerre.
-- Quando o lead estiver quente (quer testar/assinar/saber preço), diga que vai chamar um atendente humano pra dar sequência.`
+Regras de forma (valem sempre):
+- Mensagens CURTAS, uma ideia por vez. Nada de texto longo ou robótico.
+- No máximo 1 emoji por mensagem.
+- Nunca invente informação. Se não souber, diga que vai verificar.
+- Não repita pergunta que o lead já respondeu.
+- Se o lead não tiver interesse, agradeça com educação e encerre.
+
+IMPORTANTE: o que você é, o que oferece e o objetivo desta conversa vêm EXCLUSIVAMENTE do script da campanha abaixo. Não ofereça nenhum produto, serviço, sistema ou aplicativo que não esteja escrito nesse script, mesmo que o lead pergunte sobre outra coisa.
+
+Se mensagens SUAS mais antigas nesta conversa fugiram do script (por exemplo, ofereceram outro produto ou sistema), NÃO dê continuidade a elas. Retome o objetivo do script sem comentar a mudança.`
 
 interface AnthropicMessage {
   role: 'user' | 'assistant'
@@ -97,7 +107,7 @@ export async function generateAiReply(
 
     if (isCampaignMode) {
       // Venda do SISTEMA LokAgenda para donos de locadoras (B2B).
-      const baseSales = CAMPAIGN_BASE_SALES
+      const baseRules = CAMPAIGN_BASE_RULES
 
       const script = `\n\nScript e instruções desta campanha (siga à risca):\n${options!.campaignPrompt!.trim()}`
       const statusInstruction = `\n\n[CONTROLE INTERNO — NUNCA mostre isto ao lead] Ao FINAL de cada resposta, em uma linha separada e sozinha, inclua exatamente uma tag de status do lead, escolhida pela conversa até aqui:
@@ -106,7 +116,7 @@ export async function generateAiReply(
 - <status>lost</status> — sem interesse, pediu para não receber mais mensagens, ou disse que não é locador.
 - <status>contacted</status> — ainda em conversa, sem sinal claro (use este por padrão).
 Inclua a tag SEMPRE, sozinha na última linha. O sistema remove a tag antes de enviar — o lead NUNCA a vê.`
-      systemPrompt = `${baseSales}${script}${statusInstruction}`
+      systemPrompt = `${baseRules}${script}${statusInstruction}`
     } else {
       // Atendimento ao cliente final da locadora (modo original).
       const { data: products } = await admin
@@ -264,7 +274,7 @@ export async function generateReengagementMessage(
         ? '[CONTROLE INTERNO — NUNCA mostre isto ao lead] O lead nao respondeu sua ultima mensagem ha ~2 dias. Este eh o PRIMEIRO toque de follow-up. Escreva UMA unica mensagem curta e leve pra retomar de forma natural — sem cobrar, sem soar automatico, sem repetir o que ja foi dito. Pergunta aberta se ficou duvida ou se pode ajustar algo. Se claramente nao fizer sentido insistir (lead ja recusou/pediu pra parar), responda APENAS PULAR.'
         : '[CONTROLE INTERNO — NUNCA mostre isto ao lead] O lead segue em silencio ha ~5 dias no total. Este eh o SEGUNDO e ULTIMO toque — nao volta mais depois desse. Escreva UMA unica mensagem curta com tom respeitoso de despedida: pergunta se ainda faz sentido conversar ou se pode encerrar por aqui. De uma saida elegante pra ele responder sim/nao sem pressao. Se ja fica obvio que nao vai voltar, responda APENAS PULAR.'
 
-    const systemPrompt = `${CAMPAIGN_BASE_SALES}\n\nScript e instruções desta campanha (siga à risca):\n${campaignPrompt.trim()}\n\n${stageInstruction}`
+    const systemPrompt = `${CAMPAIGN_BASE_RULES}\n\nScript e instruções desta campanha (siga à risca):\n${campaignPrompt.trim()}\n\n${stageInstruction}`
 
     // Sem mensagem de entrada: um cue interno fecha o turno para a IA gerar o
     // follow-up. Esse cue NÃO é salvo na memória.
