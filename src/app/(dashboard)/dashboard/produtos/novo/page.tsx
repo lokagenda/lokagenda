@@ -5,17 +5,21 @@ import Link from 'next/link'
 import { ArrowLeft, Save, ImageIcon, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createProduct } from '@/actions/products'
-import { compressImage, replaceInputFile } from '@/lib/compress-image'
+import { compressImage, replaceInputFile, MAX_UPLOAD_BYTES } from '@/lib/compress-image'
 
 export default function NovoProdutoPage() {
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [trackStock, setTrackStock] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Guarda o arquivo JA comprimido. O submit envia ele explicitamente em vez de
+  // confiar no <input>: o replaceInputFile depende de DataTransfer, que falha
+  // em silencio em parte dos browsers mobile — e af o original (grande) subia.
+  const arquivoComprimidoRef = useRef<File | null>(null)
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) { setPreview(null); return }
+    if (!file) { setPreview(null); arquivoComprimidoRef.current = null; return }
 
     const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']
     if (!validTypes.includes(file.type)) {
@@ -26,16 +30,35 @@ export default function NovoProdutoPage() {
 
     try {
       const compressed = await compressImage(file)
+
+      // Barra AQUI o que nao caberia no limite de upload. Antes isso so
+      // aparecia como erro generico do servidor, depois de esperar o upload
+      // inteiro subir numa rede ruim.
+      if (compressed.size > MAX_UPLOAD_BYTES) {
+        const mb = (compressed.size / 1024 / 1024).toFixed(1)
+        toast.error(
+          `Esta imagem tem ${mb} MB e passa do limite de envio. ` +
+            `Tire a foto de novo com qualidade menor, ou envie um print dela.`,
+        )
+        e.target.value = ''
+        setPreview(null)
+        arquivoComprimidoRef.current = null
+        return
+      }
+
+      arquivoComprimidoRef.current = compressed
       replaceInputFile(fileInputRef.current, compressed)
       setPreview(URL.createObjectURL(compressed))
     } catch {
       toast.error('Erro ao processar imagem. Tente outra foto.')
       e.target.value = ''
+      arquivoComprimidoRef.current = null
     }
   }
 
   function clearImage() {
     setPreview(null)
+    arquivoComprimidoRef.current = null
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -45,6 +68,10 @@ export default function NovoProdutoPage() {
 
     try {
       const formData = new FormData(e.currentTarget)
+      // Garante que vai a versao comprimida, independente do DataTransfer.
+      if (arquivoComprimidoRef.current) {
+        formData.set('image', arquivoComprimidoRef.current)
+      }
       await createProduct(formData)
       toast.success('Produto criado com sucesso!')
     } catch (err) {

@@ -25,7 +25,7 @@ import {
   type ProductHistoryRental,
 } from '@/actions/products'
 import { createBrowserClient } from '@supabase/ssr'
-import { compressImage, replaceInputFile } from '@/lib/compress-image'
+import { compressImage, replaceInputFile, MAX_UPLOAD_BYTES } from '@/lib/compress-image'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ProductCalendar } from '@/components/product-calendar'
@@ -78,6 +78,9 @@ export default function EditarProdutoPage({
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [showAllPast, setShowAllPast] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Arquivo ja comprimido — enviado explicitamente no submit (mesmo motivo
+  // documentado em produtos/novo: DataTransfer falha calado em mobile).
+  const arquivoComprimidoRef = useRef<File | null>(null)
 
   useEffect(() => {
     async function fetchProduct() {
@@ -154,11 +157,27 @@ export default function EditarProdutoPage({
 
     try {
       const compressed = await compressImage(file)
+
+      // Barra aqui o que estouraria o limite de upload — antes isso virava um
+      // erro generico do servidor depois do upload inteiro subir.
+      if (compressed.size > MAX_UPLOAD_BYTES) {
+        const mb = (compressed.size / 1024 / 1024).toFixed(1)
+        toast.error(
+          `Esta imagem tem ${mb} MB e passa do limite de envio. ` +
+            `Tire a foto de novo com qualidade menor, ou envie um print dela.`,
+        )
+        e.target.value = ''
+        arquivoComprimidoRef.current = null
+        return
+      }
+
+      arquivoComprimidoRef.current = compressed
       replaceInputFile(fileInputRef.current, compressed)
       setPreview(URL.createObjectURL(compressed))
     } catch {
       toast.error('Erro ao processar imagem. Tente outra foto.')
       e.target.value = ''
+      arquivoComprimidoRef.current = null
     }
   }
 
@@ -168,6 +187,10 @@ export default function EditarProdutoPage({
 
     try {
       const formData = new FormData(e.currentTarget)
+      // Garante que vai a versao comprimida, independente do DataTransfer.
+      if (arquivoComprimidoRef.current) {
+        formData.set('image', arquivoComprimidoRef.current)
+      }
       await updateProduct(id, formData)
       toast.success('Produto atualizado com sucesso!')
     } catch (err) {
