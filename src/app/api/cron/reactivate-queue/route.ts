@@ -10,6 +10,7 @@ export const maxDuration = 300
 // 8 envios * ate 20s = ~160s, abaixo do periodo de 180s do cron */3. Com 12 o
 // pior caso era 240s: duas execucoes se sobrepunham, reliam as mesmas linhas
 // ainda 'pending' e mandavam duas vezes pro mesmo telefone.
+const CUPOM_REATIVACAO = 'VOLTEI50'
 const MAX_PER_RUN = 8
 const MIN_DELAY_MS = 8000
 const MAX_DELAY_MS = 20000
@@ -33,6 +34,31 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient()
+
+  // Trava: o codigo mandava 'VOLTAR50', cupom que nunca existiu — as 184 pessoas
+  // receberiam um cupom invalido e a reativacao queimava o chip a toa. Confere o
+  // cupom antes de mandar qualquer coisa.
+  const { data: cupom } = await admin
+    .from('coupons')
+    .select('code, active, max_uses, used_count')
+    .ilike('code', CUPOM_REATIVACAO)
+    .maybeSingle()
+
+  const cupomEsgotado = cupom?.max_uses != null && (cupom.used_count ?? 0) >= cupom.max_uses
+
+  if (!cupom || !cupom.active || cupomEsgotado) {
+    const motivo = !cupom ? 'nao existe' : !cupom.active ? 'esta inativo' : 'esgotou os usos'
+    console.error(
+      `[reactivate-queue] ABORTADO: cupom ${CUPOM_REATIVACAO} ${motivo}. Nenhuma mensagem enviada.`
+    )
+    return NextResponse.json({
+      processed: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 'cupom_indisponivel',
+      cupom: CUPOM_REATIVACAO,
+    })
+  }
 
   // Pega os mais antigos pendentes — ordem de inserção.
   const { data: pending } = await admin
@@ -59,7 +85,7 @@ export async function GET(request: NextRequest) {
       ok = await sendTemplateMessage(
         item.template_slug,
         item.phone,
-        { nome: item.company_name || '', cupom: 'VOLTAR50' },
+        { nome: item.company_name || '', cupom: CUPOM_REATIVACAO },
         item.company_id,
         'marketing'
       )
