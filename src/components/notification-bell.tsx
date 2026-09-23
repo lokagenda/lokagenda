@@ -37,11 +37,23 @@ export function NotificationBell() {
   const [loading, setLoading] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const fetchNotifications = async () => {
-    const supabase = createClient()
+  // O sininho fazia 3 requests por minuto, por aba aberta: getUser() (que bate
+  // no Auth, limitado a 10 conexoes e estopim da queda de 11/09), profiles e
+  // notifications. Com 10 clientes de aba aberta o dia todo isso sozinho dava
+  // ~43 mil requests/dia sem ninguem clicar em nada.
+  //
+  // Agora: company_id e resolvido UMA vez e fica em cache; o polling so busca
+  // notifications; aba em segundo plano nao consulta nada; e ao voltar pra aba
+  // atualiza na hora — quem esta olhando a tela continua vendo em tempo real.
+  const INTERVALO_MS = 5 * 60 * 1000
+
+  const companyIdRef = useRef<string | null>(null)
+
+  const resolverCompanyId = async (supabase: ReturnType<typeof createClient>) => {
+    if (companyIdRef.current) return companyIdRef.current
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) return null
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -49,12 +61,21 @@ export function NotificationBell() {
       .eq('id', user.id)
       .single()
 
-    if (!profile) return
+    if (!profile?.company_id) return null
+    companyIdRef.current = profile.company_id
+    return profile.company_id
+  }
+
+  const fetchNotifications = async () => {
+    const supabase = createClient()
+
+    const companyId = await resolverCompanyId(supabase)
+    if (!companyId) return
 
     const { data } = await supabase
       .from('notifications')
       .select('*')
-      .eq('company_id', profile.company_id)
+      .eq('company_id', companyId)
       .eq('read', false)
       .order('created_at', { ascending: false })
       .limit(20)
@@ -63,11 +84,19 @@ export function NotificationBell() {
   }
 
   useEffect(() => {
-    fetchNotifications()
+    const atualizarSeVisivel = () => {
+      if (document.visibilityState === 'visible') fetchNotifications()
+    }
 
-    // Refresh every 60 seconds
-    const interval = setInterval(fetchNotifications, 60000)
-    return () => clearInterval(interval)
+    atualizarSeVisivel()
+
+    const interval = setInterval(atualizarSeVisivel, INTERVALO_MS)
+    document.addEventListener('visibilitychange', atualizarSeVisivel)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', atualizarSeVisivel)
+    }
   }, [])
 
   // Close dropdown when clicking outside
